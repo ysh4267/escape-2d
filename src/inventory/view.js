@@ -56,8 +56,9 @@ export function renderItem(item, opts = {}) {
     node.append(el('div', { class: 'item__fallback' }, tpl.short || tpl.name));
   }
 
-  // name strip on anything larger than a single cell
-  if (item.w * item.h > 1 && !opts.noName) {
+  // tarkov.dev grid sprites already carry the short name in the corner, so the
+  // name strip is only needed when we are falling back to a text tile
+  if (!tpl.imgUrl && item.w * item.h > 1 && !opts.noName) {
     node.append(el('div', { class: 'item__name' }, tpl.short || tpl.name));
   }
 
