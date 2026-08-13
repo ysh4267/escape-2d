@@ -1,11 +1,43 @@
 // =========================================================
-// procedural sound
+// sound
 //
-// Every effect is synthesised at runtime with WebAudio — no audio files, so
-// the repo stays asset-free and there is no third-party licence to carry.
-// Weapon reports are driven by the item data the game already has (caliber
-// and rate of fire), so a shotgun and a pistol genuinely sound different.
+// Foley comes from openly licensed sample packs in assets/sfx (see
+// assets/sfx/CREDITS.md) — metal footsteps on concrete, crate and locker
+// rummaging, an alarm for the exfil channel, and a clean interface set.
+// The industrial ambience is still synthesised so it can drone forever
+// without a loop point.
+//
+// Weapon fire is deliberately silent for now: gunplay is being reworked
+// separately, so nothing here makes a gunshot.
 // =========================================================
+
+const SFX_DIR = 'assets/sfx/';
+
+/** name -> gain / pitch spread, so raw sample levels never have to be edited */
+const MIX = {
+  step:          { gain: 0.32, rate: [0.92, 1.09] },
+  step_sprint:   { gain: 0.42, rate: [1.0, 1.16] },
+  open_wood:     { gain: 0.55, rate: [0.94, 1.06] },
+  open_metal:    { gain: 0.5,  rate: [0.94, 1.06] },
+  open_door:     { gain: 0.5,  rate: [0.95, 1.05] },
+  search:        { gain: 0.42, rate: [0.9, 1.12] },
+  thud:          { gain: 0.4,  rate: [0.95, 1.05] },
+  hurt:          { gain: 0.6,  rate: [0.9, 1.05] },
+  ui_click:      { gain: 0.32, rate: [1, 1] },
+  ui_tab:        { gain: 0.3,  rate: [1, 1] },
+  item_pick:     { gain: 0.4,  rate: [0.96, 1.06] },
+  item_drop:     { gain: 0.45, rate: [0.94, 1.04] },
+  deny:          { gain: 0.4,  rate: [1, 1] },
+  confirm:       { gain: 0.4,  rate: [1, 1] },
+  alert:         { gain: 0.5,  rate: [1, 1] },
+  money:         { gain: 0.45, rate: [0.98, 1.04] },
+  window_open:   { gain: 0.32, rate: [1, 1] },
+  window_close:  { gain: 0.3,  rate: [1, 1] },
+  extract_alarm: { gain: 0.42, rate: [1, 1] },
+};
+
+const STEPS = ['step_1', 'step_2', 'step_3', 'step_4', 'step_5', 'step_6'];
+const SEARCHES = ['search_1', 'search_2', 'search_3', 'search_4'];
 
 let ctx = null;
 let master = null;
@@ -17,19 +49,16 @@ let enabled = true;
 let volume = 0.7;
 let ambientNodes = null;
 let lastFootstep = 0;
+let lastStepIndex = -1;
+
+/** name -> AudioBuffer | 'pending' | 'failed' */
+const buffers = new Map();
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const rnd = (a, b) => a + Math.random() * (b - a);
 
+// ---------------------------------------------------------
 export function initAudio() {
-  const unlock = () => {
-    if (unlocked) return;
-    ensure();
-    if (ctx && ctx.state === 'suspended') ctx.resume();
-    unlocked = true;
-  };
-  for (const ev of ['pointerdown', 'keydown']) {
-    window.addEventListener(ev, unlock, { once: false, passive: true });
-  }
   try {
     const saved = localStorage.getItem('escape2d.audio');
     if (saved) {
@@ -38,6 +67,16 @@ export function initAudio() {
       volume = typeof o.volume === 'number' ? clamp01(o.volume) : 0.7;
     }
   } catch { /* defaults are fine */ }
+
+  const unlock = () => {
+    if (unlocked) return;
+    unlocked = true;
+    ensure();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    preload();
+  };
+  window.addEventListener('pointerdown', unlock, { passive: true });
+  window.addEventListener('keydown', unlock, { passive: true });
 }
 
 function ensure() {
@@ -50,13 +89,12 @@ function ensure() {
   master.gain.value = enabled ? volume : 0;
   master.connect(ctx.destination);
 
-  // a touch of glue so the loud transients do not clip
   const comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -18;
+  comp.threshold.value = -16;
   comp.knee.value = 22;
-  comp.ratio.value = 8;
-  comp.attack.value = 0.002;
-  comp.release.value = 0.18;
+  comp.ratio.value = 6;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.2;
   comp.connect(master);
 
   sfxBus = ctx.createGain();
@@ -67,7 +105,6 @@ function ensure() {
   ambientBus.gain.value = 0;
   ambientBus.connect(master);
 
-  // one second of white noise, reused by everything percussive
   const len = ctx.sampleRate;
   noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
   const data = noiseBuf.getChannelData(0);
@@ -76,6 +113,58 @@ function ensure() {
   return ctx;
 }
 
+function preload() {
+  for (const name of [...STEPS, ...SEARCHES, 'ui_click', 'ui_tab', 'item_pick',
+    'item_drop', 'deny', 'confirm', 'alert', 'money', 'open_wood', 'open_metal',
+    'open_door', 'thud', 'hurt', 'window_open', 'window_close', 'extract_alarm']) {
+    load(name);
+  }
+}
+
+function load(name) {
+  if (buffers.has(name)) return;
+  if (!ensure()) return;
+  buffers.set(name, 'pending');
+  fetch(new URL(`../../${SFX_DIR}${name}.ogg`, import.meta.url))
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+    .then((ab) => ctx.decodeAudioData(ab))
+    .then((buf) => buffers.set(name, buf))
+    .catch(() => buffers.set(name, 'failed'));
+}
+
+/** mix key for a sample: strip the trailing _N so step_3 uses the `step` mix */
+function mixFor(name, override) {
+  return MIX[override] || MIX[name] || MIX[name.replace(/_\d+$/, '')] || { gain: 0.4, rate: [1, 1] };
+}
+
+function play(name, opts = {}) {
+  if (!enabled || !ensure()) return;
+  const buf = buffers.get(name);
+  if (buf === undefined) { load(name); return; }
+  if (buf === 'pending' || buf === 'failed') return;
+
+  const m = mixFor(name, opts.mix);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = opts.rate ?? rnd(m.rate[0], m.rate[1]);
+
+  const g = ctx.createGain();
+  g.gain.value = (opts.gain ?? m.gain) * (opts.scale ?? 1);
+
+  src.connect(g);
+  g.connect(sfxBus);
+  src.start(ctx.currentTime + (opts.delay || 0));
+}
+
+function pickDifferent(list, lastRef) {
+  let i = Math.floor(Math.random() * list.length);
+  if (list.length > 1 && i === lastRef.v) i = (i + 1) % list.length;
+  lastRef.v = i;
+  return list[i];
+}
+const stepRef = { get v() { return lastStepIndex; }, set v(x) { lastStepIndex = x; } };
+
+// ---------------------------------------------------------
 export function setEnabled(on) {
   enabled = !!on;
   if (master) master.gain.setTargetAtTime(enabled ? volume : 0, ctx.currentTime, 0.02);
@@ -92,30 +181,10 @@ function persist() {
 }
 
 // ---------------------------------------------------------
-// primitives
+// synth helpers, used only where a sample would be wrong
 // ---------------------------------------------------------
-function noise({ dur = 0.12, gain = 0.4, type = 'bandpass', freq = 900, q = 1, sweepTo = null, delay = 0 }) {
-  if (!ensure() || !enabled) return;
-  const t = ctx.currentTime + delay;
-  const src = ctx.createBufferSource();
-  src.buffer = noiseBuf;
-  src.loop = true;
-  const filt = ctx.createBiquadFilter();
-  filt.type = type;
-  filt.frequency.setValueAtTime(freq, t);
-  filt.Q.value = q;
-  if (sweepTo) filt.frequency.exponentialRampToValueAtTime(Math.max(40, sweepTo), t + dur);
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + 0.004);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(filt); filt.connect(g); g.connect(sfxBus);
-  src.start(t);
-  src.stop(t + dur + 0.02);
-}
-
-function tone({ freq = 440, to = null, dur = 0.12, gain = 0.16, type = 'sine', delay = 0, attack = 0.005 }) {
-  if (!ensure() || !enabled) return;
+function tone({ freq = 440, to = null, dur = 0.12, gain = 0.12, type = 'sine', delay = 0 }) {
+  if (!enabled || !ensure()) return;
   const t = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   osc.type = type;
@@ -123,130 +192,64 @@ function tone({ freq = 440, to = null, dur = 0.12, gain = 0.16, type = 'sine', d
   if (to) osc.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + dur);
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(gain, t + attack);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.006);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   osc.connect(g); g.connect(sfxBus);
   osc.start(t);
   osc.stop(t + dur + 0.02);
 }
 
-const rnd = (a, b) => a + Math.random() * (b - a);
-
-// ---------------------------------------------------------
-// UI and inventory
 // ---------------------------------------------------------
 export const sfx = {
-  click() {
-    tone({ freq: 1500, to: 900, dur: 0.05, gain: 0.06, type: 'square' });
-  },
-  tab() {
-    tone({ freq: 620, to: 880, dur: 0.09, gain: 0.07, type: 'triangle' });
-  },
-  pick() {
-    noise({ dur: 0.07, gain: 0.16, freq: 2400, q: 0.8, sweepTo: 1200 });
-    tone({ freq: 780, to: 1020, dur: 0.06, gain: 0.05, type: 'triangle' });
-  },
-  drop() {
-    noise({ dur: 0.09, gain: 0.2, freq: 1500, q: 0.7, sweepTo: 420 });
-    tone({ freq: 300, to: 190, dur: 0.09, gain: 0.07, type: 'sine' });
-  },
-  deny() {
-    tone({ freq: 220, to: 150, dur: 0.14, gain: 0.1, type: 'sawtooth' });
-  },
-  money() {
-    for (let i = 0; i < 3; i++) {
-      tone({ freq: 1200 + i * 260, dur: 0.07, gain: 0.05, type: 'triangle', delay: i * 0.045 });
-    }
-  },
+  // ---- interface ----
+  click() { play('ui_click'); },
+  tab() { play('ui_tab'); },
+  windowOpen() { play('window_open'); },
+  windowClose() { play('window_close'); },
+  pick() { play('item_pick'); },
+  drop() { play('item_drop'); },
+  deny() { play('deny'); },
+  money() { play('money'); },
   levelUp() {
-    [523, 659, 784, 1047].forEach((f, i) =>
-      tone({ freq: f, dur: 0.22, gain: 0.07, type: 'triangle', delay: i * 0.08 }));
+    play('confirm');
+    [523, 659, 784, 1047].forEach((f, i) => tone({ freq: f, dur: 0.24, gain: 0.06, type: 'triangle', delay: 0.06 + i * 0.08 }));
   },
 
-  // ---------------- raid ----------------
+  // ---- movement ----
   footstep(sprinting = false) {
     const now = performance.now();
-    const gap = sprinting ? 260 : 420;
+    const gap = sprinting ? 265 : 430;
     if (now - lastFootstep < gap) return;
     lastFootstep = now;
-    noise({
-      dur: rnd(0.05, 0.08),
-      gain: sprinting ? 0.12 : 0.075,
-      freq: rnd(280, 460), q: 1.2, sweepTo: rnd(120, 200),
-    });
+    play(pickDifferent(STEPS, stepRef), { mix: sprinting ? 'step_sprint' : 'step' });
   },
 
-  /** weapon report; louder and lower for big calibers */
-  shot(cal = '9x18') {
-    const profile = {
-      '12/70':   { body: 78,  bright: 3600, dur: 0.34, gain: 0.55 },
-      '7.62x39': { body: 108, bright: 4200, dur: 0.26, gain: 0.46 },
-      '5.45x39': { body: 122, bright: 5000, dur: 0.22, gain: 0.42 },
-      '7.62x25': { body: 150, bright: 5200, dur: 0.16, gain: 0.34 },
-      '9x19':    { body: 145, bright: 4600, dur: 0.17, gain: 0.34 },
-      '9x18':    { body: 160, bright: 4200, dur: 0.15, gain: 0.30 },
-    }[cal] || { body: 150, bright: 4600, dur: 0.18, gain: 0.34 };
-
-    // crack
-    noise({ dur: profile.dur * 0.45, gain: profile.gain, type: 'highpass', freq: profile.bright, sweepTo: profile.bright * 0.25 });
-    // body
-    noise({ dur: profile.dur, gain: profile.gain * 0.8, type: 'bandpass', freq: profile.body * 6, q: 0.7, sweepTo: profile.body });
-    // thump
-    tone({ freq: profile.body, to: profile.body * 0.45, dur: profile.dur * 0.8, gain: 0.22, type: 'sine' });
-    // room tail
-    noise({ dur: profile.dur * 2.2, gain: profile.gain * 0.14, type: 'lowpass', freq: 1400, sweepTo: 300, delay: 0.03 });
+  // ---- containers ----
+  /** the lid noise depends on what is being opened */
+  openContainer(type = '') {
+    const t = String(type);
+    if (/crate|weapon|ammo|ration|grenade|tech|med/.test(t)) play('open_wood');
+    else if (/safe|cash|drawer|filecab|pc|toolbox/.test(t)) play('open_metal');
+    else if (/scav|pmc|body|jacket|duffle|sportbag|suitcase/.test(t)) play('open_door');
+    else play('open_wood');
   },
+  search() { play(SEARCHES[Math.floor(Math.random() * SEARCHES.length)]); },
+  searchDone() { play('confirm'); },
 
-  enemyShot(distance = 12) {
-    const far = clamp01(distance / 26);
-    noise({ dur: 0.2, gain: 0.26 * (1 - far * 0.7), type: 'bandpass', freq: 1400 - far * 900, q: 0.8, sweepTo: 180 });
-    tone({ freq: 130, to: 60, dur: 0.18, gain: 0.12 * (1 - far * 0.6), type: 'sine' });
-  },
+  // ---- raid state ----
+  alert() { play('alert'); },
+  hurt() { play('hurt'); },
+  thud() { play('thud'); },
 
-  hitmark() {
-    tone({ freq: 1800, to: 1400, dur: 0.05, gain: 0.09, type: 'square' });
-  },
-
-  hurt() {
-    noise({ dur: 0.22, gain: 0.3, type: 'lowpass', freq: 700, sweepTo: 160 });
-    tone({ freq: 95, to: 55, dur: 0.3, gain: 0.2, type: 'sine' });
-  },
-
-  kill() {
-    noise({ dur: 0.3, gain: 0.22, type: 'lowpass', freq: 900, sweepTo: 140 });
-    tone({ freq: 240, to: 120, dur: 0.32, gain: 0.1, type: 'triangle', delay: 0.02 });
-  },
-
-  alert() {
-    tone({ freq: 760, to: 520, dur: 0.16, gain: 0.12, type: 'sawtooth' });
-    tone({ freq: 520, to: 340, dur: 0.2, gain: 0.1, type: 'sawtooth', delay: 0.13 });
-  },
-
-  search() {
-    noise({ dur: rnd(0.1, 0.17), gain: 0.09, freq: rnd(900, 1800), q: 0.6, sweepTo: rnd(300, 600) });
-  },
-
-  searchDone() {
-    tone({ freq: 900, to: 1250, dur: 0.11, gain: 0.09, type: 'triangle' });
-    noise({ dur: 0.1, gain: 0.1, freq: 2200, q: 0.8, sweepTo: 900 });
-  },
-
-  extractTick(progress) {
-    tone({ freq: 380 + progress * 520, dur: 0.07, gain: 0.06, type: 'sine' });
-  },
-
+  extractStart() { play('extract_alarm'); },
+  extractTick(progress) { tone({ freq: 420 + progress * 480, dur: 0.06, gain: 0.05, type: 'sine' }); },
   extracted() {
-    [392, 523, 659, 880].forEach((f, i) =>
-      tone({ freq: f, dur: 0.36, gain: 0.09, type: 'triangle', delay: i * 0.11 }));
+    play('confirm', { scale: 1.2 });
+    [392, 523, 659, 880].forEach((f, i) => tone({ freq: f, dur: 0.34, gain: 0.07, type: 'triangle', delay: 0.1 + i * 0.11 }));
   },
-
   died() {
-    tone({ freq: 180, to: 48, dur: 1.4, gain: 0.18, type: 'sine' });
-    noise({ dur: 1.1, gain: 0.12, type: 'lowpass', freq: 500, sweepTo: 80 });
-  },
-
-  timeLow() {
-    tone({ freq: 660, to: 480, dur: 0.13, gain: 0.08, type: 'square' });
+    play('thud', { scale: 1.3, rate: 0.7 });
+    tone({ freq: 170, to: 46, dur: 1.4, gain: 0.16, type: 'sine', delay: 0.05 });
   },
 };
 
@@ -279,7 +282,6 @@ export function startAmbient() {
   const hissGain = ctx.createGain();
   hissGain.gain.value = 0.02;
 
-  // very slow filter drift so the bed never sits still
   const lfo = ctx.createOscillator();
   lfo.frequency.value = 0.045;
   const lfoGain = ctx.createGain();

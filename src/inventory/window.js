@@ -62,7 +62,7 @@ export function openContainerWindow(item) {
   open.set(item.uid, { item, node, body });
   bringToFront(node);
   renderOne(item, node, body);
-  sfx.tab();
+  sfx.windowOpen();
   return node;
 }
 
@@ -71,7 +71,7 @@ export function closeContainerWindow(uid) {
   if (!rec) return;
   rec.node.remove();
   open.delete(uid);
-  sfx.click();
+  sfx.windowClose();
 }
 
 export function closeAllContainerWindows() {

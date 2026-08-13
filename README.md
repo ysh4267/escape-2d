@@ -90,11 +90,17 @@ insertion; anything carried out gains it. Die or run the clock out and only the
 secure container comes home. Worn gear stays equipped between raids — only
 loose loot is unloaded into the stash.
 
-**Sound.** Every effect is synthesised at runtime with WebAudio — gunshots are
-built from a noise crack, a filtered body and a room tail whose character comes
-from the weapon's caliber, so a 12-gauge and a 9x18 genuinely sound different.
-There are no audio files in the repo and nothing extra to attribute. Mute and
-volume live in the top bar and the profile panel.
+**Sound.** Escape From Tarkov's own audio is Battlestate Games' copyrighted
+work and is not redistributed here, so the foley comes from openly licensed
+packs instead — **all CC0**: metal footsteps on concrete for a chemical plant,
+crate and locker rummaging while you search, an alarm for the exfil channel,
+and a clean interface set. Six footstep variants are pitch-shifted per step so
+walking never audibly loops, and the container you open picks its own lid
+sound. The industrial ambience is still synthesised so it can drone without a
+loop point. Weapon fire is deliberately silent for now — gunplay is being
+reworked separately. Full attribution is in
+[`assets/sfx/CREDITS.md`](assets/sfx/CREDITS.md); mute lives in the top bar and
+volume in the profile panel.
 
 **Traders.** Eight traders with the documented buy-back multipliers — Therapist
 0.51, Ragman 0.50, Jaeger 0.48, Mechanic 0.45, Prapor 0.40, Skier 0.39,
@@ -124,9 +130,11 @@ python -m http.server 8777
 | `tools/build_items.py` | builds `src/data/items-db.json` and downloads item artwork |
 | `tools/selection.py` | the curated item list the builder resolves |
 | `tools/build_map.py` | extracts Factory wall / floor / obstacle geometry into `src/data/map-factory.json` |
+| `tools/build_sounds.py` | downloads the CC0 sound packs and transcodes the effects into `assets/sfx/` |
 | `tools/smoke.html` | 91 headless assertions over inventory, map, raid, combat, trader and save logic |
 | `tools/preview_map.html` | renders the raw extracted geometry |
 | `tools/preview_nav.html` | renders navmesh connected components, spawn/extract reachability and per-region walkability |
+| `tools/sfx_test.html` | checks every effect is served and decodable, and that no weapon sounds crept back in |
 
 Regenerate everything:
 
@@ -134,6 +142,7 @@ Regenerate everything:
 cd tools
 python build_items.py --report
 python build_map.py
+python build_sounds.py     # needs ffmpeg and py7zr
 ```
 
 The item builder joins three public data sets: grid footprints, weights, stack
@@ -158,6 +167,12 @@ Battlestate Games; this project is not affiliated with or endorsed by them.
   [SPT](https://github.com/sp-tarkov/server) database dumps.
 - **Extract names, spawn locations and container behaviour** — the Escape From
   Tarkov wiki.
+- **Sound effects** — all CC0: [Kenney](https://kenney.nl/assets/interface-sounds)
+  (interface), [rubberduck](https://opengameart.org/content/100-cc0-sfx-2)
+  (crates, lockers, doors, impacts),
+  [Thimras](https://opengameart.org/content/metal-footsteps-on-concrete)
+  (footsteps) and [yd](https://opengameart.org/content/short-alarm) (exfil
+  alarm). No Battlestate Games audio is included.
 
 Because the map geometry is CC BY-NC-SA, this project inherits the same terms:
 share alike, non-commercial, with attribution.

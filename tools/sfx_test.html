@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>sfx</title>
+<style>
+ body{margin:0;background:#05090b;color:#f4f4f9;font:13px/1.6 Cascadia Mono,Consolas,monospace;padding:18px}
+ #sum{display:inline-block;padding:8px 12px;border:1px solid #344b56;margin-bottom:14px}
+ .ok{color:#7fb39a}.bad{color:#c2604f}.warn{color:#d9a441}
+ .hd{color:#b8dbd9;margin:14px 0 6px;letter-spacing:.15em}
+ table{border-collapse:collapse}
+ td{padding:2px 14px 2px 0}
+ button{background:#22323a;border:1px solid #344b56;color:#cfd9dd;padding:3px 10px;cursor:pointer}
+ button:hover{border-color:#b8dbd9;color:#fff}
+</style></head><body>
+<div id="sum">checking…</div>
+<div id="out"></div>
+<script type="module">
+// Headless browsers have no audio device, so decodeAudioData can hang there.
+// The blocking checks below therefore only touch the network and the file
+// header; decoding is attempted afterwards and reported if it resolves.
+const out = document.getElementById('out');
+const line = (t, cls) => { const d = document.createElement('div'); d.textContent = t; if (cls) d.className = cls; out.append(d); return d; };
+let ok = 0, bad = 0;
+
+const manifest = await (await fetch('../assets/sfx/manifest.json')).json();
+
+const table = document.createElement('table');
+out.append(table);
+const cells = new Map();
+
+for (const name of manifest) {
+  const url = `../assets/sfx/${name}.ogg`;
+  const tr = document.createElement('tr');
+  const mk = (t, cls) => { const td = document.createElement('td'); td.textContent = t; if (cls) td.className = cls; tr.append(td); return td; };
+  mk(name);
+  const statusCell = mk('…');
+  const sizeCell = mk('');
+  const decodeCell = mk('decode …', 'warn');
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const ab = await res.arrayBuffer();
+    const head = new Uint8Array(ab, 0, 4);
+    const isOgg = head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
+    if (!isOgg) throw new Error('not an Ogg container');
+    if (ab.byteLength < 800) throw new Error('suspiciously small');
+    statusCell.textContent = 'OK';
+    statusCell.className = 'ok';
+    sizeCell.textContent = (ab.byteLength / 1024).toFixed(1) + ' KiB';
+    ok++;
+    cells.set(name, { decodeCell, ab });
+  } catch (err) {
+    statusCell.textContent = 'FAIL ' + err.message;
+    statusCell.className = 'bad';
+    decodeCell.textContent = '';
+    bad++;
+  }
+
+  const td = document.createElement('td');
+  const b = document.createElement('button');
+  b.textContent = 'play';
+  b.onclick = async () => {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    window.__ac ||= new AC();
+    const ac = window.__ac;
+    if (ac.state === 'suspended') await ac.resume();
+    const buf = await ac.decodeAudioData((await (await fetch(url)).arrayBuffer()));
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const g = ac.createGain(); g.gain.value = 0.6;
+    src.connect(g); g.connect(ac.destination); src.start();
+  };
+  td.append(b); tr.append(td);
+  table.append(tr);
+}
+
+// --- the audio module must expose what the UI calls, and no weapon sounds ---
+out.append(Object.assign(document.createElement('div'), { className: 'hd', textContent: '== audio api ==' }));
+const audio = await import('../src/core/audio.js');
+const required = ['click', 'tab', 'windowOpen', 'windowClose', 'pick', 'drop', 'deny', 'money',
+  'levelUp', 'footstep', 'openContainer', 'search', 'searchDone', 'alert', 'hurt', 'thud',
+  'extractStart', 'extractTick', 'extracted', 'died'];
+const missing = required.filter((k) => typeof audio.sfx[k] !== 'function');
+const banned = ['shot', 'enemyShot', 'hitmark', 'kill'].filter((k) => typeof audio.sfx[k] === 'function');
+if (missing.length) { bad++; line('  FAIL missing effects: ' + missing.join(', '), 'bad'); }
+else { ok++; line('  OK  every effect the UI calls exists', 'ok'); }
+if (banned.length) { bad++; line('  FAIL weapon sounds still present: ' + banned.join(', '), 'bad'); }
+else { ok++; line('  OK  no weapon sounds are defined', 'ok'); }
+
+// --- no source file may reference a sample that is not in the manifest ---
+const src = await (await fetch('../src/core/audio.js')).text();
+const referenced = new Set();
+for (const m of src.matchAll(/'(step_\d|search_\d|open_\w+|ui_\w+|item_\w+|window_\w+|extract_alarm|confirm|deny|alert|money|hurt|thud)'/g)) {
+  referenced.add(m[1]);
+}
+const unknown = [...referenced].filter((n) => !manifest.includes(n));
+if (unknown.length) { bad++; line('  FAIL audio.js references missing samples: ' + unknown.join(', '), 'bad'); }
+else { ok++; line(`  OK  all ${referenced.size} referenced samples exist`, 'ok'); }
+
+const sum = document.getElementById('sum');
+sum.textContent = `${ok} ok, ${bad} failed  ·  ${manifest.length} effects`;
+sum.style.color = bad ? '#c2604f' : '#7fb39a';
+sum.style.borderColor = bad ? '#c2604f' : '#7fb39a';
+document.title = bad ? `FAIL ${bad}` : `PASS ${ok}`;
+
+// --- best-effort decode, reported when the platform allows it ---
+try {
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const decoder = new OAC(1, 128, 44100);
+  for (const [name, rec] of cells) {
+    decoder.decodeAudioData(rec.ab.slice(0))
+      .then((buf) => { rec.decodeCell.textContent = buf.duration.toFixed(3) + ' s'; rec.decodeCell.className = 'ok'; })
+      .catch((e) => { rec.decodeCell.textContent = 'decode fail: ' + e.message; rec.decodeCell.className = 'bad'; });
+    void name;
+  }
+} catch {
+  for (const [, rec] of cells) { rec.decodeCell.textContent = 'no audio device'; rec.decodeCell.className = 'warn'; }
+}
+</script></body></html>

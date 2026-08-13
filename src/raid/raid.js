@@ -230,6 +230,7 @@ export class Raid {
     }
     this.searching = container;
     this.searchProgress = 0;
+    sfx.openContainer(container.type);
   }
 
   openLoot(container) {
@@ -431,7 +432,7 @@ export class Raid {
     const rpm = weapon.tpl.rpm || 400;
     this.playerCooldown = Math.max(0.09, 60 / rpm);
     this.stats.shots++;
-    sfx.shot(cal);
+    // gunfire is intentionally silent: weapon audio lands with the combat pass
 
     const p = this.player;
     p.facing = Math.atan2(ty - p.y, tx - p.x);
@@ -465,14 +466,13 @@ export class Raid {
     const base = (weapon.tpl.dmg || 40) * (ammo ? (0.7 + (ammo.tpl.dmg || 40) / 120) : 1);
     const died = target.takeHit(base * this.rng.float(0.85, 1.15), this);
     if (died) { this.killScav(target); return 'kill'; }
-    sfx.hitmark();
     return 'hit';
   }
 
   killScav(scav) {
     this.stats.kills++;
     addExp(120);
-    sfx.kill();
+    sfx.thud();
     emit(EV.RAID_TOAST, { kind: 'ok', text: 'Scav down' });
     const def = CONTAINERS.deadscav;
     const body = {
@@ -534,6 +534,7 @@ export class Raid {
       return;
     }
     const before = this.extractHold;
+    if (before === 0) sfx.extractStart();
     this.extractHold += dt;
     if (Math.floor(before / 0.6) !== Math.floor(this.extractHold / 0.6)) {
       sfx.extractTick(Math.min(1, this.extractHold / EXTRACT_HOLD));

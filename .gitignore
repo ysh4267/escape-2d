@@ -10,3 +10,6 @@ tools/_*.png
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# sound source packs (regenerate with tools/build_sounds.py)
+tools/cache/sfx/
