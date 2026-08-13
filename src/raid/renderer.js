@@ -235,8 +235,93 @@ export class Renderer {
     this.drawExtracts(extracts, state);
     this.drawContainers(containers, vis, seen, hover);
     if (path && path.length) this.drawPath(player, path);
+    this.drawScavs(state.scavs || [], nav, player);
+    this.drawShots(state.shots || []);
     this.drawPlayer(player, time);
     this.drawEdgeVignette();
+    this.drawDamage(state);
+  }
+
+  drawScavs(scavs, nav, player) {
+    const g = this.ctx;
+    for (const s of scavs) {
+      if (!s.alive) continue;
+      const d = Math.hypot(s.x - player.x, s.y - player.y);
+      const visible = d <= player.viewRange && nav.lineClear(player.x, player.y, s.x, s.y);
+      if (!visible) continue;
+      const [sx, sy] = this.worldToScreen(s.x, s.y);
+      const r = 0.58 * this.ppu;
+      g.save();
+      // engagement halo
+      if (s.state !== 'patrol') {
+        g.strokeStyle = 'rgba(194,96,79,.5)';
+        g.lineWidth = 1;
+        g.beginPath(); g.arc(sx, sy, r * 2.1, 0, Math.PI * 2); g.stroke();
+      }
+      g.fillStyle = s.hitFlash > 0 ? '#f0c1b8' : '#c2604f';
+      g.strokeStyle = '#120806';
+      g.lineWidth = 2;
+      g.beginPath(); g.arc(sx, sy, r, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.fillStyle = '#2c1815';
+      g.beginPath();
+      g.arc(sx + Math.cos(s.facing) * r * 0.9, sy + Math.sin(s.facing) * r * 0.9, r * 0.32, 0, Math.PI * 2);
+      g.fill();
+      // health pip
+      if (s.hp < s.maxHp) {
+        const w = r * 2.2;
+        g.fillStyle = 'rgba(0,0,0,.6)';
+        g.fillRect(sx - w / 2, sy - r - 8, w, 3);
+        g.fillStyle = '#d9a441';
+        g.fillRect(sx - w / 2, sy - r - 8, w * (s.hp / s.maxHp), 3);
+      }
+      if (s.muzzle > 0) {
+        g.fillStyle = `rgba(255,214,140,${s.muzzle * 0.85})`;
+        const mx = sx + Math.cos(s.facing) * r * 1.5;
+        const my = sy + Math.sin(s.facing) * r * 1.5;
+        g.beginPath(); g.arc(mx, my, r * 0.6 * s.muzzle, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+    }
+  }
+
+  drawShots(shots) {
+    const g = this.ctx;
+    for (const s of shots) {
+      const [ax, ay] = this.worldToScreen(s.from[0], s.from[1]);
+      const [bx, by] = this.worldToScreen(s.to[0], s.to[1]);
+      const a = Math.max(0, s.t / 0.12);
+      g.save();
+      g.strokeStyle = s.hostile
+        ? `rgba(217,140,80,${a * 0.85})`
+        : `rgba(184,219,217,${a * 0.9})`;
+      g.lineWidth = s.hostile ? 1.4 : 1.8;
+      g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.stroke();
+      if (s.hit) {
+        g.strokeStyle = `rgba(244,244,249,${a})`;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(bx - 5, by - 5); g.lineTo(bx + 5, by + 5);
+        g.moveTo(bx + 5, by - 5); g.lineTo(bx - 5, by + 5);
+        g.stroke();
+      }
+      g.restore();
+    }
+  }
+
+  drawDamage(state) {
+    const p = state.player;
+    if (p.lastHitAt == null) return;
+    const since = state.rawTime - p.lastHitAt;
+    if (since > 0.9 || since < 0) return;
+    const a = (1 - since / 0.9) * 0.5;
+    const g = this.ctx;
+    const grad = g.createRadialGradient(
+      this.vw / 2, this.vh / 2, Math.min(this.vw, this.vh) * 0.3,
+      this.vw / 2, this.vh / 2, Math.max(this.vw, this.vh) * 0.7);
+    grad.addColorStop(0, 'rgba(194,96,79,0)');
+    grad.addColorStop(1, `rgba(194,96,79,${a})`);
+    g.fillStyle = grad;
+    g.fillRect(0, 0, this.vw, this.vh);
   }
 
   drawPath(player, path) {

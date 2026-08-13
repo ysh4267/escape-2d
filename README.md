@@ -5,6 +5,8 @@ reimplementation of Escape From Tarkov's grid inventory. Right-click to move,
 right-click a container to search it, drag the loot into your rig, then walk to
 an exfil and hold **F** to take it home.
 
+**Play it: https://ysh4267.github.io/escape-2d/**
+
 No build step, no dependencies — plain ES modules, canvas and DOM.
 
 ![stash](docs/stash.png)
@@ -24,9 +26,11 @@ No build step, no dependencies — plain ES modules, canvas and DOM.
 |---|---|
 | **RMB** on the ground | move there (A\* pathfinding around the real Factory walls) |
 | **RMB** on a container | walk to it and search it |
+| **LMB** | fire at the cursor (hold for automatic weapons) |
 | **TAB** | open / close the inventory overlay |
 | **SHIFT** | sprint (burns stamina) |
 | **F** (hold, 6 s) | extract, when standing in an exfil zone |
+| **ESC** | leave the action — you keep only the pouch |
 | **1 / 2 / 3** in the hideout | stash · traders · raid |
 
 ### Inventory
@@ -65,9 +69,16 @@ per-container-type loot tables and real search times. Containers start
 unsearched and their contents are hidden until you search them. Unexamined
 items render as `?` until you examine them.
 
+**Scavs.** Seven hostiles patrol the navmesh and notice you inside a view cone
+with clear line of sight, then close to a firing distance and shoot. Your
+weapon draws ammunition of the matching caliber from whatever you are carrying,
+your armor soaks a share of incoming damage and wears down doing it, and a dead
+scav leaves a searchable body with its own gear in it.
+
 **Extraction.** Anything carried into a raid loses its found-in-raid mark on
 insertion; anything carried out gains it. Die or run the clock out and only the
-secure container comes home.
+secure container comes home. Worn gear stays equipped between raids — only
+loose loot is unloaded into the stash.
 
 **Traders.** Eight traders with the documented buy-back multipliers — Therapist
 0.51, Ragman 0.50, Jaeger 0.48, Mechanic 0.45, Prapor 0.40, Skier 0.39,
@@ -97,7 +108,7 @@ python -m http.server 8777
 | `tools/build_items.py` | builds `src/data/items-db.json` and downloads item artwork |
 | `tools/selection.py` | the curated item list the builder resolves |
 | `tools/build_map.py` | extracts Factory wall / floor / obstacle geometry into `src/data/map-factory.json` |
-| `tools/smoke.html` | 76 headless assertions over inventory, map, raid, trader and save logic |
+| `tools/smoke.html` | 91 headless assertions over inventory, map, raid, combat, trader and save logic |
 | `tools/preview_map.html` | renders the raw extracted geometry |
 | `tools/preview_nav.html` | renders navmesh connected components, spawn/extract reachability and per-region walkability |
 

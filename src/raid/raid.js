@@ -2,9 +2,10 @@
 // raid session: loot placement, movement, searching, extraction
 // =========================================================
 
-import { Grid, Item, autoPlace } from '../inventory/model.js';
-import { CONTAINERS, poolsFor, EMPTY_CHANCE } from '../data/loot.js';
+import { Grid, Item, autoPlace, detach } from '../inventory/model.js';
+import { CONTAINERS, poolsFor, EMPTY_CHANCE, POOLS } from '../data/loot.js';
 import { TPL } from '../data/items.js';
+import { Scav } from './ai.js';
 import { makeRng } from '../core/rng.js';
 import { clamp, dist, uid } from '../core/util.js';
 import { game, addExp } from '../core/state.js';
@@ -44,7 +45,10 @@ export class Raid {
     this.searchProgress = 0;
     this.pendingInteract = null;
     this.openContainerRef = null;
-    this.stats = { searched: 0, picked: 0, distance: 0 };
+    this.scavs = [];
+    this.shots = [];
+    this.playerCooldown = 0;
+    this.stats = { searched: 0, picked: 0, distance: 0, kills: 0, shots: 0 };
 
     const spawn = this.rng.pick(mapDef.spawns);
     const p = nav.snap(spawn.x, spawn.y) || [spawn.x, spawn.y];
@@ -60,7 +64,37 @@ export class Raid {
     };
 
     this.placeLoot();
+    this.spawnScavs();
     this.markRaidStart();
+  }
+
+  // ---------------------------------------------------------
+  spawnScavs(count = 7) {
+    const rng = this.rng;
+    for (let i = 0; i < count; i++) {
+      let pos = null;
+      for (let tries = 0; tries < 80 && !pos; tries++) {
+        const region = rng.pick(this.map.regions);
+        const [x0, y0, x1, y1] = region.rect;
+        const x = rng.float(x0, x1), y = rng.float(y0, y1);
+        if (!this.nav.walkable(x, y)) continue;
+        if (dist(x, y, this.player.x, this.player.y) < 34) continue;
+        pos = [x, y];
+      }
+      if (!pos) continue;
+      this.scavs.push(new Scav({ x: pos[0], y: pos[1], rng, tier: rng.int(0, 2) }));
+    }
+  }
+
+  randomWalkable(nearX, nearY, radius) {
+    for (let i = 0; i < 40; i++) {
+      const a = this.rng.float(0, Math.PI * 2);
+      const r = this.rng.float(radius * 0.35, radius);
+      const x = nearX + Math.cos(a) * r;
+      const y = nearY + Math.sin(a) * r;
+      if (this.nav.walkable(x, y)) return [x, y];
+    }
+    return null;
   }
 
   // ---------------------------------------------------------
@@ -304,12 +338,167 @@ export class Raid {
       }
     }
 
+    // hostiles
+    this.playerCooldown = Math.max(0, this.playerCooldown - dt);
+    for (const s of this.scavs) s.update(dt, this);
+    for (let i = this.shots.length - 1; i >= 0; i--) {
+      this.shots[i].t -= dt;
+      if (this.shots[i].t <= 0) this.shots.splice(i, 1);
+    }
+
     // extract proximity
     this.nearExtract = null;
     for (const ex of this.extracts) {
       if (dist(p.x, p.y, ex.x, ex.y) <= ex.r) { this.nearExtract = ex; break; }
     }
     if (!this.nearExtract) this.extractHold = 0;
+  }
+
+  // ---------------------------------------------------------
+  // combat
+  // ---------------------------------------------------------
+  registerShot(shot) {
+    this.shots.push({ ...shot, t: 0.12 });
+    if (this.shots.length > 40) this.shots.shift();
+  }
+
+  onScavAlert() {
+    emit(EV.RAID_TOAST, { kind: 'warn', text: 'Contact' });
+  }
+
+  onNearMiss() {
+    if (this.rng.chance(0.35)) emit(EV.RAID_TOAST, { kind: 'warn', text: 'Rounds nearby' });
+  }
+
+  /** the weapon the player will fire, preferring the sling over the holster */
+  activeWeapon() {
+    return game.equipment.item('primary') || game.equipment.item('holster') || null;
+  }
+
+  /** a carried ammo stack matching the weapon's caliber */
+  findAmmo(cal) {
+    for (const g of game.equipment.allGrids()) {
+      for (const it of g.items()) {
+        if (it.cat === 'ammo' && it.tpl.cal === cal && it.stack > 0) return it;
+      }
+    }
+    return null;
+  }
+
+  ammoCount(cal) {
+    let n = 0;
+    for (const g of game.equipment.allGrids()) {
+      for (const it of g.items()) if (it.cat === 'ammo' && it.tpl.cal === cal) n += it.stack;
+    }
+    return n;
+  }
+
+  /** fire toward a world point; returns a short status for the HUD */
+  playerFire(tx, ty) {
+    if (this.status !== RAID_STATUS.RUNNING) return 'over';
+    const weapon = this.activeWeapon();
+    if (!weapon) { emit(EV.RAID_TOAST, { kind: 'warn', text: 'No weapon equipped' }); return 'noweapon'; }
+    if (this.playerCooldown > 0) return 'cooldown';
+
+    const cal = weapon.tpl.cal;
+    const ammo = cal ? this.findAmmo(cal) : null;
+    if (cal && !ammo) { emit(EV.RAID_TOAST, { kind: 'bad', text: `Out of ${cal}` }); return 'noammo'; }
+    if (ammo) {
+      ammo.stack -= 1;
+      if (ammo.stack <= 0) detach(ammo);
+    }
+
+    const rpm = weapon.tpl.rpm || 400;
+    this.playerCooldown = Math.max(0.09, 60 / rpm);
+    this.stats.shots++;
+
+    const p = this.player;
+    p.facing = Math.atan2(ty - p.y, tx - p.x);
+
+    // the closest hostile inside a narrow cone toward the cursor wins the shot
+    let target = null, bestScore = Infinity;
+    for (const s of this.scavs) {
+      if (!s.alive) continue;
+      const d = dist(p.x, p.y, s.x, s.y);
+      if (d > 34) continue;
+      const ang = Math.atan2(s.y - p.y, s.x - p.x);
+      const off = Math.abs(((ang - p.facing + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      if (off > 0.22) continue;
+      if (!this.nav.lineClear(p.x, p.y, s.x, s.y)) continue;
+      const score = d + off * 20;
+      if (score < bestScore) { bestScore = score; target = s; }
+    }
+
+    if (!target) {
+      this.registerShot({ from: [p.x, p.y], to: [tx, ty], hostile: false, hit: false });
+      return 'miss';
+    }
+
+    const d = dist(p.x, p.y, target.x, target.y);
+    const ergo = weapon.tpl.ergo || 40;
+    const chance = clamp(0.94 - d * 0.018 + (ergo - 40) * 0.004, 0.22, 0.96);
+    const hit = this.rng.chance(chance);
+    this.registerShot({ from: [p.x, p.y], to: [target.x, target.y], hostile: false, hit });
+    if (!hit) return 'miss';
+
+    const base = (weapon.tpl.dmg || 40) * (ammo ? (0.7 + (ammo.tpl.dmg || 40) / 120) : 1);
+    const died = target.takeHit(base * this.rng.float(0.85, 1.15), this);
+    if (died) this.killScav(target);
+    return died ? 'kill' : 'hit';
+  }
+
+  killScav(scav) {
+    this.stats.kills++;
+    addExp(120);
+    emit(EV.RAID_TOAST, { kind: 'ok', text: 'Scav down' });
+    const def = CONTAINERS.deadscav;
+    const body = {
+      id: uid('c'), type: 'deadscav', def,
+      x: scav.x, y: scav.y, rot: this.rng.float(-0.4, 0.4),
+      region: 'Body', searched: false,
+      grid: new Grid(def.w, def.h, { tag: 'loot', label: def.name }),
+    };
+    this.rollLoot(body);
+    // scavs carry a little gear of their own
+    for (const pool of [POOLS.gear_misc, POOLS.mags, POOLS.weapons_low]) {
+      if (!this.rng.chance(0.5)) continue;
+      const entry = this.rng.weighted(pool, (e) => e[1]);
+      if (!entry) continue;
+      const tpl = TPL[entry[0]];
+      if (!tpl) continue;
+      const it = new Item(entry[0]);
+      it.raidLoot = true;
+      it.examined = game.profile.examined.has(entry[0]);
+      if (tpl.dura != null) it.dura = Math.round(tpl.dura * this.rng.float(0.2, 0.8));
+      const spot = body.grid.findSpot(it);
+      if (spot) body.grid.place(it, spot.x, spot.y, spot.rot);
+    }
+    this.containers.push(body);
+    this.seen.add(body.id);
+    this.scavs = this.scavs.filter((s) => s !== scav);
+  }
+
+  damagePlayer(amount, source) {
+    const p = this.player;
+    let dmg = amount;
+
+    // body armor soaks a share of it and wears down
+    const armor = game.equipment.item('armor') || game.equipment.item('rig');
+    if (armor && armor.tpl.armorClass && armor.dura > 0) {
+      const soak = clamp(armor.tpl.armorClass * 0.11, 0, 0.62);
+      dmg *= 1 - soak;
+      armor.dura = Math.max(0, armor.dura - amount * 0.09);
+    }
+    const helmet = game.equipment.item('head');
+    if (helmet && helmet.tpl.armorClass && helmet.dura > 0 && this.rng.chance(0.18)) {
+      dmg *= 0.45;
+      helmet.dura = Math.max(0, helmet.dura - amount * 0.12);
+    }
+
+    p.hp = Math.max(0, p.hp - dmg);
+    p.lastHitAt = this.time;
+    p.lastHitFrom = source ? Math.atan2(source.y - p.y, source.x - p.x) : 0;
+    if (p.hp <= 0) this.finish(RAID_STATUS.KIA);
   }
 
   holdExtract(dt) {
@@ -339,6 +528,8 @@ export class Raid {
       map: this.map.name,
       duration: this.map.duration - this.timeLeft,
       searched: this.stats.searched,
+      kills: this.stats.kills,
+      shots: this.stats.shots,
       kept: [],
       lost: [],
       value: 0,
@@ -376,27 +567,27 @@ export class Raid {
     return result;
   }
 
-  /** move loot from the character into the stash after the raid */
+  /**
+   * Empty everything you were carrying into the stash after a raid.
+   * Worn gear stays equipped — only the loose contents of the rig, pockets,
+   * backpack and pouch are unloaded, so you are not re-dressing every run.
+   */
   static depositToStash() {
     const eq = game.equipment;
     const moved = [];
-    // pockets and worn container contents first, then the gear itself
-    const grids = eq.allGrids();
-    for (const g of grids) {
+    const overflow = [];
+    for (const g of eq.allGrids()) {
       for (const it of g.items()) {
         g.remove(it);
         if (autoPlace(it, [game.stash])) moved.push(it);
-        else { const spot = g.findSpot(it); if (spot) g.place(it, spot.x, spot.y, spot.rot); }
+        else {
+          // no room in the stash: put it back where it was
+          const spot = g.findSpot(it);
+          if (spot) g.place(it, spot.x, spot.y, spot.rot);
+          overflow.push(it);
+        }
       }
     }
-    for (const slot of eq.slotList()) {
-      const it = slot.item;
-      if (!it) continue;
-      if (slot.key === 'secure') continue;   // the pouch stays on the character
-      slot.clear();
-      if (autoPlace(it, [game.stash])) moved.push(it);
-      else slot.set(it);
-    }
-    return moved;
+    return { moved, overflow };
   }
 }

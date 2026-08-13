@@ -252,6 +252,63 @@ try {
   state.addMoney(payout, 'RUB');
   check('selling pays out', state.countMoney('RUB') === cashBefore + payout, `${cashBefore} + ${payout}`);
 
+  head('combat');
+  state.initState();
+  const eq4 = state.game.equipment;
+  moveToSlot(new Item('rig_blackrock'), eq4.get('rig'));
+  moveToSlot(new Item('w_ak74n'), eq4.get('primary'));
+  autoPlace(new Item('am_545ps', { stack: 60 }), eq4.carryGrids());
+  const raid4 = new Raid({ mapDef, geo, nav, seed: 4242 });
+  check('scavs spawned', raid4.scavs.length >= 4, String(raid4.scavs.length));
+  check('scavs spawn away from the player',
+        raid4.scavs.every(s => Math.hypot(s.x - raid4.player.x, s.y - raid4.player.y) >= 30));
+  check('scavs stand on walkable floor', raid4.scavs.every(s => nav.walkable(s.x, s.y)));
+  check('active weapon resolves', raid4.activeWeapon()?.tpl.key === 'w_ak74n');
+  const ammo0 = raid4.ammoCount('5.45x39');
+  check('ammo counted', ammo0 === 60, String(ammo0));
+
+  // stand somewhere with a clear shot at one of them
+  let victim = null;
+  outer: for (const s of raid4.scavs) {
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
+      for (const r of [4, 6, 8]) {
+        const spot = nav.snap(s.x + Math.cos(a) * r, s.y + Math.sin(a) * r);
+        if (!spot) continue;
+        if (!nav.lineClear(spot[0], spot[1], s.x, s.y)) continue;
+        raid4.player.x = spot[0]; raid4.player.y = spot[1];
+        victim = s;
+        break outer;
+      }
+    }
+  }
+  check('found a firing position on a scav', !!victim);
+  let outcome = null, guard = 0;
+  while (guard++ < 400 && victim && victim.alive) {
+    raid4.playerCooldown = 0;
+    outcome = raid4.playerFire(victim.x, victim.y);
+    if (outcome === 'noammo' || outcome === 'noweapon') break;
+  }
+  check('firing consumes ammo', raid4.ammoCount('5.45x39') < ammo0, String(raid4.ammoCount('5.45x39')));
+  check('a scav can be killed', victim && !victim.alive, `outcome=${outcome}`);
+  check('a killed scav leaves a searchable body',
+        raid4.containers.some(c => c.type === 'deadscav' && c.region === 'Body'));
+  check('kill counted', raid4.stats.kills === 1, String(raid4.stats.kills));
+
+  const hp0 = raid4.player.hp;
+  raid4.damagePlayer(30, null);
+  check('player takes damage', raid4.player.hp < hp0, `${hp0} -> ${raid4.player.hp}`);
+  raid4.damagePlayer(999, null);
+  check('lethal damage ends the raid', raid4.status === 'kia', raid4.status);
+
+  head('scavs run without throwing');
+  state.initState();
+  const raid5 = new Raid({ mapDef, geo, nav, seed: 5150 });
+  for (let i = 0; i < 900; i++) raid5.update(1 / 30);
+  check('30 simulated seconds are stable', raid5.status === 'running', raid5.status);
+  check('scavs stayed on walkable floor', raid5.scavs.every(s => nav.walkable(s.x, s.y)),
+        raid5.scavs.filter(s => !nav.walkable(s.x, s.y)).length + ' off-mesh');
+  check('scavs actually moved', raid5.scavs.some(s => s.path.length > 0 || s.state !== 'patrol'));
+
   head('death keeps only the pouch');
   state.initState();
   const eq3 = state.game.equipment;

@@ -167,6 +167,10 @@
 .bar--stam { width: 120px; }
 .bar--stam > i { background: var(--ok); }
 
+.vital--ammo { color: var(--tx-1); letter-spacing: .04em; }
+.vital--ammo .ammo-count { color: var(--warn); font-weight: 700; margin-left: 4px; }
+.vital--ammo.is-dry .ammo-count { color: var(--danger); }
+
 .hud-clock { display: flex; align-items: center; gap: 8px; color: var(--tx-1); font-size: 17px; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
 .hud-clock.is-low { color: var(--warn); }
 .hud-clock.is-crit { color: var(--danger); }

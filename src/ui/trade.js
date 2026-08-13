@@ -22,6 +22,9 @@ let cart = [];
 const CUR_SYM = { RUB: '₽', USD: '$', EUR: '€' };
 
 export function initTrade() {
+  // remember the starting stock so restocks can restore it
+  for (const t of TRADERS) for (const off of t.assort) off.base = off.stock;
+
   for (const seg of $$('#pane-traders .seg')) {
     seg.addEventListener('click', () => {
       mode = seg.dataset.mode;
@@ -290,5 +293,12 @@ function randomFenceStock() {
   return fenceStock;
 }
 
-export function rerollFence() { fenceStock = null; }
+/** traders restock between raids: stock counts reset and Fence rotates */
+export function restockTraders() {
+  fenceStock = null;
+  for (const t of TRADERS) {
+    for (const off of t.assort) if (off.base != null) off.stock = off.base;
+  }
+}
+export function rerollFence() { restockTraders(); }
 export function activeTraderId() { return activeId; }

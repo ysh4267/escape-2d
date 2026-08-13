@@ -22,6 +22,8 @@ let rafId = 0;
 let lastT = 0;
 let overlayOpen = false;
 let holdingF = false;
+let firing = false;
+let aim = null;
 let onFinishCb = () => {};
 
 // ---------------------------------------------------------
@@ -60,6 +62,7 @@ function loop(now) {
   if (raid.status === RAID_STATUS.RUNNING) {
     raid.update(dt);
     if (holdingF && raid.nearExtract) raid.holdExtract(dt);
+    if (firing && aim && !overlayOpen) raid.playerFire(aim[0], aim[1]);
   }
   renderer.followCamera(raid.player.x, raid.player.y, dt);
   renderer.draw({
@@ -70,7 +73,10 @@ function loop(now) {
     hover: raid.hover,
     path: raid.path,
     seen: raid.seen,
+    scavs: raid.scavs,
+    shots: raid.shots,
     time: now / 1000,
+    rawTime: raid.time,
     nearExtract: raid.nearExtract,
   });
   drawHud();
@@ -94,6 +100,19 @@ function drawHud() {
   wtBar.classList.toggle('is-over', w > 65);
   $('#wt-text').textContent = `${fmtWeight(w)} kg`;
   $('#stam-fill').style.width = `${p.stamina}%`;
+
+  const weapon = raid.activeWeapon();
+  const ammoRow = $('#ammo-count').parentElement;
+  if (weapon) {
+    $('#ammo-weapon').textContent = weapon.tpl.short || weapon.tpl.name;
+    const n = weapon.tpl.cal ? raid.ammoCount(weapon.tpl.cal) : 0;
+    $('#ammo-count').textContent = weapon.tpl.cal ? String(n) : '—';
+    ammoRow.classList.toggle('is-dry', !!weapon.tpl.cal && n === 0);
+  } else {
+    $('#ammo-weapon').textContent = 'unarmed';
+    $('#ammo-count').textContent = '—';
+    ammoRow.classList.remove('is-dry');
+  }
 
   const clock = $('#raid-timer');
   clock.textContent = fmtClock(raid.timeLeft);
@@ -138,12 +157,20 @@ function bindRaidInput(canvas) {
       const c = raid.containerAt(wx, wy, 1.8);
       if (c) raid.interactWith(c);
       else { raid.cancelSearch(); raid.moveTo(wx, wy); }
+    } else if (e.button === 0) {
+      firing = true;
+      aim = [wx, wy];
+      raid.playerFire(wx, wy);
     }
   });
+
+  window.addEventListener('pointerup', (e) => { if (e.button === 0) firing = false; });
+  window.addEventListener('blur', () => { firing = false; });
 
   canvas.addEventListener('pointermove', (e) => {
     if (!raid) return;
     const [wx, wy] = pointerWorld(e);
+    aim = [wx, wy];
     const c = raid.containerAt(wx, wy, 1.6);
     raid.hover = c && raid.seen.has(c.id) ? c : null;
     canvas.style.cursor = raid.hover ? 'pointer' : 'crosshair';
@@ -186,6 +213,7 @@ function onKeyDown(e) {
     holdingF = true;
   } else if (e.key === 'Escape') {
     if (overlayOpen) closeOverlay();
+    else abandonRaid();
   }
 }
 
@@ -355,6 +383,7 @@ function showResult(result) {
   stats.append(
     stat('TIME', fmtClock(result.duration)),
     stat('CONTAINERS', String(result.searched)),
+    stat('KILLS', String(result.kills ?? 0)),
     stat('ITEMS OUT', String(result.kept.length)),
     stat('HAUL VALUE', `${fmtNum(result.value)} ₽`));
 
@@ -372,8 +401,9 @@ function showResult(result) {
 
   const btn = $('#btn-result-continue');
   btn.onclick = () => {
-    const overflow = Raid.depositToStash();
-    void overflow;
+    const { moved, overflow } = Raid.depositToStash();
+    if (overflow.length) toast(`${overflow.length} items stayed in your gear — stash is full`, 'warn');
+    else if (moved.length) toast(`${moved.length} items unloaded into the stash`, 'ok');
     raid = null;
     saveSoon();
     refreshTopbar();
