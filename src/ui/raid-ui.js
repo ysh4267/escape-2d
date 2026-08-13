@@ -28,6 +28,7 @@ let overlayOpen = false;
 let holdingF = false;
 let firing = false;
 let aim = null;
+let wasMoving = false;
 let onFinishCb = () => {};
 
 // ---------------------------------------------------------
@@ -73,7 +74,14 @@ function loop(now) {
       const enemy = raid.scavAt(aim[0], aim[1], 2.4);
       raid.playerFire(enemy ? enemy.x : aim[0], enemy ? enemy.y : aim[1]);
     }
-    if (raid.player.moving && !overlayOpen) sfx.footstep(raid.player.sprint);
+    // the base gait is a jog, so normal movement uses the run set; a heavy
+    // load drops the player to the slower walk cadence
+    if (raid.player.moving && !overlayOpen) {
+      sfx.footstep(raid.player.sprint, game.equipment.weight() <= 35);
+    }
+    // one settling scuff when the player comes to rest
+    if (wasMoving && !raid.player.moving && !overlayOpen) sfx.halt();
+    wasMoving = raid.player.moving;
   }
   renderer.followCamera(raid.player.x, raid.player.y, dt);
   renderer.draw({
@@ -287,12 +295,14 @@ function onKeyUp(e) {
 
 // ---------------------------------------------------------
 export function openOverlay() {
+  if (!overlayOpen) sfx.ui('window_open');
   overlayOpen = true;
   $('#raid-inventory').hidden = false;
   renderOverlay();
 }
 
 export function closeOverlay() {
+  if (overlayOpen) sfx.ui('close');
   overlayOpen = false;
   $('#raid-inventory').hidden = true;
   if (raid) raid.closeLoot();
@@ -410,6 +420,7 @@ function activateRaidContext() {
           const used = Math.max(1, Math.round(raid.player.hp - before));
           item.res = Math.max(0, item.res - (tpl.heal ? used : 20));
           if (item.res <= 0) detach(item);
+          sfx.use(tpl.cat);
           raidToast(`Used ${tpl.name}`, 'ok');
           dndContext.onChange();
         },

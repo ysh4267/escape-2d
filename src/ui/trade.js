@@ -21,6 +21,7 @@ import { dndContext, quickTransfer } from '../inventory/dnd.js';
 import { setContextProvider, openModal, inspectDialog } from '../inventory/dialogs.js';
 import { openContainerWindow, refreshContainerWindows } from '../inventory/window.js';
 import { buildMenu, markOpenable } from './stash.js';
+import { sfx } from '../core/audio.js';
 import { on, emit, EV } from '../core/events.js';
 import { toast, refreshTopbar } from './shell.js';
 
@@ -56,6 +57,7 @@ export function initTrade() {
     seg.addEventListener('click', () => {
       if (mode === seg.dataset.mode) return;
       mode = seg.dataset.mode;
+      sfx.trade('click');
       returnTableItems();
       renderTrade();
     });
@@ -239,6 +241,7 @@ function renderTabs(host) {
       onclick: () => {
         if (activeId !== t.id) {
           activeId = t.id;
+          sfx.trade('tab');
           returnTableItems();
           renderTrade();
         }
@@ -413,7 +416,7 @@ function openBuyDialog(t, off) {
     const range = el('input', { type: 'range', min: '1', max: String(cap), value: '1' });
     const allBtn = el('button', { class: 'btn btn--sm' }, 'ALL');
     const totalEl = el('b', {});
-    const dealBtn = el('button', { class: 'btn btn--primary' }, 'DEAL');
+    const dealBtn = el('button', { class: 'btn btn--primary', dataset: { sfx: 'own' } }, 'DEAL');
 
     const sync = (v) => {
       qty = clamp(Math.round(Number(v) || 1), 1, cap);
@@ -428,7 +431,7 @@ function openBuyDialog(t, off) {
     field.addEventListener('input', () => sync(field.value));
     range.addEventListener('input', () => sync(range.value));
     allBtn.addEventListener('click', () => sync(Math.max(1, Math.min(cap, affordable))));
-    dealBtn.addEventListener('click', () => { done(); doBuy(t, off, tpl, qty); });
+    dealBtn.addEventListener('click', () => { sfx.trade('buy'); done(); doBuy(t, off, tpl, qty); });
 
     box.append(
       el('div', { class: 'modal__head' }, 'PURCHASE'),
@@ -480,6 +483,7 @@ function doBuy(t, off, tpl, qty) {
   st.rep = Math.min(10, st.rep + (total * (FX[payCur] || 1)) / 900000);
   addExp(Math.round(count * 2));
 
+  sfx.trade('deal');
   toast(`Bought ${count}x ${tpl.name}`, 'ok');
   renderTrade();
   refreshTopbar();
@@ -511,8 +515,9 @@ function renderSell(t, host) {
   let total = 0;
   for (const it of tradeTable.items()) total += sellValue(t, it, FX);
 
-  const dealBtn = el('button', { class: 'btn btn--primary btn--deal', disabled: !tradeTable.count },
-    'DEAL');
+  const dealBtn = el('button', {
+    class: 'btn btn--primary btn--deal', disabled: !tradeTable.count, dataset: { sfx: 'own' },
+  }, 'DEAL');
   dealBtn.addEventListener('click', () => doSell(t));
   wrap.append(el('div', { class: 'table-foot' },
     el('div', { class: 'table-foot__total' },
@@ -526,6 +531,7 @@ function renderSell(t, host) {
 function doSell(t) {
   const items = tradeTable.items();
   if (!items.length) return;
+  sfx.trade('deal');
   let total = 0;
   for (const it of items) total += sellValue(t, it, FX);
   // the sold items sit on the table, not in the stash, so destroying them

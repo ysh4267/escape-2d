@@ -7,6 +7,7 @@ import { hide as hideTooltip } from './tooltip.js';
 import { catLabel } from './view.js';
 import { isKnown } from './examine.js';
 import { isDragging } from './dnd.js';
+import { sfx } from '../core/audio.js';
 
 // ---------------------------------------------------------
 // context menu
@@ -49,12 +50,13 @@ export function openContext(item, x, y) {
     const btn = el('button', {
       class: `ctx__item${a.danger ? ' ctx__item--danger' : ''}`,
       disabled: a.disabled || false,
-      onclick: () => { closeContext(); a.run?.(); },
+      onclick: () => { sfx.ui('click'); closeContext(); a.run?.(); },
     }, icon(a.icon || 'info'), el('span', {}, a.label));
     if (a.key) btn.append(el('span', { class: 'ctx__key' }, a.key));
     ctxNode.append(btn);
   }
   ctxNode.hidden = false;
+  sfx.ui('context');
   const r = ctxNode.getBoundingClientRect();
   ctxNode.style.left = `${Math.min(x, window.innerWidth - r.width - 8)}px`;
   ctxNode.style.top = `${Math.min(y, window.innerHeight - r.height - 8)}px`;
@@ -74,6 +76,7 @@ export function openModal(build, opts = {}) {
   build(box, close);
   root.append(box);
   root.hidden = false;
+  sfx.ui('inspect_open');
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   const onClick = (e) => { if (e.target === root && opts.dismissable !== false) close(); };
   document.addEventListener('keydown', onKey);
@@ -84,6 +87,7 @@ export function openModal(build, opts = {}) {
     root.removeEventListener('pointerdown', onClick);
     root.hidden = true;
     root.replaceChildren();
+    sfx.ui('inspect_close');
     opts.onClose?.();
   }
   return close;

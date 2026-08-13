@@ -154,6 +154,7 @@ export function addExp(n) {
   const lvl = Math.max(1, Math.floor(game.profile.exp / XP_PER_LEVEL) + 1);
   if (lvl !== game.profile.level) {
     game.profile.level = lvl;
+    emit(EV.LEVEL_UP, lvl);
     emit(EV.TOAST, { kind: 'ok', text: `Level ${lvl}` });
   }
 }

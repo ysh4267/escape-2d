@@ -9,6 +9,7 @@ import { Scav } from './ai.js';
 import { makeRng } from '../core/rng.js';
 import { clamp, dist, uid } from '../core/util.js';
 import { game, addExp } from '../core/state.js';
+import { sfx } from '../core/audio.js';
 import { emit, EV } from '../core/events.js';
 
 export const RAID_STATUS = {
@@ -279,9 +280,11 @@ export class Raid {
     this.pendingInteract = null;
     // the panel opens straight away; the contents appear as they are uncovered
     this.openLoot(container);
+    sfx.openContainer(container.type);
     if (container.searched) return;
     this.searching = container;
     this.searchProgress = 0;
+    sfx.search(container.type);
   }
 
   openLoot(container) {
@@ -374,6 +377,9 @@ export class Raid {
           c.found.add(uid);
           this.stats.found++;
           addExp(4);
+          sfx.found();
+          // keep rummaging while there is more to turn up
+          if (c.found.size < c.order.length) sfx.search(c.type);
           emit(EV.LOOT_FOUND, c);
         }
         if (c.found.size >= c.order.length && this.searchProgress >= step * 0.5) {
@@ -459,9 +465,16 @@ export class Raid {
     if (this.rng.chance(0.35)) emit(EV.RAID_TOAST, { kind: 'warn', text: 'Rounds nearby' });
   }
 
-  /** the weapon the player will fire, preferring the sling over the holster */
+  /**
+   * The weapon the player will fire: the sling first, then the one on the
+   * back, then the sidearm. The back slot used to be equippable but was never
+   * read, so a rifle parked there was dead weight.
+   */
   activeWeapon() {
-    return game.equipment.item('primary') || game.equipment.item('holster') || null;
+    return game.equipment.item('primary')
+      || game.equipment.item('secondary')
+      || game.equipment.item('holster')
+      || null;
   }
 
   /** a carried ammo stack matching the weapon's caliber */
@@ -500,7 +513,7 @@ export class Raid {
     const rpm = weapon.tpl.rpm || 400;
     this.playerCooldown = Math.max(0.09, 60 / rpm);
     this.stats.shots++;
-    // gunfire is intentionally silent: weapon audio lands with the combat pass
+    sfx.fire(weapon.tpl);
 
     const p = this.player;
     p.facing = Math.atan2(ty - p.y, tx - p.x);
@@ -614,6 +627,8 @@ export class Raid {
     this.closeLoot();
 
     const survived = status === RAID_STATUS.SURVIVED;
+    if (survived) sfx.extract();
+    else if (status === RAID_STATUS.KIA) sfx.death();
     const result = {
       status,
       extract: viaExtract,

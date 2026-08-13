@@ -5,6 +5,7 @@
 import { $, $$, el, icon, fmtNum } from '../core/util.js';
 import { on, emit, EV } from '../core/events.js';
 import { game, countMoney } from '../core/state.js';
+import { sfx } from '../core/audio.js';
 
 let current = 'boot';
 
@@ -33,6 +34,8 @@ export function refreshTopbar() {
 const ICON_FOR = { ok: 'check', warn: 'warn', bad: 'warn', info: 'info' };
 
 export function toast(text, kind = 'info', ttl = 2600) {
+  // only the refusals get a cue; a chime on every confirmation would nag
+  if (kind === 'warn' || kind === 'bad') sfx.ui('error');
   const host = $('#toasts');
   const node = el('div', { class: `toast toast--${kind}` }, icon(ICON_FOR[kind] || 'info'), el('span', {}, text));
   host.append(node);
@@ -55,10 +58,23 @@ export function initShell() {
   on(EV.TOAST, (p) => toast(p.text, p.kind || 'info'));
   on(EV.RAID_TOAST, (p) => raidToast(p.text, p.kind || 'info'));
   on(EV.INVENTORY_CHANGED, refreshTopbar);
+  on(EV.LEVEL_UP, () => sfx.ui('exp'));
 
   for (const t of $$('#hideout-tabs .tab')) {
-    t.addEventListener('click', () => showPane(t.dataset.tab));
+    t.addEventListener('click', () => { sfx.ui('click'); showPane(t.dataset.tab); });
+    t.addEventListener('pointerenter', () => sfx.ui('hover'));
   }
+
+  // every button in the shell answers to the pointer the same way; anything
+  // carrying data-sfx plays its own cue instead and is skipped here
+  document.addEventListener('pointerenter', (e) => {
+    const b = e.target instanceof Element ? e.target.closest('.btn, .seg, .ttab, .map-card') : null;
+    if (b && !b.disabled) sfx.ui('hover');
+  }, true);
+  document.addEventListener('click', (e) => {
+    const b = e.target instanceof Element ? e.target.closest('.btn, .seg, .map-card') : null;
+    if (b && !b.disabled && !b.dataset.sfx) sfx.ui('click');
+  }, true);
 }
 
 export function bootProgress(pct, label) {

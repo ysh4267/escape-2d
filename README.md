@@ -100,16 +100,26 @@ insertion; anything carried out gains it. Die or run the clock out and only the
 secure container comes home. Worn gear stays equipped between raids — only
 loose loot is unloaded into the stash.
 
-**Sound.** Deliberately sparse: footsteps and the factory ambience, nothing
-else. Six CC0 metal-on-concrete footstep samples
-([Thimras](https://opengameart.org/content/metal-footsteps-on-concrete)) are
-cycled so the same one never plays twice in a row and each is pitch-shifted,
-with a tighter cadence when sprinting. The ambience is synthesised so it drones
-without a loop point and ships no file. Interface, container and extraction
-cues were removed by request, and weapon fire is silent until the combat pass —
-the vetted picks for all of them are parked in `tools/build_sounds.py` so they
-can be restored in one edit. Mute lives in the top bar, volume in the profile
-panel.
+**Sound.** 76 cues over three buses — world foley, interface, ambience —
+covering footsteps by gait, per-material container rummaging, item handling
+keyed to what the item *is*, interface and trader clicks, weapon reports,
+extraction and death.
+
+Two packs can back them. `tools/extract_tarkov_sfx.py` reads a local Escape
+From Tarkov install with [UnityPy](https://github.com/K0lb3/UnityPy) — the
+bundles are plain UnityFS — indexes all 32,815 AudioClips in it, and
+transcodes the picks in `tools/sfx_picks.py` into `assets/sfx-eft/`. That
+audio is Battlestate Games' copyright, so it is gitignored and never
+deployed; the published build falls back to the CC0 pack in `assets/sfx/`
+and any cue without a sample is a silent no-op. See
+[assets/sfx/CREDITS.md](assets/sfx/CREDITS.md).
+
+The mapping follows the game's own taxonomy rather than one invented here:
+footsteps are `<gait>_<surface>` layered with a `gear_stereo` webbing rustle,
+looting is per furniture (`woodbox`, `safe`, `cashregister`, `drawer`,
+`sportbag`, body), and item foley is per class (`med_medkit`, `gear_helmet`,
+`weap_rifle`, `magazine_metal`…) so a helmet lands like a helmet. Mute lives
+in the top bar, volume in the profile panel.
 
 **Traders.** Eight traders with the documented buy-back multipliers — Therapist
 0.51, Ragman 0.50, Jaeger 0.48, Mechanic 0.45, Prapor 0.40, Skier 0.39,
@@ -146,6 +156,8 @@ python -m http.server 8777
 | `tools/selection.py` | the curated item list the builder resolves |
 | `tools/build_map.py` | extracts Factory wall / floor / obstacle geometry into `src/data/map-factory.json` |
 | `tools/build_sounds.py` | downloads the CC0 sound packs and transcodes the effects into `assets/sfx/` |
+| `tools/extract_tarkov_sfx.py` | indexes and extracts the sound effects from a local EFT install into `assets/sfx-eft/` (local only, never committed) |
+| `tools/sfx_picks.py` | which AudioClip backs which cue |
 | `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |
 | `tools/preview_map.html` | renders the raw extracted geometry |
 | `tools/preview_nav.html` | renders navmesh connected components, spawn/extract reachability and per-region walkability |

@@ -12,6 +12,7 @@
 // =========================================================
 
 import { markExamined, isExamined, addExp } from '../core/state.js';
+import { sfx } from '../core/audio.js';
 import { emit, EV } from '../core/events.js';
 
 const DEFAULT_TIME = 1.0;
@@ -62,6 +63,7 @@ export function startExamine(item, onChange) {
     timer: setTimeout(finish, duration * 1000),
   };
   if (!rafId) rafId = requestAnimationFrame(repaint);
+  sfx.item(tpl.cat, 'pickup');   // turning it over in your hands
   active.onChange();
   return true;
 }

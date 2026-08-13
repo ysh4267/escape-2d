@@ -82,7 +82,6 @@ export const SLOT_ACCEPTS = {
   ears: ['headset'],
   face: ['facecover'],
   eyes: ['glasses'],
-  armband: ['armband'],
   armor: ['armor'],
   rig: ['rig'],
   backpack: ['backpack'],

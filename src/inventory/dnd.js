@@ -10,6 +10,7 @@
 import { $, el } from '../core/util.js';
 import { renderItem, gridCellAt } from './view.js';
 import { moveToGrid, moveToSlot, autoPlace, detach, splitStack } from './model.js';
+import { sfx } from '../core/audio.js';
 import { emit, on, EV } from '../core/events.js';
 
 const DRAG_THRESHOLD = 4;
@@ -123,6 +124,7 @@ function onPointerUp(e) {
 function rotateDrag() {
   if (!drag || !drag.item.canRotate) return;
   drag.rot = drag.rot ? 0 : 1;
+  sfx.ui('click');
   rebuildGhost();
   updateDrag(drag.lastX, drag.lastY);
 }
@@ -159,6 +161,9 @@ function beginDrag(e) {
     ghost: null,
   };
   pending = null;
+
+  // the item leaves its slot the moment the drag starts, so the foley does too
+  sfx.item(item.cat, 'pickup');
 
   node.classList.add('is-dragging');
   document.body.classList.add('is-dragging');
@@ -273,11 +278,13 @@ function commitDrag(e) {
     if (target.kind === 'grid') {
       const res = moveToGrid(item, target.grid, target.x, target.y, rot);
       changed = res.ok;
-      if (!res.ok) emit(EV.TOAST, { kind: 'warn', text: 'No room there' });
+      if (res.ok) sfx.item(item.cat, 'drop');
+      else emit(EV.TOAST, { kind: 'warn', text: 'No room there' });
     } else if (target.kind === 'slot') {
       const res = moveToSlot(item, target.slot);
       changed = res.ok;
-      if (!res.ok) emit(EV.TOAST, { kind: 'warn', text: 'Slot is not empty' });
+      if (res.ok) sfx.ui('equip');
+      else emit(EV.TOAST, { kind: 'warn', text: 'Slot is not empty' });
     }
   } else if (target && !target.ok) {
     emit(EV.TOAST, { kind: 'warn', text: target.kind === 'slot' ? 'Wrong slot' : 'Blocked' });
@@ -306,11 +313,13 @@ export function quickTransfer(item) {
   if (!targets.length) return false;
   const from = item.holder;
   const before = item.stack;
+  const cat = item.cat;
   if (autoPlace(item, targets)) {
+    sfx.item(cat, 'pickup');
     dndContext.onChange();
     return true;
   }
-  if (item.stack !== before) { dndContext.onChange(); return true; }
+  if (item.stack !== before) { sfx.item(cat, 'pickup'); dndContext.onChange(); return true; }
   if (from) emit(EV.TOAST, { kind: 'warn', text: 'No space' });
   return false;
 }

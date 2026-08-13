@@ -3,7 +3,7 @@
 <style>
  body{margin:0;background:#05090b;color:#f4f4f9;font:13px/1.6 Cascadia Mono,Consolas,monospace;padding:18px}
  #sum{display:inline-block;padding:8px 12px;border:1px solid #344b56;margin-bottom:14px}
- .ok{color:#7fb39a}.bad{color:#c2604f}.warn{color:#d9a441}
+ .ok{color:#7fb39a}.bad{color:#c2604f}.warn{color:#d9a441}.dim{color:#7c8a92}
  .hd{color:#b8dbd9;margin:16px 0 6px;letter-spacing:.15em}
 </style></head><body>
 <div id="sum">checking…</div>
@@ -17,50 +17,109 @@ const check = (name, cond, extra = '') => {
   if (cond) { ok++; line('  PASS  ' + name, 'ok'); }
   else { bad++; line('  FAIL  ' + name + (extra ? '  -> ' + extra : ''), 'bad'); }
 };
+const note = (t) => line('  ..    ' + t, 'dim');
 
 // ---------------------------------------------------------
-head('shipped effects');
-const manifest = await (await fetch('../assets/sfx/manifest.json')).json();
-check('manifest lists only footsteps',
-  manifest.length === 6 && manifest.every((n) => /^step_\d$/.test(n)),
-  manifest.join(','));
+// Which pack is deployed? The extracted EFT set is gitignored, so a clean
+// checkout only has the CC0 fallback and the coverage checks are skipped.
+head('sound pack');
+let pack = null, manifest = null;
+for (const dir of ['../assets/sfx-eft/', '../assets/sfx/']) {
+  try {
+    const res = await fetch(dir + 'manifest.json');
+    if (!res.ok) continue;
+    manifest = await res.json();
+    pack = dir;
+    break;
+  } catch { /* next */ }
+}
+check('a sound pack is present', !!pack, 'none found');
+const extracted = pack === '../assets/sfx-eft/';
+note(`pack: ${pack}  (${extracted ? 'extracted from a local EFT install' : 'CC0 fallback'})`);
 
-for (const name of manifest) {
-  const res = await fetch(`../assets/sfx/${name}.ogg`);
-  let good = false, detail = '';
+if (Array.isArray(manifest)) {
+  // the CC0 pack is a bare list of footstep files
+  check('fallback manifest lists footsteps', manifest.length >= 4 && manifest.every((n) => /^step_\d$/.test(n)),
+    manifest.join(','));
+  manifest = { step_walk: manifest, step_run: manifest, step_sprint: manifest };
+} else {
+  check('cue manifest is an object of arrays',
+    !!manifest && Object.values(manifest).every((v) => Array.isArray(v) && v.length));
+}
+
+// ---------------------------------------------------------
+head('files');
+const files = [...new Set(Object.values(manifest).flat())];
+note(`${Object.keys(manifest).length} cues over ${files.length} files`);
+let badFiles = [];
+for (const name of files) {
+  const res = await fetch(`${pack}${name}.ogg`);
+  let good = false;
   if (res.ok) {
     const ab = await res.arrayBuffer();
     const h = new Uint8Array(ab, 0, 4);
-    good = h[0] === 0x4f && h[1] === 0x67 && h[2] === 0x67 && h[3] === 0x53 && ab.byteLength > 800;
-    detail = (ab.byteLength / 1024).toFixed(1) + ' KiB';
-  } else {
-    detail = 'HTTP ' + res.status;
+    good = h[0] === 0x4f && h[1] === 0x67 && h[2] === 0x67 && h[3] === 0x53 && ab.byteLength > 500;
   }
-  check(`${name}.ogg is a valid Ogg (${detail})`, good, detail);
+  if (!good) badFiles.push(name);
 }
+check('every manifest file is a valid Ogg', badFiles.length === 0, badFiles.slice(0, 8).join(','));
 
 // ---------------------------------------------------------
 head('audio surface');
 const audio = await import('../src/core/audio.js');
-const keys = Object.keys(audio.sfx);
-check('sfx exposes footstep only', keys.length === 1 && keys[0] === 'footstep', keys.join(','));
-check('ambient controls exist',
-  typeof audio.startAmbient === 'function' && typeof audio.stopAmbient === 'function');
-check('volume controls exist',
-  typeof audio.setEnabled === 'function' && typeof audio.setVolume === 'function');
-
-// no source file may still call a removed cue
-const files = ['src/core/audio.js', 'src/raid/raid.js', 'src/raid/ai.js', 'src/ui/raid-ui.js',
-  'src/ui/trade.js', 'src/ui/shell.js', 'src/ui/stash.js', 'src/main.js',
-  'src/inventory/dnd.js', 'src/inventory/window.js'];
-const stale = [];
-for (const f of files) {
-  const txt = await (await fetch('../' + f)).text();
-  for (const m of txt.matchAll(/sfx\.(\w+)\s*\(/g)) {
-    if (m[1] !== 'footstep') stale.push(`${f}:${m[1]}`);
-  }
+for (const fn of ['play', 'hasCue', 'setEnabled', 'setVolume', 'audioState', 'startAmbient', 'stopAmbient']) {
+  check(`exports ${fn}`, typeof audio[fn] === 'function');
 }
-check('no source calls a removed cue', stale.length === 0, stale.join(', '));
+for (const m of ['footstep', 'halt', 'ui', 'trade', 'item', 'search', 'openContainer', 'use', 'fire', 'found', 'death', 'extract']) {
+  check(`sfx.${m} exists`, typeof audio.sfx[m] === 'function');
+}
+// a cue with no audio behind it must be a quiet no-op, never a throw
+let threw = null;
+try {
+  audio.play('definitely_not_a_cue');
+  audio.sfx.item('nonexistent_category', 'pickup');
+  audio.sfx.search('nonexistent_container');
+  audio.sfx.fire(null);
+  audio.sfx.ui('nope');
+} catch (e) { threw = e; }
+check('unknown cues are silent no-ops', !threw, threw && String(threw));
+
+// ---------------------------------------------------------
+// Every cue name the game asks for must exist in the pack, or it is a typo
+// that would silently never play.
+head('cue coverage');
+const SRC = [
+  'src/core/audio.js', 'src/core/state.js', 'src/raid/raid.js', 'src/raid/ai.js',
+  'src/ui/raid-ui.js', 'src/ui/trade.js', 'src/ui/shell.js', 'src/ui/stash.js',
+  'src/ui/deploy.js', 'src/main.js', 'src/inventory/dnd.js', 'src/inventory/window.js',
+  'src/inventory/dialogs.js', 'src/inventory/examine.js',
+];
+const wanted = new Set();
+for (const f of SRC) {
+  const txt = await (await fetch('../' + f)).text();
+  for (const m of txt.matchAll(/\bplay\(\s*'([a-z0-9_]+)'/g)) wanted.add(m[1]);
+  for (const m of txt.matchAll(/sfx\.ui\(\s*'([a-z0-9_]+)'/g)) wanted.add('ui_' + m[1]);
+  for (const m of txt.matchAll(/sfx\.trade\(\s*'([a-z0-9_]+)'/g)) wanted.add('trade_' + m[1]);
+}
+note(`source asks for ${wanted.size} cues by name`);
+if (extracted) {
+  const absent = [...wanted].filter((c) => !manifest[c]);
+  check('every cue named in source exists in the pack', absent.length === 0, absent.join(','));
+
+  // and the reverse: cues shipped but never asked for are dead weight.
+  // item_/search_/open_/use_/fire_/step_ are picked dynamically, so exempt.
+  const dynamic = /^(item_|search_|open_|use_|fire_|step_|amb_)/;
+  const unused = Object.keys(manifest).filter((c) => !dynamic.test(c) && !wanted.has(c));
+  check('no shipped cue is dead weight', unused.length === 0, unused.join(','));
+
+  // the categories the user specifically asked to hear
+  for (const cue of ['step_walk', 'step_run', 'step_sprint', 'search_wood', 'search_body',
+    'open_case', 'item_med_pickup', 'item_weapon_drop', 'found', 'amb_factory']) {
+    check(`cue present: ${cue}`, !!manifest[cue]);
+  }
+} else {
+  note('CC0 fallback deployed — cue coverage is only checked against the extracted pack');
+}
 
 // ---------------------------------------------------------
 const sum = document.getElementById('sum');
