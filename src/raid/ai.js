@@ -7,6 +7,7 @@
 // =========================================================
 
 import { dist, clamp, uid } from '../core/util.js';
+import { sfx } from '../core/audio.js';
 
 export const SCAV_STATE = { PATROL: 'patrol', ALERT: 'alert', ENGAGE: 'engage', DEAD: 'dead' };
 
@@ -134,6 +135,7 @@ export class Scav {
     const falloff = clamp(1 - (d / FIRE_RANGE) * 0.65, 0.2, 1);
     const hit = raid.rng.chance(this.accuracy * falloff);
     raid.registerShot({ from: [this.x, this.y], to: [raid.player.x, raid.player.y], hostile: true, hit });
+    sfx.enemyShot(d);
     if (hit) raid.damagePlayer(this.damage * raid.rng.float(0.75, 1.25), this);
     else raid.onNearMiss();
   }

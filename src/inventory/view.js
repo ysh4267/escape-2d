@@ -40,12 +40,17 @@ export function renderItem(item, opts = {}) {
       class: 'item__img', src: tpl.imgUrl, alt: '', draggable: 'false', loading: 'lazy',
     });
     if (item.rot) {
+      // The sprite is drawn for the unrotated footprint, so give the element the
+      // unrotated box and spin it about its centre — a W x H box rotated 90 deg
+      // lands exactly on the H x W tile.
+      // `inset` must be cleared BEFORE left/top, or the shorthand wipes them.
+      img.classList.add('is-rot');
+      img.style.inset = 'auto';
       img.style.width = `calc(var(--cell) * ${tpl.w})`;
       img.style.height = `calc(var(--cell) * ${tpl.h})`;
       img.style.left = '50%';
       img.style.top = '50%';
       img.style.transform = 'translate(-50%, -50%) rotate(90deg)';
-      img.style.inset = 'auto';
     }
     img.addEventListener('error', () => {
       img.remove();

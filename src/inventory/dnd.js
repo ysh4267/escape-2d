@@ -11,6 +11,7 @@ import { $, el } from '../core/util.js';
 import { renderItem, gridCellAt } from './view.js';
 import { moveToGrid, moveToSlot, autoPlace, detach, splitStack } from './model.js';
 import { emit, EV } from '../core/events.js';
+import { sfx } from '../core/audio.js';
 
 const DRAG_THRESHOLD = 4;
 
@@ -25,6 +26,8 @@ export const dndContext = {
   equipSlotFor: () => null,
   /** ctrl+drag onto a free cell: ask the UI for a split amount */
   requestSplit: null,
+  /** double-click: open a container, or quick-transfer anything else */
+  onActivate: null,
 };
 
 let pending = null;   // { item, node, startX, startY }
@@ -36,12 +39,32 @@ export function initDnd() {
   document.addEventListener('pointermove', onPointerMove, true);
   document.addEventListener('pointerup', onPointerUp, true);
   document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('dblclick', onDoubleClick, true);
+
+  // this is a game: the browser menu never helps, except inside text fields
   document.addEventListener('contextmenu', (e) => {
-    if (e.target.closest('.item, .grid, .slot')) e.preventDefault();
+    const t = e.target;
+    if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+    e.preventDefault();
   });
 }
 
+function onDoubleClick(e) {
+  const node = e.target.closest('.item');
+  if (!node || !node._item) return;
+  e.preventDefault();
+  e.stopPropagation();
+  dndContext.onActivate?.(node._item);
+}
+
 function onPointerDown(e) {
+  // right button while carrying something rotates it, so rotation needs no key
+  if (e.button === 2 && drag) {
+    e.preventDefault();
+    e.stopPropagation();
+    rotateDrag();
+    return;
+  }
   if (e.button !== 0) return;
   const node = e.target.closest('.item');
   if (!node || !node._item) return;
@@ -92,14 +115,19 @@ function onPointerUp(e) {
   pending = null;
 }
 
+function rotateDrag() {
+  if (!drag || !drag.item.canRotate) return;
+  drag.rot = drag.rot ? 0 : 1;
+  rebuildGhost();
+  updateDrag(drag.lastX, drag.lastY);
+  sfx.click();
+}
+
 function onKeyDown(e) {
   if (!drag) return;
   if (e.key === 'r' || e.key === 'R' || e.key === 'ㄱ') {
     e.preventDefault();
-    if (!drag.item.canRotate) return;
-    drag.rot = drag.rot ? 0 : 1;
-    rebuildGhost();
-    updateDrag(drag.lastX, drag.lastY);
+    rotateDrag();
   } else if (e.key === 'Escape') {
     e.preventDefault();
     cancelDrag();
@@ -131,6 +159,7 @@ function beginDrag(e) {
   node.classList.add('is-dragging');
   document.body.classList.add('is-dragging');
   rebuildGhost();
+  sfx.pick();
 }
 
 function rebuildGhost() {
@@ -241,13 +270,16 @@ function commitDrag(e) {
     if (target.kind === 'grid') {
       const res = moveToGrid(item, target.grid, target.x, target.y, rot);
       changed = res.ok;
-      if (!res.ok) emit(EV.TOAST, { kind: 'warn', text: 'No room there' });
+      if (res.ok) sfx.drop();
+      else { sfx.deny(); emit(EV.TOAST, { kind: 'warn', text: 'No room there' }); }
     } else if (target.kind === 'slot') {
       const res = moveToSlot(item, target.slot);
       changed = res.ok;
-      if (!res.ok) emit(EV.TOAST, { kind: 'warn', text: 'Slot is not empty' });
+      if (res.ok) sfx.drop();
+      else { sfx.deny(); emit(EV.TOAST, { kind: 'warn', text: 'Slot is not empty' }); }
     }
   } else if (target && !target.ok) {
+    sfx.deny();
     emit(EV.TOAST, { kind: 'warn', text: target.kind === 'slot' ? 'Wrong slot' : 'Blocked' });
   }
 
@@ -275,10 +307,12 @@ export function quickTransfer(item) {
   const from = item.holder;
   const before = item.stack;
   if (autoPlace(item, targets)) {
+    sfx.drop();
     dndContext.onChange();
     return true;
   }
-  if (item.stack !== before) { dndContext.onChange(); return true; }
+  if (item.stack !== before) { sfx.drop(); dndContext.onChange(); return true; }
+  sfx.deny();
   if (from) emit(EV.TOAST, { kind: 'warn', text: 'No space' });
   return false;
 }

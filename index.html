@@ -38,6 +38,8 @@
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
   <symbol id="i-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 1.5v5M12 17.5v5M1.5 12h5M17.5 12h5"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4"/><path d="M6 4h11l-2.5 4L17 12H6"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/><path d="M18 7a7.5 7.5 0 0 1 0 10"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
 </svg>
 
 <div id="app">
@@ -68,7 +70,9 @@
         <div class="stat" title="Dollars"><span id="stat-usd">0</span><em>$</em></div>
         <div class="stat" title="Euros"><span id="stat-eur">0</span><em>€</em></div>
         <div class="stat stat--sep" title="Level"><span class="stat__k">LVL</span><span id="stat-level">1</span></div>
-        <button class="btn btn--ghost btn--sm" id="btn-settings" title="Settings">…</button>
+        <button class="btn btn--ghost btn--sm" id="btn-sound" title="Sound on/off">
+          <svg class="ico"><use href="#i-sound"/></svg></button>
+        <button class="btn btn--ghost btn--sm" id="btn-settings" title="Profile and settings">…</button>
       </div>
     </header>
 
@@ -81,7 +85,14 @@
               <h2>GEAR</h2>
               <div class="panel__meta"><svg class="ico"><use href="#i-weight"/></svg><span id="equip-weight">0.00</span> kg</div>
             </div>
-            <div class="panel__body" id="equipment-host"></div>
+            <div class="panel__body panel__body--scroll" id="equipment-host"></div>
+          </div>
+          <div class="panel" id="panel-carry">
+            <div class="panel__head">
+              <h2>INVENTORY</h2>
+              <div class="panel__meta hint">double-click a bag to pop it out</div>
+            </div>
+            <div class="panel__body panel__body--scroll" id="carry-host"></div>
           </div>
           <div class="panel" id="panel-stash">
             <div class="panel__head">
@@ -149,12 +160,18 @@
         <div class="hud-clock"><svg class="ico"><use href="#i-timer"/></svg><span id="raid-timer">40:00</span></div>
       </div>
       <div class="hud-right">
+        <div class="hud-actions">
+          <button class="hudbtn" id="btn-hud-inventory" title="Inventory">
+            <svg class="ico"><use href="#i-stash"/></svg><span>INVENTORY</span></button>
+          <button class="hudbtn" id="btn-hud-sprint" title="Toggle sprint">
+            <svg class="ico"><use href="#i-extract"/></svg><span>SPRINT</span></button>
+          <button class="hudbtn hudbtn--danger" id="btn-hud-leave" title="Leave the action">
+            <svg class="ico"><use href="#i-back"/></svg><span>LEAVE</span></button>
+        </div>
         <div class="hud-keys">
-          <span><b>RMB</b> move / interact</span>
-          <span><b>LMB</b> fire</span>
-          <span><b>TAB</b> inventory</span>
-          <span><b>SHIFT</b> sprint</span>
-          <span><b>F</b> extract &nbsp; <b>ESC</b> leave</span>
+          <span><b>LMB</b> move &nbsp; on an enemy: fire</span>
+          <span><b>RMB</b> search / interact</span>
+          <span>drag an item, <b>RMB</b> to rotate</span>
         </div>
       </div>
     </div>
@@ -166,14 +183,14 @@
       <div class="interact-prompt__bar"><i id="interact-fill"></i></div>
     </div>
 
-    <div class="extract-prompt" id="extract-prompt" hidden>
+    <button class="extract-prompt" id="extract-prompt" hidden>
       <svg class="ico ico--lg"><use href="#i-extract"/></svg>
       <div>
         <div class="extract-prompt__name" id="extract-name">EXTRACT</div>
         <div class="extract-prompt__bar"><i id="extract-fill"></i></div>
-        <div class="extract-prompt__hint">hold <b>F</b></div>
+        <div class="extract-prompt__hint">hold this button</div>
       </div>
-    </div>
+    </button>
 
     <!-- in-raid inventory overlay -->
     <div class="overlay" id="raid-inventory" hidden>
@@ -185,15 +202,19 @@
           </div>
           <div class="panel__body panel__body--scroll" id="loot-host"></div>
         </div>
-        <div class="panel" id="panel-raid-gear">
+        <div class="panel" id="panel-raid-carry">
           <div class="panel__head">
-            <h2>GEAR</h2>
+            <h2>INVENTORY</h2>
             <div class="panel__meta"><svg class="ico"><use href="#i-weight"/></svg><span id="raid-weight">0.00</span> kg</div>
           </div>
+          <div class="panel__body panel__body--scroll" id="raid-carry-host"></div>
+        </div>
+        <div class="panel" id="panel-raid-gear">
+          <div class="panel__head"><h2>GEAR</h2></div>
           <div class="panel__body panel__body--scroll" id="raid-equipment-host"></div>
         </div>
       </div>
-      <button class="overlay__close" id="btn-close-overlay"><svg class="ico"><use href="#i-close"/></svg> CLOSE (TAB)</button>
+      <button class="overlay__close" id="btn-close-overlay"><svg class="ico"><use href="#i-close"/></svg> CLOSE</button>
     </div>
   </section>
 

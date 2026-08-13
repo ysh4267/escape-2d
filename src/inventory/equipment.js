@@ -150,15 +150,22 @@ export class Equipment {
 
 // ---------------------------------------------------------
 // rendering
+//
+// Worn gear and carried storage are deliberately two separate panels: the
+// doll is where you dress the character, the storage panel is where you
+// actually shuffle loot.
 // ---------------------------------------------------------
-export function renderEquipment(equipment, host, opts = {}) {
+export function renderGearSlots(equipment, host) {
   host.replaceChildren();
-
   const doll = el('div', { class: 'equip' });
   for (const d of SLOT_DEFS) {
     doll.append(renderSlot(equipment.slots[d.key], { w: d.w, h: d.h }));
   }
   host.append(doll);
+}
+
+export function renderCarry(equipment, host, opts = {}) {
+  host.replaceChildren();
 
   // pockets: four independent single-cell grids
   const pocketWrap = el('div', { class: 'cnt' },
@@ -168,10 +175,11 @@ export function renderEquipment(equipment, host, opts = {}) {
   pocketWrap.append(row);
   host.append(pocketWrap);
 
-  // containers currently worn, each with its own grids
+  let any = false;
   for (const key of ['rig', 'backpack', 'secure']) {
     const it = equipment.item(key);
     if (it?.grids) {
+      any = true;
       host.append(renderContainerBlock(it, {
         ...opts,
         title: `${equipment.slots[key].label} — ${it.tpl.name}`,
@@ -179,4 +187,15 @@ export function renderEquipment(equipment, host, opts = {}) {
       }));
     }
   }
+  if (!any) {
+    host.append(el('div', { class: 'empty-note' }, 'NO RIG, BACKPACK OR POUCH EQUIPPED'));
+  }
+}
+
+/** legacy single-panel render, kept for anything still calling it */
+export function renderEquipment(equipment, host, opts = {}) {
+  renderGearSlots(equipment, host);
+  const carry = el('div');
+  renderCarry(equipment, carry, opts);
+  host.append(carry);
 }

@@ -10,9 +10,11 @@ import { Item, autoPlace, detach } from '../inventory/model.js';
 import { renderGrid } from '../inventory/view.js';
 import { dndContext } from '../inventory/dnd.js';
 import { setContextProvider } from '../inventory/dialogs.js';
+import { openContainerWindow, refreshContainerWindows } from '../inventory/window.js';
 import { buildMenu } from './stash.js';
 import { emit, EV } from '../core/events.js';
 import { toast, refreshTopbar } from './shell.js';
+import { sfx } from '../core/audio.js';
 
 let activeId = 'prapor';
 let mode = 'buy';
@@ -39,6 +41,7 @@ export function activateTradeContext() {
   dndContext.quickTargets = () => [game.stash];
   dndContext.equipSlotFor = () => null;
   dndContext.requestSplit = null;
+  dndContext.onActivate = (item) => { if (item.isContainer) openContainerWindow(item); };
   dndContext.onChange = () => { renderTrade(); emit(EV.INVENTORY_CHANGED); saveSoon(); };
   setContextProvider((item) => {
     const t = TRADER_BY_ID[activeId];
@@ -102,6 +105,11 @@ export function renderTrade() {
   content.replaceChildren();
   if (mode === 'buy') renderBuy(t, ll, content);
   else renderSell(t, content);
+
+  for (const node of content.querySelectorAll('.item')) {
+    if (node._item?.isContainer) node.classList.add('item--openable');
+  }
+  refreshContainerWindows();
 }
 
 // ---------------------------------------------------------
@@ -134,10 +142,18 @@ function renderBuy(t, ll, host) {
     if (locked) {
       info.append(el('div', { class: 'offer__lock' }, icon('warn', 'ico ico--sm'), `LOYALTY LEVEL ${off.ll}`));
     } else {
+      // stepper buttons so buying never needs the keyboard
       const qty = el('input', { class: 'offer__qty', type: 'number', min: '1', value: '1' });
+      const step = (d) => {
+        const cap = off.stock >= 1000 ? 999 : off.stock;
+        qty.value = String(clamp((Number(qty.value) || 1) + d, 1, Math.max(1, cap)));
+        sfx.click();
+      };
+      const minus = el('button', { class: 'offer__step', onclick: () => step(-1) }, '−');
+      const plus = el('button', { class: 'offer__step', onclick: () => step(1) }, '+');
       const buy = el('button', { class: 'btn btn--sm' }, 'BUY');
       buy.addEventListener('click', () => doBuy(t, off, tpl, Math.max(1, Number(qty.value) || 1)));
-      info.append(el('div', { class: 'offer__buy' }, qty, buy,
+      info.append(el('div', { class: 'offer__buy' }, minus, qty, plus, buy,
         el('span', { class: 'offer__stock' }, off.stock >= 1000 ? '' : `x${off.stock}`)));
     }
     node.append(info);
@@ -167,10 +183,10 @@ function walletPanel(t) {
 function doBuy(t, off, tpl, qty) {
   const unit = buyPrice(t, tpl, FX);
   const count = Math.min(qty, off.stock);
-  if (count <= 0) { toast('Out of stock', 'warn'); return; }
+  if (count <= 0) { sfx.deny(); toast('Out of stock', 'warn'); return; }
   const total = unit * count;
 
-  if (countMoney(t.currency) < total) { toast(`Not enough ${t.currency}`, 'bad'); return; }
+  if (countMoney(t.currency) < total) { sfx.deny(); toast(`Not enough ${t.currency}`, 'bad'); return; }
 
   // reserve space first so we never take money for items that will not fit
   const made = [];
@@ -193,6 +209,7 @@ function doBuy(t, off, tpl, qty) {
   st.rep = Math.min(10, st.rep + (total * (FX[t.currency] || 1)) / 900000);
   addExp(Math.round(count * 2));
 
+  sfx.money();
   toast(`Bought ${count}x ${tpl.name}`, 'ok');
   renderTrade();
   refreshTopbar();
@@ -249,10 +266,11 @@ function renderSell(t, host) {
 
 function addToSellCart(item) {
   const t = TRADER_BY_ID[activeId];
-  if (!canBuyFrom(t, item)) { toast(`${t.name} does not buy that`, 'warn'); return; }
-  if (item.tpl.cat === 'money') { toast('Cannot sell currency', 'warn'); return; }
+  if (!canBuyFrom(t, item)) { sfx.deny(); toast(`${t.name} does not buy that`, 'warn'); return; }
+  if (item.tpl.cat === 'money') { sfx.deny(); toast('Cannot sell currency', 'warn'); return; }
   if (cart.some((c) => c.item === item)) return;
   cart.push({ item });
+  sfx.click();
   renderTrade();
 }
 
@@ -268,6 +286,7 @@ function doSell(t, total) {
   const rub = total * (FX[t.currency] || 1);
   st.rep = Math.min(10, st.rep + rub / 1400000);
   addExp(Math.round(items.length * 3));
+  sfx.money();
   toast(`Sold ${items.length} item${items.length > 1 ? 's' : ''}`, 'ok');
   renderTrade();
   refreshTopbar();

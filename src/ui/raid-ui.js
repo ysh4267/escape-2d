@@ -8,7 +8,9 @@ import { Renderer } from '../raid/renderer.js';
 import { NavGrid } from '../raid/nav.js';
 import { game, saveSoon, markExamined, isExamined } from '../core/state.js';
 import { renderGrid, renderItem } from '../inventory/view.js';
-import { renderEquipment } from '../inventory/equipment.js';
+import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
+import { openContainerWindow, refreshContainerWindows, closeAllContainerWindows } from '../inventory/window.js';
+import { sfx, startAmbient, stopAmbient } from '../core/audio.js';
 import { dndContext, quickTransfer } from '../inventory/dnd.js';
 import { setContextProvider, splitDialog, inspectDialog, confirmDialog } from '../inventory/dialogs.js';
 import { autoPlace, detach, splitStack, moveToSlot } from '../inventory/model.js';
@@ -41,6 +43,9 @@ export function startRaid({ mapDef, geo, onFinish }) {
   bindRaidInput(canvas);
   activateRaidContext();
   closeOverlay();
+  closeAllContainerWindows();
+  startAmbient();
+  $('#btn-hud-sprint').classList.remove('is-on');
   raidToast(`Inserted — ${raid.player.spawnName}`, 'ok', 3400);
   raidToast(`${raid.containers.length} containers on this map`, 'info', 3400);
 
@@ -62,7 +67,11 @@ function loop(now) {
   if (raid.status === RAID_STATUS.RUNNING) {
     raid.update(dt);
     if (holdingF && raid.nearExtract) raid.holdExtract(dt);
-    if (firing && aim && !overlayOpen) raid.playerFire(aim[0], aim[1]);
+    if (firing && aim && !overlayOpen) {
+      const enemy = raid.scavAt(aim[0], aim[1], 2.4);
+      raid.playerFire(enemy ? enemy.x : aim[0], enemy ? enemy.y : aim[1]);
+    }
+    if (raid.player.moving && !overlayOpen) sfx.footstep(raid.player.sprint);
   }
   renderer.followCamera(raid.player.x, raid.player.y, dt);
   renderer.draw({
@@ -75,6 +84,7 @@ function loop(now) {
     seen: raid.seen,
     scavs: raid.scavs,
     shots: raid.shots,
+    hoverEnemy: raid.hoverEnemy,
     time: now / 1000,
     rawTime: raid.time,
     nearExtract: raid.nearExtract,
@@ -134,12 +144,14 @@ function drawHud() {
   if (raid.nearExtract && raid.status === RAID_STATUS.RUNNING) {
     ep.hidden = false;
     const locked = raid.nearExtract.req && !raid.hasKey(raid.nearExtract.req);
+    ep.classList.toggle('is-locked', !!locked);
     $('#extract-name').textContent = locked
       ? `${raid.nearExtract.name} — LOCKED`
       : raid.nearExtract.name.toUpperCase();
     $('#extract-fill').style.width = `${(raid.extractHold / 6) * 100}%`;
   } else {
     ep.hidden = true;
+    holdingF = false;
   }
 }
 
@@ -150,30 +162,40 @@ function bindRaidInput(canvas) {
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+  // left button moves, or opens fire when the cursor is on a visible hostile;
+  // right button searches containers. No keyboard needed for either.
   canvas.addEventListener('pointerdown', (e) => {
     if (!raid || raid.status !== RAID_STATUS.RUNNING) return;
     const [wx, wy] = pointerWorld(e);
+    aim = [wx, wy];
     if (e.button === 2) {
       const c = raid.containerAt(wx, wy, 1.8);
       if (c) raid.interactWith(c);
-      else { raid.cancelSearch(); raid.moveTo(wx, wy); }
+      else raid.cancelSearch();
     } else if (e.button === 0) {
-      firing = true;
-      aim = [wx, wy];
-      raid.playerFire(wx, wy);
+      const enemy = raid.scavAt(wx, wy, 1.9);
+      if (enemy) {
+        firing = true;
+        raid.playerFire(enemy.x, enemy.y);
+      } else {
+        raid.cancelSearch();
+        raid.moveTo(wx, wy);
+      }
     }
   });
 
   window.addEventListener('pointerup', (e) => { if (e.button === 0) firing = false; });
-  window.addEventListener('blur', () => { firing = false; });
+  window.addEventListener('blur', () => { firing = false; holdingF = false; });
 
   canvas.addEventListener('pointermove', (e) => {
     if (!raid) return;
     const [wx, wy] = pointerWorld(e);
     aim = [wx, wy];
-    const c = raid.containerAt(wx, wy, 1.6);
+    const enemy = raid.scavAt(wx, wy, 1.9);
+    const c = enemy ? null : raid.containerAt(wx, wy, 1.6);
     raid.hover = c && raid.seen.has(c.id) ? c : null;
-    canvas.style.cursor = raid.hover ? 'pointer' : 'crosshair';
+    raid.hoverEnemy = enemy || null;
+    canvas.style.cursor = enemy ? 'crosshair' : raid.hover ? 'pointer' : 'default';
   });
 
   canvas.addEventListener('wheel', (e) => {
@@ -191,6 +213,28 @@ function bindRaidInput(canvas) {
     if (raid) raid.closeLoot();
     renderOverlay();
   });
+
+  // on-screen equivalents for everything that used to need a key
+  $('#btn-hud-inventory').addEventListener('click', () => {
+    overlayOpen ? closeOverlay() : openOverlay();
+  });
+  const sprintBtn = $('#btn-hud-sprint');
+  sprintBtn.addEventListener('click', () => {
+    if (!raid) return;
+    raid.player.sprint = !raid.player.sprint;
+    sprintBtn.classList.toggle('is-on', raid.player.sprint);
+    sfx.click();
+  });
+  $('#btn-hud-leave').addEventListener('click', () => abandonRaid());
+
+  // hold the extract panel with the mouse to channel the exfil
+  const ep = $('#extract-prompt');
+  const startHold = (e) => { e.preventDefault(); holdingF = true; };
+  const endHold = () => { holdingF = false; if (raid) raid.releaseExtract(); };
+  ep.addEventListener('pointerdown', startHold);
+  ep.addEventListener('pointerup', endHold);
+  ep.addEventListener('pointerleave', endHold);
+  ep.addEventListener('pointercancel', endHold);
 
   on(EV.LOOT_OPENED, () => openOverlay());
 }
@@ -270,8 +314,18 @@ function renderOverlay() {
     host.append(renderGrid(c.grid));
   }
 
-  renderEquipment(game.equipment, $('#raid-equipment-host'));
+  renderCarry(game.equipment, $('#raid-carry-host'));
+  renderGearSlots(game.equipment, $('#raid-equipment-host'));
   $('#raid-weight').textContent = fmtWeight(game.equipment.weight());
+
+  for (const host of ['#loot-host', '#raid-carry-host', '#raid-equipment-host']) {
+    const root = $(host);
+    if (!root) continue;
+    for (const node of root.querySelectorAll('.item')) {
+      if (node._item?.isContainer) node.classList.add('item--openable');
+    }
+  }
+  refreshContainerWindows();
 }
 
 // ---------------------------------------------------------
@@ -286,6 +340,10 @@ function activateRaidContext() {
   };
   dndContext.equipSlotFor = (item) => game.equipment.slotFor(item);
   dndContext.requestSplit = (item, cb) => splitDialog(item, cb);
+  dndContext.onActivate = (item) => {
+    if (item.isContainer) openContainerWindow(item);
+    else quickTransfer(item);
+  };
   dndContext.canMove = (item) => {
     const h = item.holder;
     if (h?.kind === 'grid' && h.grid.tag === 'loot') {
@@ -360,7 +418,10 @@ function activateRaidContext() {
 on(EV.RAID_END, (result) => {
   stopLoop();
   holdingF = false;
+  firing = false;
   closeOverlay();
+  closeAllContainerWindows();
+  stopAmbient();
   showResult(result);
 });
 

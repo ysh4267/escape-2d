@@ -10,6 +10,7 @@ import { makeRng } from '../core/rng.js';
 import { clamp, dist, uid } from '../core/util.js';
 import { game, addExp } from '../core/state.js';
 import { emit, EV } from '../core/events.js';
+import { sfx } from '../core/audio.js';
 
 export const RAID_STATUS = {
   RUNNING: 'running',
@@ -246,6 +247,21 @@ export class Raid {
     this.searchProgress = 0;
   }
 
+  /** the visible hostile under a world point, if any */
+  scavAt(x, y, radius = 1.8) {
+    let best = null, bestD = radius;
+    for (const s of this.scavs) {
+      if (!s.alive) continue;
+      const d = dist(s.x, s.y, x, y);
+      if (d >= bestD) continue;
+      const seen = dist(s.x, s.y, this.player.x, this.player.y) <= this.player.viewRange
+        && this.nav.lineClear(this.player.x, this.player.y, s.x, s.y);
+      if (!seen) continue;
+      bestD = d; best = s;
+    }
+    return best;
+  }
+
   containerAt(x, y, radius = 1.6) {
     let best = null, bestD = radius;
     for (const c of this.containers) {
@@ -286,13 +302,16 @@ export class Raid {
       if (dist(p.x, p.y, c.x, c.y) > INTERACT_RANGE + 0.6) {
         this.cancelSearch();
       } else {
+        const before = this.searchProgress;
         this.searchProgress += dt;
+        if (Math.floor(before / 0.42) !== Math.floor(this.searchProgress / 0.42)) sfx.search();
         if (this.searchProgress >= c.def.search) {
           c.searched = true;
           this.stats.searched++;
           addExp(6);
           this.searching = null;
           this.searchProgress = 0;
+          sfx.searchDone();
           this.openLoot(c);
         }
       }
@@ -363,6 +382,7 @@ export class Raid {
   }
 
   onScavAlert() {
+    sfx.alert();
     emit(EV.RAID_TOAST, { kind: 'warn', text: 'Contact' });
   }
 
@@ -411,6 +431,7 @@ export class Raid {
     const rpm = weapon.tpl.rpm || 400;
     this.playerCooldown = Math.max(0.09, 60 / rpm);
     this.stats.shots++;
+    sfx.shot(cal);
 
     const p = this.player;
     p.facing = Math.atan2(ty - p.y, tx - p.x);
@@ -443,13 +464,15 @@ export class Raid {
 
     const base = (weapon.tpl.dmg || 40) * (ammo ? (0.7 + (ammo.tpl.dmg || 40) / 120) : 1);
     const died = target.takeHit(base * this.rng.float(0.85, 1.15), this);
-    if (died) this.killScav(target);
-    return died ? 'kill' : 'hit';
+    if (died) { this.killScav(target); return 'kill'; }
+    sfx.hitmark();
+    return 'hit';
   }
 
   killScav(scav) {
     this.stats.kills++;
     addExp(120);
+    sfx.kill();
     emit(EV.RAID_TOAST, { kind: 'ok', text: 'Scav down' });
     const def = CONTAINERS.deadscav;
     const body = {
@@ -498,6 +521,7 @@ export class Raid {
     p.hp = Math.max(0, p.hp - dmg);
     p.lastHitAt = this.time;
     p.lastHitFrom = source ? Math.atan2(source.y - p.y, source.x - p.x) : 0;
+    sfx.hurt();
     if (p.hp <= 0) this.finish(RAID_STATUS.KIA);
   }
 
@@ -509,7 +533,11 @@ export class Raid {
       this.extractHold = 0;
       return;
     }
+    const before = this.extractHold;
     this.extractHold += dt;
+    if (Math.floor(before / 0.6) !== Math.floor(this.extractHold / 0.6)) {
+      sfx.extractTick(Math.min(1, this.extractHold / EXTRACT_HOLD));
+    }
     if (this.extractHold >= EXTRACT_HOLD) this.finish(RAID_STATUS.SURVIVED, ex);
   }
 
@@ -522,6 +550,8 @@ export class Raid {
     this.closeLoot();
 
     const survived = status === RAID_STATUS.SURVIVED;
+    if (survived) sfx.extracted();
+    else if (status === RAID_STATUS.KIA) sfx.died();
     const result = {
       status,
       extract: viaExtract,

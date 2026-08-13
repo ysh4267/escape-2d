@@ -5,6 +5,7 @@
 import { $, $$, el, icon, fmtNum } from '../core/util.js';
 import { on, emit, EV } from '../core/events.js';
 import { game, countMoney } from '../core/state.js';
+import { sfx } from '../core/audio.js';
 
 let current = 'boot';
 
@@ -57,7 +58,7 @@ export function initShell() {
   on(EV.INVENTORY_CHANGED, refreshTopbar);
 
   for (const t of $$('#hideout-tabs .tab')) {
-    t.addEventListener('click', () => showPane(t.dataset.tab));
+    t.addEventListener('click', () => { sfx.tab(); showPane(t.dataset.tab); });
   }
 }
 

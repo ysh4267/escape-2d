@@ -30,7 +30,7 @@ export class Renderer {
     this.ctx = canvas.getContext('2d');
     this.geo = geo;
     this.L = geo.levels[level];
-    this.ppu = 8.6;                // pixels per svg unit
+    this.ppu = 13;                 // pixels per svg unit
     this.cam = { x: 65, y: 70 };
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.mapScale = 12;
@@ -235,14 +235,14 @@ export class Renderer {
     this.drawExtracts(extracts, state);
     this.drawContainers(containers, vis, seen, hover);
     if (path && path.length) this.drawPath(player, path);
-    this.drawScavs(state.scavs || [], nav, player);
+    this.drawScavs(state.scavs || [], nav, player, state.hoverEnemy);
     this.drawShots(state.shots || []);
     this.drawPlayer(player, time);
     this.drawEdgeVignette();
     this.drawDamage(state);
   }
 
-  drawScavs(scavs, nav, player) {
+  drawScavs(scavs, nav, player, hoverEnemy = null) {
     const g = this.ctx;
     for (const s of scavs) {
       if (!s.alive) continue;
@@ -251,6 +251,23 @@ export class Renderer {
       if (!visible) continue;
       const [sx, sy] = this.worldToScreen(s.x, s.y);
       const r = 0.58 * this.ppu;
+
+      // brackets show that a left click here opens fire rather than moving
+      if (s === hoverEnemy) {
+        g.save();
+        g.strokeStyle = '#f0c1b8';
+        g.lineWidth = 2;
+        const b = r * 2.1, k = r * 0.8;
+        for (const [mx, my] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          g.beginPath();
+          g.moveTo(sx + mx * b, sy + my * b - my * k);
+          g.lineTo(sx + mx * b, sy + my * b);
+          g.lineTo(sx + mx * b - mx * k, sy + my * b);
+          g.stroke();
+        }
+        g.restore();
+      }
+
       g.save();
       // engagement halo
       if (s.state !== 'patrol') {

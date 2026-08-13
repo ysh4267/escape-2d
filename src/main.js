@@ -12,6 +12,7 @@ import { Item, autoPlace, moveToSlot } from './inventory/model.js';
 import { initDnd } from './inventory/dnd.js';
 import { initTooltip } from './inventory/tooltip.js';
 import { initContextMenu, confirmDialog } from './inventory/dialogs.js';
+import { initAudio, audioState, setEnabled, setVolume, sfx } from './core/audio.js';
 import { initShell, showScreen, showPane, refreshTopbar, bootProgress, toast } from './ui/shell.js';
 import { initStash, renderStash, activateStashContext } from './ui/stash.js';
 import { initDeploy, renderDeploy } from './ui/deploy.js';
@@ -64,6 +65,7 @@ async function boot() {
   if (!restored) seedNewProfile();
 
   bootProgress(0.82, 'building interface');
+  initAudio();
   initShell();
   initDnd();
   initTooltip();
@@ -167,6 +169,29 @@ function runDevHooks() {
   if (!mode) return;
   if (mode === 'traders') { showPane('traders'); return; }
   if (mode === 'deploy') { showPane('raid'); return; }
+  if (mode === 'rot') {
+    // rotate every rotatable item in the stash so the sprite geometry can be
+    // eyeballed in a single capture
+    for (const it of game.stash.items()) {
+      if (!it.canRotate) continue;
+      const pos = game.stash.posOf(it);
+      game.stash.remove(it);
+      if (game.stash.canPlace(it, pos.x, pos.y, 1)) game.stash.place(it, pos.x, pos.y, 1);
+      else {
+        const spot = game.stash.findSpot(it, { preferRot: true });
+        if (spot) game.stash.place(it, spot.x, spot.y, spot.rot);
+        else game.stash.place(it, pos.x, pos.y, it.rot);
+      }
+    }
+    renderStash();
+    return;
+  }
+  if (mode === 'window') {
+    const bag = game.stash.items().find((i) => i.isContainer)
+      || game.equipment.item('rig');
+    if (bag) import('./inventory/window.js').then((m) => m.openContainerWindow(bag));
+    return;
+  }
   if (mode !== 'raid' && mode !== 'loot') return;
 
   deploy('factory');
@@ -217,6 +242,20 @@ function deploy(mapId) {
 function wireGlobalKeys() {
   $('#btn-settings').addEventListener('click', openSettings);
 
+  const soundBtn = $('#btn-sound');
+  const paintSound = () => {
+    const { enabled } = audioState();
+    soundBtn.querySelector('use').setAttribute('href', enabled ? '#i-sound' : '#i-mute');
+    soundBtn.style.color = enabled ? '' : 'var(--danger)';
+    soundBtn.title = enabled ? 'Sound on — click to mute' : 'Muted — click to unmute';
+  };
+  soundBtn.addEventListener('click', () => {
+    setEnabled(!audioState().enabled);
+    paintSound();
+    if (audioState().enabled) sfx.tab();
+  });
+  paintSound();
+
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
     const hideout = $('#screen-hideout').classList.contains('is-active');
@@ -225,6 +264,27 @@ function wireGlobalKeys() {
     if (e.key === '2') showPane('traders');
     if (e.key === '3') showPane('raid');
   });
+}
+
+function volumeRow() {
+  const { volume } = audioState();
+  const slider = el('input', {
+    type: 'range', min: '0', max: '100', value: String(Math.round(volume * 100)),
+    style: { flex: '1', accentColor: 'var(--pale)' },
+  });
+  const readout = el('span', { class: 'muted', style: { width: '38px', textAlign: 'right' } },
+    `${Math.round(volume * 100)}%`);
+  slider.addEventListener('input', () => {
+    setVolume(Number(slider.value) / 100);
+    readout.textContent = `${slider.value}%`;
+  });
+  slider.addEventListener('change', () => sfx.click());
+  return el('div', {
+    style: {
+      display: 'flex', alignItems: 'center', gap: '12px',
+      marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--line-1)',
+    },
+  }, el('span', { class: 'hint', style: { width: '58px' } }, 'VOLUME'), slider, readout);
 }
 
 function openSettings() {
@@ -243,6 +303,7 @@ function openSettings() {
             el('dt', {}, 'SURVIVED'), el('dd', {}, String(stats.survived)),
             el('dt', {}, 'DIED'), el('dd', {}, String(stats.died)),
             el('dt', {}, 'BEST HAUL'), el('dd', {}, `${Math.round(stats.bestHaul).toLocaleString('en-US')} ₽`)),
+          volumeRow(),
           el('div', { class: 'tooltip__desc', style: { marginTop: '14px', borderTop: '1px solid var(--line-1)', paddingTop: '10px' } },
             'Non-commercial fan project. Escape From Tarkov is a trademark of Battlestate Games. '
             + 'Map geometry from the-hideout/tarkov-dev-svg-maps (CC BY-NC-SA 4.0); item artwork from '

@@ -1,9 +1,10 @@
 # ESCAPE 2D — Factory
 
 A top-down, browser-based extraction shooter sandbox built around a faithful
-reimplementation of Escape From Tarkov's grid inventory. Right-click to move,
+reimplementation of Escape From Tarkov's grid inventory. Click to move,
 right-click a container to search it, drag the loot into your rig, then walk to
-an exfil and hold **F** to take it home.
+an exfil and hold the button to take it home. Mouse only — the keyboard is
+optional.
 
 **Play it: https://ysh4267.github.io/escape-2d/**
 
@@ -22,27 +23,36 @@ No build step, no dependencies — plain ES modules, canvas and DOM.
 
 ## Playing
 
+Everything is playable with the mouse alone.
+
 | | |
 |---|---|
-| **RMB** on the ground | move there (A\* pathfinding around the real Factory walls) |
-| **RMB** on a container | walk to it and search it |
-| **LMB** | fire at the cursor (hold for automatic weapons) |
-| **TAB** | open / close the inventory overlay |
-| **SHIFT** | sprint (burns stamina) |
-| **F** (hold, 6 s) | extract, when standing in an exfil zone |
-| **ESC** | leave the action — you keep only the pouch |
-| **1 / 2 / 3** in the hideout | stash · traders · raid |
+| **left click** the ground | move there (A\* pathfinding around the real Factory walls) |
+| **left click** a hostile | open fire; hold to keep shooting |
+| **right click** a container | walk to it and search it |
+| **wheel** | zoom |
+| **INVENTORY / SPRINT / LEAVE** buttons | bottom-right of the raid HUD |
+| hold the **exfil panel** | channel the extraction |
+
+Optional keyboard shortcuts still work: `TAB` inventory, `SHIFT` sprint,
+`F` extract, `ESC` leave, `1/2/3` for the hideout tabs.
 
 ### Inventory
 
 | | |
 |---|---|
 | **drag** | move an item; the ghost anchors by its **top-left** cell, as in Tarkov |
-| **R** while dragging | rotate 90° (square items are a no-op) |
-| **CTRL + click** | quick transfer — rig, then pockets, then backpack |
-| **CTRL + drag** onto a free cell | split the stack |
-| **ALT + click** | equip into the matching slot |
-| **RMB** on an item | context menu: examine, use, split, equip, inspect, discard |
+| **right click while dragging** | rotate 90° (`R` also works; square items are a no-op) |
+| **double click** a bag, rig or case | pop it out into a draggable window you can drop items into |
+| **double click** anything else | quick transfer |
+| **right click** an item | context menu: open, examine, use, split, equip, inspect, discard |
+| **ctrl + click** | quick transfer — rig, then pockets, then backpack |
+| **ctrl + drag** onto a free cell | split the stack |
+| **alt + click** | equip into the matching slot |
+
+Gear and carried storage are separate panels: the doll on the left is where
+you dress the character, the inventory panel next to it is where you actually
+shuffle loot.
 
 ---
 
@@ -79,6 +89,12 @@ scav leaves a searchable body with its own gear in it.
 insertion; anything carried out gains it. Die or run the clock out and only the
 secure container comes home. Worn gear stays equipped between raids — only
 loose loot is unloaded into the stash.
+
+**Sound.** Every effect is synthesised at runtime with WebAudio — gunshots are
+built from a noise crack, a filtered body and a room tail whose character comes
+from the weapon's caliber, so a 12-gauge and a 9x18 genuinely sound different.
+There are no audio files in the repo and nothing extra to attribute. Mute and
+volume live in the top bar and the profile panel.
 
 **Traders.** Eight traders with the documented buy-back multipliers — Therapist
 0.51, Ragman 0.50, Jaeger 0.48, Mechanic 0.45, Prapor 0.40, Skier 0.39,

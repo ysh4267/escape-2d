@@ -84,7 +84,9 @@
   pointer-events: none;
   padding: 2px;
 }
-.item__img.is-rot { transform: rotate(90deg) scale(var(--rot-scale, 1)); }
+/* rotated tiles get their geometry from inline styles in view.js; this only
+   guarantees the sprite is never clipped by the tile's own padding */
+.item__img.is-rot { padding: 2px; object-fit: contain; }
 
 /* text fallback when the sprite is missing */
 .item__fallback {
@@ -182,8 +184,12 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 
 /* ---------------- equipment slots ---------------- */
 .equip {
+  /* the doll uses smaller cells than a working grid so two columns of gear
+     always fit the panel without clipping */
+  --cell: 40px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-items: start;
   gap: 8px;
 }
 .equip__row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -217,6 +223,56 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .slot__hint .ico { width: 22px; height: 22px; opacity: .5; }
 .slot .item { z-index: 2; }
 .slot--wide { grid-column: 1 / -1; }
+
+/* ---------------- floating container windows ---------------- */
+.cwin-layer { position: fixed; inset: 0; pointer-events: none; z-index: 700; }
+.cwin {
+  position: absolute;
+  pointer-events: auto;
+  min-width: 160px;
+  max-width: min(80vw, 720px);
+  max-height: 78vh;
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, rgba(23,33,38,.985) 0%, rgba(9,14,17,.985) 100%);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-3);
+  animation: tip-in .1s ease-out;
+}
+.cwin.is-flash { animation: cwin-flash .5s ease-out; }
+@keyframes cwin-flash {
+  0%, 100% { box-shadow: var(--shadow-3); }
+  35% { box-shadow: 0 0 0 2px var(--pale), var(--shadow-3); }
+}
+.cwin__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 8px 8px 11px;
+  border-bottom: 1px solid var(--line-1);
+  background: linear-gradient(180deg, rgba(47,69,80,.5), rgba(47,69,80,0));
+  cursor: grab;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  touch-action: none;
+}
+.cwin__head:active { cursor: grabbing; }
+.cwin__head .ico { color: var(--pale); }
+.cwin__title { color: var(--tx-0); font-size: 12px; letter-spacing: .08em; white-space: nowrap; }
+.cwin__meta { margin-left: auto; color: var(--tx-dim); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.cwin__close { color: var(--tx-3); display: flex; padding: 3px; border-radius: 2px; }
+.cwin__close:hover { color: var(--danger); background: rgba(194,96,79,.16); }
+.cwin__body { padding: 10px; overflow: auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.cwin__grid { display: flex; flex-direction: column; gap: 3px; }
+.cwin__gridlabel { color: var(--tx-dim); font-size: 9px; letter-spacing: .14em; }
+
+/* containers advertise that they open */
+.item--openable::after {
+  content: "";
+  position: absolute; right: 3px; bottom: 3px;
+  width: 7px; height: 7px;
+  border-right: 2px solid var(--pale);
+  border-bottom: 2px solid var(--pale);
+  opacity: .55;
+  pointer-events: none;
+}
 
 /* ---------------- tooltip ---------------- */
 .tooltip {

@@ -5,7 +5,8 @@
 import { $, el, fmtWeight, debounce } from '../core/util.js';
 import { game, saveSoon, markExamined, isExamined } from '../core/state.js';
 import { renderGrid } from '../inventory/view.js';
-import { renderEquipment } from '../inventory/equipment.js';
+import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
+import { openContainerWindow, refreshContainerWindows } from '../inventory/window.js';
 import { dndContext, quickTransfer } from '../inventory/dnd.js';
 import { setContextProvider, splitDialog, inspectDialog, confirmDialog } from '../inventory/dialogs.js';
 import { autoPlace, detach, moveToSlot, splitStack } from '../inventory/model.js';
@@ -37,14 +38,29 @@ function matches(item) {
 
 export function renderStash() {
   const eqHost = $('#equipment-host');
+  const carryHost = $('#carry-host');
   const stHost = $('#stash-host');
   if (!eqHost || !stHost) return;
 
-  renderEquipment(game.equipment, eqHost);
+  renderGearSlots(game.equipment, eqHost);
+  if (carryHost) renderCarry(game.equipment, carryHost);
   $('#equip-weight').textContent = fmtWeight(game.equipment.weight());
 
   stHost.replaceChildren();
   stHost.append(renderGrid(game.stash, { filterFn: filterText ? matches : null }));
+
+  markOpenable(eqHost);
+  markOpenable(carryHost);
+  markOpenable(stHost);
+  refreshContainerWindows();
+}
+
+/** containers get a corner tick so it is obvious they can be popped out */
+export function markOpenable(root) {
+  if (!root) return;
+  for (const node of root.querySelectorAll('.item')) {
+    if (node._item?.isContainer) node.classList.add('item--openable');
+  }
 }
 
 // ---------------------------------------------------------
@@ -57,6 +73,10 @@ export function activateStashContext() {
   };
   dndContext.equipSlotFor = (item) => game.equipment.slotFor(item);
   dndContext.requestSplit = (item, cb) => splitDialog(item, cb);
+  dndContext.onActivate = (item) => {
+    if (item.isContainer) openContainerWindow(item);
+    else quickTransfer(item);
+  };
   dndContext.onChange = () => {
     renderStash();
     emit(EV.INVENTORY_CHANGED);
@@ -100,6 +120,12 @@ export function buildMenu(item, where, extra = []) {
   }
 
   if (examined) {
+    if (item.isContainer) {
+      actions.push({
+        label: 'OPEN', icon: 'box', key: 'DBL-CLICK',
+        run: () => openContainerWindow(item),
+      });
+    }
     if (item.tpl.stack > 1 && item.stack > 1) {
       actions.push({
         label: 'SPLIT', icon: 'split', key: 'CTRL+DRAG',
