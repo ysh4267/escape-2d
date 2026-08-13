@@ -141,7 +141,7 @@ export function markExamined(tplKey) {
 
 export function isExamined(tplKey) {
   const t = getTpl(tplKey);
-  if (t?.alwaysExamined) return true;
+  if (t?.known || t?.alwaysExamined) return true;
   return game.profile.examined.has(tplKey);
 }
 

@@ -3,12 +3,14 @@
 // =========================================================
 
 import { $, el, fmtWeight, debounce } from '../core/util.js';
-import { game, saveSoon, markExamined, isExamined } from '../core/state.js';
+import { game, saveSoon } from '../core/state.js';
 import { renderGrid } from '../inventory/view.js';
 import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
 import { openContainerWindow, refreshContainerWindows } from '../inventory/window.js';
 import { dndContext, quickTransfer } from '../inventory/dnd.js';
 import { setContextProvider, splitDialog, inspectDialog, confirmDialog } from '../inventory/dialogs.js';
+import { startExamine, examining, needsExamine, isKnown } from '../inventory/examine.js';
+import { paintExamine } from '../inventory/view.js';
 import { autoPlace, detach, moveToSlot, splitStack } from '../inventory/model.js';
 import { emit, EV } from '../core/events.js';
 import { toast } from './shell.js';
@@ -74,7 +76,8 @@ export function activateStashContext() {
   dndContext.equipSlotFor = (item) => game.equipment.slotFor(item);
   dndContext.requestSplit = (item, cb) => splitDialog(item, cb);
   dndContext.onActivate = (item) => {
-    if (item.isContainer) openContainerWindow(item);
+    if (needsExamine(item)) examineNow(item);
+    else if (item.isContainer) openContainerWindow(item);
     else quickTransfer(item);
   };
   dndContext.onChange = () => {
@@ -104,19 +107,14 @@ export function isOnCharacter(item) {
 // ---------------------------------------------------------
 export function buildMenu(item, where, extra = []) {
   const actions = [];
-  const examined = item.examined || isExamined(item.tpl.key);
+  const examined = isKnown(item);
 
   if (!examined) {
     actions.push({
-      label: 'EXAMINE', icon: 'eye',
-      run: () => {
-        item.examined = true;
-        markExamined(item.tpl.key);
-        dndContext.onChange();
-        toast(`Item examined: ${item.tpl.name}`, 'ok');
-      },
+      label: 'EXAMINE', icon: 'eye', key: 'DBL-CLICK',
+      disabled: !!examining(),
+      run: () => examineNow(item),
     });
-    actions.push('-');
   }
 
   if (examined) {
@@ -183,6 +181,14 @@ export function buildMenu(item, where, extra = []) {
   });
 
   return actions;
+}
+
+/** run an examination, repainting only the progress bar as it ticks */
+export function examineNow(item) {
+  startExamine(item, () => {
+    if (examining() === item) paintExamine(item);
+    else dndContext.onChange();
+  });
 }
 
 function isEquipped(item) {

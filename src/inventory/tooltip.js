@@ -4,7 +4,7 @@
 
 import { $, el, icon, fmtNum, fmtWeight } from '../core/util.js';
 import { catLabel } from './view.js';
-import { isExamined } from '../core/state.js';
+import { isKnown } from './examine.js';
 
 let node = null;
 let hoverItem = null;
@@ -65,13 +65,13 @@ function show(item) {
   const tpl = item.tpl;
   node.replaceChildren();
 
-  if (!isExamined(tpl.key) && !item.examined) {
+  if (!isKnown(item)) {
     node.append(
       el('div', { class: 'tooltip__head' },
         el('div', { class: 'tooltip__name' }, 'Unknown item'),
         el('div', { class: 'tooltip__short' }, 'NOT EXAMINED')),
       el('div', { class: 'tooltip__body' },
-        el('div', { class: 'tooltip__desc' }, 'Right-click and examine this item to reveal its name, stats and value.')));
+        el('div', { class: 'tooltip__desc' }, 'Examine this item to reveal its name, stats and value — right-click it, or double-click.')));
     node.hidden = false;
     place();
     return;

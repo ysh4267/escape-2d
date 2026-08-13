@@ -92,6 +92,10 @@ try {
   check('backpack rejected by the rig slot', !moveToSlot(new Item('bp_mbss'), eq.get('rig')).ok);
   check('carry grids include rig + pockets', eq.carryGrids().length === rig.grids.length + 4);
   check('slotFor resolves a helmet', eq.slotFor(new Item('hl_fast'))?.key === 'head');
+  const sideways = new Item('w_ak74n', { rot: 1 });
+  check('a rotated weapon is rotated to begin with', sideways.rot === 1 && sideways.w === 1);
+  moveToSlot(sideways, eq.get('primary'));
+  check('equipping straightens a rotated item', sideways.rot === 0 && sideways.w === items.TPL.w_ak74n.w);
   const sec = new Item('sc_alpha');
   moveToSlot(sec, eq.get('secure'));
   const stowed = new Item('ledx');
@@ -202,8 +206,45 @@ try {
   for (let i = 0; i < 4000 && raid.path.length; i++) raid.update(1 / 30);
   check('player reached the container', Math.hypot(raid.player.x - near.x, raid.player.y - near.y) < 3.2,
         Math.hypot(raid.player.x - near.x, raid.player.y - near.y).toFixed(2));
-  for (let i = 0; i < 400 && !near.searched; i++) raid.update(1 / 30);
-  check('search completes', near.searched);
+
+  head('searching uncovers items one at a time');
+  const loaded = raid.containers.find((c) => c.grid.count >= 3) || near;
+  raid.player.x = loaded.x; raid.player.y = loaded.y;
+  raid.beginSearch(loaded);
+  check('the panel opens before anything is uncovered', raid.openContainerRef === loaded);
+  check('nothing is revealed yet', loaded.found.size === 0 && !loaded.searched);
+  check('unrevealed loot cannot be moved', loaded.grid.items().every((it) => !raid.isRevealed(it)));
+
+  const counts = [];
+  for (let i = 0; i < 2000 && !loaded.searched; i++) {
+    raid.update(1 / 30);
+    if (!counts.length || counts[counts.length - 1] !== loaded.found.size) counts.push(loaded.found.size);
+  }
+  check('items were uncovered progressively, not all at once',
+        counts.length >= Math.min(3, loaded.grid.count), 'steps: ' + counts.join(','));
+  check('search completes', loaded.searched);
+  check('every item is revealed once searched',
+        loaded.grid.items().every((it) => raid.isRevealed(it)));
+  check('uncovering granted experience', raid.stats.found >= loaded.grid.count, String(raid.stats.found));
+
+  head('examine');
+  const examine = await import('../src/inventory/examine.js');
+  state.game.profile.examined.clear();
+  const known = new Item('bandage');
+  const unknown = new Item('ledx');
+  check('a common item is known on sight', examine.isKnown(known) && !examine.needsExamine(known));
+  check('a rare item starts unknown', !examine.isKnown(unknown) && examine.needsExamine(unknown));
+  check('templates carry an examine time', items.TPL.ledx.examineTime > 0, String(items.TPL.ledx.examineTime));
+
+  const started = examine.startExamine(unknown, () => {});
+  check('examination starts', started);
+  check('only one examination at a time', !examine.startExamine(new Item('k_bunk'), () => {}));
+  check('progress is reported', examine.examineProgress(unknown) >= 0 && examine.examineProgress(unknown) < 1);
+  await new Promise((r) => setTimeout(r, Math.ceil(items.TPL.ledx.examineTime * 1000) + 350));
+  check('examination finishes', examine.isKnown(unknown), 'progress ' + examine.examineProgress(unknown));
+  check('the whole template is learned, not just the one item',
+        examine.isKnown(new Item('ledx')));
+  check('examining is remembered on the profile', state.game.profile.examined.has('ledx'));
 
   head('full loop: loot -> extract -> stash -> sell');
   state.initState();

@@ -5,6 +5,7 @@
 import { $, el, icon, clamp, fmtNum, fmtWeight } from '../core/util.js';
 import { hide as hideTooltip } from './tooltip.js';
 import { catLabel } from './view.js';
+import { isKnown } from './examine.js';
 
 // ---------------------------------------------------------
 // context menu
@@ -38,7 +39,7 @@ export function openContext(item, x, y) {
   if (!actions.length) { closeContext(); return; }
 
   ctxNode.replaceChildren();
-  ctxNode.append(el('div', { class: 'ctx__title' }, item.examined ? item.tpl.name : 'Unknown item'));
+  ctxNode.append(el('div', { class: 'ctx__title' }, isKnown(item) ? item.tpl.name : 'Unknown item'));
   for (const a of actions) {
     if (a === '-') { ctxNode.append(el('div', { class: 'ctx__sep' })); continue; }
     const btn = el('button', {

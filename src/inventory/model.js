@@ -36,7 +36,7 @@ export class Item {
     this.rot = opts.rot ? 1 : 0;
     this.stack = clamp(opts.stack ?? 1, 1, tpl.stack || 1);
     this.fir = opts.fir ?? false;
-    this.examined = opts.examined ?? !!tpl.alwaysExamined;
+    this.examined = opts.examined ?? !!(tpl.known || tpl.alwaysExamined);
     this.res = opts.res ?? (tpl.res ? tpl.res.max : null);
     this.dura = opts.dura ?? (tpl.dura != null ? tpl.dura : null);
     this.ammo = opts.ammo ?? (tpl.magSize != null ? 0 : null);
@@ -350,7 +350,12 @@ export class Slot {
 
   set(item) {
     this.item = item;
-    if (item) item.holder = { kind: 'slot', slot: this };
+    if (item) {
+      // equipment slots have no orientation: a rifle carried sideways in a
+      // backpack goes back upright the moment it is worn
+      item.rot = 0;
+      item.holder = { kind: 'slot', slot: this };
+    }
     return true;
   }
 
@@ -362,7 +367,10 @@ export class Slot {
   }
 
   toJSON() { return this.item ? this.item.toJSON() : null; }
-  loadJSON(o) { this.item = o ? Item.fromJSON(o) : null; if (this.item) this.item.holder = { kind: 'slot', slot: this }; }
+  loadJSON(o) {
+    this.item = o ? Item.fromJSON(o) : null;
+    if (this.item) { this.item.rot = 0; this.item.holder = { kind: 'slot', slot: this }; }
+  }
 }
 
 // ---------------------------------------------------------

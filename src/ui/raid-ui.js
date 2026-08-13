@@ -6,7 +6,7 @@ import { $, el, icon, clamp, fmtClock, fmtNum, fmtWeight } from '../core/util.js
 import { Raid, RAID_STATUS } from '../raid/raid.js';
 import { Renderer } from '../raid/renderer.js';
 import { NavGrid } from '../raid/nav.js';
-import { game, saveSoon, markExamined, isExamined } from '../core/state.js';
+import { game, saveSoon } from '../core/state.js';
 import { renderGrid, renderItem } from '../inventory/view.js';
 import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
 import { openContainerWindow, refreshContainerWindows, closeAllContainerWindows } from '../inventory/window.js';
@@ -14,6 +14,8 @@ import { sfx, startAmbient, stopAmbient } from '../core/audio.js';
 import { dndContext, quickTransfer } from '../inventory/dnd.js';
 import { setContextProvider, splitDialog, inspectDialog, confirmDialog } from '../inventory/dialogs.js';
 import { autoPlace, detach, splitStack, moveToSlot } from '../inventory/model.js';
+import { startExamine, examining, needsExamine, isKnown } from '../inventory/examine.js';
+import { paintExamine } from '../inventory/view.js';
 import { showScreen, raidToast, toast, refreshTopbar } from './shell.js';
 import { emit, on, EV } from '../core/events.js';
 
@@ -129,12 +131,14 @@ function drawHud() {
   clock.parentElement.classList.toggle('is-low', raid.timeLeft < 300);
   clock.parentElement.classList.toggle('is-crit', raid.timeLeft < 60);
 
-  // search progress
+  // search progress, mirrored on the HUD while the panel is open
   const ip = $('#interact-prompt');
-  if (raid.searching) {
+  const sc = raid.searching;
+  if (sc) {
     ip.hidden = false;
-    $('#interact-label').textContent = `SEARCHING ${raid.searching.def.name.toUpperCase()}`;
-    $('#interact-fill').style.width = `${(raid.searchProgress / raid.searching.def.search) * 100}%`;
+    $('#interact-label').textContent =
+      `SEARCHING ${sc.def.name.toUpperCase()} — ${sc.found.size}/${sc.order.length}`;
+    $('#interact-fill').style.width = `${Math.round(raid.searchFraction(sc) * 100)}%`;
   } else {
     ip.hidden = true;
   }
@@ -236,6 +240,7 @@ function bindRaidInput(canvas) {
   ep.addEventListener('pointercancel', endHold);
 
   on(EV.LOOT_OPENED, () => openOverlay());
+  on(EV.LOOT_FOUND, () => { if (overlayOpen) renderOverlay(); });
 }
 
 function pointerWorld(e) {
@@ -296,21 +301,35 @@ function renderOverlay() {
     const host = $('#loot-host');
     host.replaceChildren();
 
-    const bar = el('div', { style: { display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center' } });
+    const total = c.order.length;
+    const done = c.searched;
+    const bar = el('div', { class: 'loot-bar' });
     bar.append(el('span', { class: 'hint' }, c.region || ''));
-    const takeAll = el('button', { class: 'btn btn--sm' }, icon('cart'), 'TAKE ALL');
-    takeAll.addEventListener('click', () => {
-      const items = c.grid.items();
-      let moved = 0;
-      for (const it of items) {
-        if (quickTransfer(it)) moved++;
-      }
-      raidToast(moved ? `Took ${moved} item${moved > 1 ? 's' : ''}` : 'No space', moved ? 'ok' : 'warn');
-      renderOverlay();
-    });
-    bar.append(takeAll);
+
+    if (!done) {
+      // the container gives up its contents one item at a time
+      bar.append(el('div', { class: 'loot-search' },
+        el('span', { class: 'loot-search__label' },
+          raid.searching === c ? 'SEARCHING' : 'SEARCH PAUSED'),
+        el('div', { class: 'loot-search__bar' },
+          el('i', { style: { width: `${Math.round(raid.searchFraction(c) * 100)}%` } })),
+        el('span', { class: 'loot-search__count' }, `${c.found.size}/${total}`)));
+    } else {
+      const takeAll = el('button', { class: 'btn btn--sm' }, icon('cart'), 'TAKE ALL');
+      takeAll.addEventListener('click', () => {
+        let moved = 0;
+        for (const it of c.grid.items()) if (quickTransfer(it)) moved++;
+        raidToast(moved ? `Took ${moved} item${moved > 1 ? 's' : ''}` : 'No space', moved ? 'ok' : 'warn');
+        renderOverlay();
+      });
+      bar.append(takeAll);
+    }
     host.append(bar);
-    host.append(renderGrid(c.grid));
+    host.append(renderGrid(c.grid, { filterFn: (it) => c.found.has(it.uid) }));
+
+    if (!done && !c.found.size) {
+      host.append(el('div', { class: 'empty-note' }, 'NOTHING UNCOVERED YET'));
+    }
   }
 
   renderCarry(game.equipment, $('#raid-carry-host'));
@@ -328,6 +347,14 @@ function renderOverlay() {
 }
 
 // ---------------------------------------------------------
+/** run an examination, repainting only the progress bar as it ticks */
+function examineNow(item) {
+  startExamine(item, () => {
+    if (examining() === item) paintExamine(item);
+    else { renderOverlay(); emit(EV.INVENTORY_CHANGED); }
+  });
+}
+
 function activateRaidContext() {
   dndContext.quickTargets = (item) => {
     const inLoot = item.holder?.kind === 'grid' && item.holder.grid.tag === 'loot';
@@ -340,17 +367,12 @@ function activateRaidContext() {
   dndContext.equipSlotFor = (item) => game.equipment.slotFor(item);
   dndContext.requestSplit = (item, cb) => splitDialog(item, cb);
   dndContext.onActivate = (item) => {
-    if (item.isContainer) openContainerWindow(item);
+    if (needsExamine(item)) examineNow(item);
+    else if (item.isContainer) openContainerWindow(item);
     else quickTransfer(item);
   };
-  dndContext.canMove = (item) => {
-    const h = item.holder;
-    if (h?.kind === 'grid' && h.grid.tag === 'loot') {
-      const c = raid?.openContainerRef;
-      if (!c || !c.searched) return false;
-    }
-    return true;
-  };
+  // loot that has not been uncovered yet cannot be touched
+  dndContext.canMove = (item) => (raid ? raid.isRevealed(item) : true);
   dndContext.onChange = () => {
     renderOverlay();
     emit(EV.INVENTORY_CHANGED);
@@ -358,13 +380,12 @@ function activateRaidContext() {
 
   setContextProvider((item) => {
     const actions = [];
-    const examined = item.examined || isExamined(item.tpl.key);
-    if (!examined) {
+    if (!isKnown(item)) {
       actions.push({
-        label: 'EXAMINE', icon: 'eye',
-        run: () => { item.examined = true; markExamined(item.tpl.key); dndContext.onChange(); },
+        label: 'EXAMINE', icon: 'eye', key: 'DBL-CLICK',
+        disabled: !!examining(),
+        run: () => examineNow(item),
       });
-      actions.push('-');
       return actions;
     }
     const tpl = item.tpl;

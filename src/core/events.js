@@ -35,6 +35,7 @@ export const EV = {
   RAID_START: 'raid:start',
   RAID_END: 'raid:end',
   LOOT_OPENED: 'loot:opened',
+  LOOT_FOUND: 'loot:found',
   LOOT_CLOSED: 'loot:closed',
   TOAST: 'ui:toast',
   RAID_TOAST: 'raid:toast',

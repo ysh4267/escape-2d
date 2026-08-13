@@ -208,12 +208,11 @@ function runDevHooks() {
         .slice()
         .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
       if (near) {
-        const snap = raid.nav ? null : null;
-        void snap;
+        // stand on it and run the real search, so the capture shows the
+        // container giving up its contents one item at a time
         p.x = near.x; p.y = near.y - 1;
-        near.searched = true;
         raid.seen.add(near.id);
-        raid.openLoot(near);
+        raid.beginSearch(near);
         openOverlay();
       }
     }

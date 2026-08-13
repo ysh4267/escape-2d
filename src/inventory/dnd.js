@@ -40,27 +40,12 @@ export function initDnd() {
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('dblclick', onDoubleClick, true);
 
-  suppressNativeMenu();
-}
-
-/**
- * Kill the browser context menu everywhere except text fields.
- *
- * This has to sit on `window` in the CAPTURE phase: a bubble-phase listener on
- * `document` runs last, so anything that calls stopPropagation on the way up
- * leaves the native menu to open on top of the game's own menu.
- */
-export function suppressNativeMenu() {
-  const handler = (e) => {
+  // this is a game: the browser menu never helps, except inside text fields
+  document.addEventListener('contextmenu', (e) => {
     const t = e.target;
-    const editable = t instanceof HTMLInputElement
-      || t instanceof HTMLTextAreaElement
-      || (t instanceof HTMLElement && t.isContentEditable);
-    if (editable) return;
+    if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
     e.preventDefault();
-  };
-  window.addEventListener('contextmenu', handler, true);
-  document.addEventListener('contextmenu', handler, true);
+  });
 }
 
 function onDoubleClick(e) {

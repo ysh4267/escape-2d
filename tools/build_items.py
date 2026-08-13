@@ -302,6 +302,14 @@ def main():
             tpl['res'] = {'max': int(props['MaxResource'])}
         if props.get('MaximumNumberOfUsage'):
             tpl['uses'] = int(props['MaximumNumberOfUsage'])
+        # examination: most templates are known on sight, the rest have to be
+        # inspected before their name and stats are revealed
+        if props.get('ExaminedByDefault'):
+            tpl['known'] = True
+        if props.get('ExamineTime'):
+            tpl['examineTime'] = float(props['ExamineTime'])
+        if props.get('ExamineExperience'):
+            tpl['examineXp'] = int(props['ExamineExperience'])
         if props.get('Damage'):
             tpl['dmg'] = int(props['Damage'])
         if props.get('PenetrationPower'):

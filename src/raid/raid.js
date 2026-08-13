@@ -48,7 +48,7 @@ export class Raid {
     this.scavs = [];
     this.shots = [];
     this.playerCooldown = 0;
-    this.stats = { searched: 0, picked: 0, distance: 0, kills: 0, shots: 0 };
+    this.stats = { searched: 0, found: 0, picked: 0, distance: 0, kills: 0, shots: 0 };
 
     const spawn = this.rng.pick(mapDef.spawns);
     const p = nav.snap(spawn.x, spawn.y) || [spawn.x, spawn.y];
@@ -137,10 +137,27 @@ export class Raid {
       rot: this.rng.float(-0.35, 0.35),
       region: region.name,
       searched: false,
+      /** uids uncovered so far; contents stay hidden until found */
+      found: new Set(),
+      /** the order the search will uncover things in */
+      order: [],
       grid,
     };
     this.rollLoot(c);
+    c.order = this.rng.shuffle(c.grid.items().map((it) => it.uid));
     return c;
+  }
+
+  /** seconds to uncover one item from this container */
+  searchStep(container) {
+    return clamp(container.def.search / 3, 0.35, 1.1);
+  }
+
+  /** how far through the search we are, 0..1 */
+  searchFraction(container) {
+    const total = container.order.length;
+    if (!total) return container.searched ? 1 : 0;
+    return container.found.size / total;
   }
 
   rollLoot(c) {
@@ -164,7 +181,6 @@ export class Raid {
       else if (tpl.stack > 1) stack = rng.int(1, Math.min(tpl.stack, 3));
       const item = new Item(key, { stack: clamp(stack, 1, tpl.stack) });
       item.raidLoot = true;
-      item.examined = game.profile.examined.has(key) || !!tpl.alwaysExamined;
       if (tpl.dura != null) item.dura = Math.round(tpl.dura * rng.float(0.3, 1));
       if (tpl.res) item.res = Math.round(tpl.res.max * rng.float(0.35, 1));
       const spot = c.grid.findSpot(item);
@@ -223,10 +239,9 @@ export class Raid {
   beginSearch(container) {
     this.path = [];
     this.pendingInteract = null;
-    if (container.searched) {
-      this.openLoot(container);
-      return;
-    }
+    // the panel opens straight away; the contents appear as they are uncovered
+    this.openLoot(container);
+    if (container.searched) return;
     this.searching = container;
     this.searchProgress = 0;
   }
@@ -259,6 +274,15 @@ export class Raid {
       bestD = d; best = s;
     }
     return best;
+  }
+
+  /** has this item been uncovered by a search yet? */
+  isRevealed(item) {
+    const h = item.holder;
+    if (!h || h.kind !== 'grid' || h.grid.tag !== 'loot') return true;
+    const c = this.containers.find((k) => k.grid === h.grid);
+    if (!c) return true;
+    return c.searched || c.found.has(item.uid);
   }
 
   containerAt(x, y, radius = 1.6) {
@@ -295,20 +319,29 @@ export class Raid {
 
     const p = this.player;
 
-    // search progress
+    // uncover the container one item at a time
     if (this.searching) {
       const c = this.searching;
-      if (dist(p.x, p.y, c.x, c.y) > INTERACT_RANGE + 0.6) {
+      if (dist(p.x, p.y, c.x, c.y) > INTERACT_RANGE + 0.6 || this.openContainerRef !== c) {
         this.cancelSearch();
       } else {
+        const step = this.searchStep(c);
         this.searchProgress += dt;
-        if (this.searchProgress >= c.def.search) {
+        while (this.searchProgress >= step && c.found.size < c.order.length) {
+          this.searchProgress -= step;
+          const uid = c.order[c.found.size];
+          c.found.add(uid);
+          this.stats.found++;
+          addExp(4);
+          emit(EV.LOOT_FOUND, c);
+        }
+        if (c.found.size >= c.order.length && this.searchProgress >= step * 0.5) {
           c.searched = true;
           this.stats.searched++;
           addExp(6);
           this.searching = null;
           this.searchProgress = 0;
-          this.openLoot(c);
+          emit(EV.LOOT_FOUND, c);
         }
       }
     }
@@ -484,7 +517,6 @@ export class Raid {
       if (!tpl) continue;
       const it = new Item(entry[0]);
       it.raidLoot = true;
-      it.examined = game.profile.examined.has(entry[0]);
       if (tpl.dura != null) it.dura = Math.round(tpl.dura * this.rng.float(0.2, 0.8));
       const spot = body.grid.findSpot(it);
       if (spot) body.grid.place(it, spot.x, spot.y, spot.rot);

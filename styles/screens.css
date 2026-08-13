@@ -267,6 +267,14 @@
 
 .panel--loot .panel__head h2 { color: var(--warn); }
 
+/* uncovering a container: the contents appear one item at a time */
+.loot-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; min-height: 26px; }
+.loot-search { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.loot-search__label { color: var(--warn); font-size: 10px; letter-spacing: .18em; }
+.loot-search__bar { width: 130px; height: 4px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); }
+.loot-search__bar > i { display: block; height: 100%; background: var(--warn); transition: width .12s linear; }
+.loot-search__count { color: var(--tx-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+
 .search-veil {
   position: absolute; inset: 0; z-index: 6;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;

@@ -31,7 +31,6 @@ Everything is playable with the mouse alone.
 | **left click** a hostile | open fire; hold to keep shooting |
 | **right click** a container | walk to it and search it |
 | **wheel** | zoom |
-| **right click** | never opens the browser menu, anywhere except text fields |
 | **INVENTORY / SPRINT / LEAVE** buttons | bottom-right of the raid HUD |
 | hold the **exfil panel** | channel the extraction |
 
@@ -76,9 +75,19 @@ rig, backpack, secure container, on-sling, on-back, holster and sheath, plus
 than a single cell fits in a pocket and items never span two of them.
 
 **Raids.** Loot containers scatter across fourteen named Factory regions with
-per-container-type loot tables and real search times. Containers start
-unsearched and their contents are hidden until you search them. Unexamined
-items render as `?` until you examine them.
+per-container-type loot tables and real search times.
+
+**Searching and examining.** Opening a container does not show you what is in
+it. The container is searched, and it gives up its contents **one item at a
+time** — matching the real game, where the Attention skill is raised per item
+uncovered and its elite perk is a chance to find an item instantly. Nothing you
+have not uncovered can be picked up, and walking away cancels the search.
+
+Uncovering an item is not the same as identifying it. 27 of the 194 templates —
+keys, rare electronics, high-value gear — are not `ExaminedByDefault`, so they
+come out as a hatched **Unknown item** plate. Examining runs on its own timer,
+one at a time, and is learned per profile: examine one LEDX and every LEDX you
+ever find is recognised. Right-click or double-click to examine.
 
 **Scavs.** Seven hostiles patrol the navmesh and notice you inside a view cone
 with clear line of sight, then close to a firing distance and shoot. Your
@@ -134,7 +143,7 @@ python -m http.server 8777
 | `tools/smoke.html` | 91 headless assertions over inventory, map, raid, combat, trader and save logic |
 | `tools/preview_map.html` | renders the raw extracted geometry |
 | `tools/preview_nav.html` | renders navmesh connected components, spawn/extract reachability and per-region walkability |
-| `tools/sfx_test.html` | checks the shipped effects, the audio surface, and that the browser context menu is blocked on every game surface |
+| `tools/sfx_test.html` | checks the shipped effects are served and that the audio surface is what the game calls |
 
 Regenerate everything:
 

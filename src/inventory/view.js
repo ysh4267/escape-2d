@@ -7,6 +7,7 @@
 
 import { el, icon, clear } from '../core/util.js';
 import { CAT_LABEL } from '../data/items.js';
+import { isKnown, examineProgress } from './examine.js';
 
 /** px size of one inventory cell, read back from CSS */
 export function cellSize(gridEl) {
@@ -92,8 +93,12 @@ export function renderItem(item, opts = {}) {
     node.append(el('div', { class: 'item__cnt-badge' }, `${used}/${cap}`));
   }
 
-  if (!item.examined) {
-    node.append(el('div', { class: 'item__unexamined' }, '?'));
+  if (!isKnown(item)) {
+    const veil = el('div', { class: 'item__unexamined' }, el('span', {}, '?'));
+    const bar = el('div', { class: 'item__exambar' }, el('i', {}));
+    veil.append(bar);
+    node.append(veil);
+    paintExamine(item, node);
   }
 
   return node;
@@ -233,5 +238,18 @@ export function gridCellAt(gridEl, clientX, clientY) {
 }
 
 export function catLabel(cat) { return CAT_LABEL[cat] || cat; }
+
+/** update the examination bar in place, so ticking does not rebuild the DOM */
+export function paintExamine(item, root = document) {
+  const p = examineProgress(item);
+  for (const node of root.querySelectorAll
+    ? root.querySelectorAll(`.item[data-uid="${item.uid}"]`)
+    : [root]) {
+    const bar = node.querySelector('.item__exambar');
+    if (!bar) continue;
+    bar.classList.toggle('is-on', p > 0);
+    bar.firstChild.style.width = `${Math.round(p * 100)}%`;
+  }
+}
 
 export function clearHost(host) { clear(host); }

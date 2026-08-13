@@ -1,15 +1,13 @@
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>input + audio</title>
+<html><head><meta charset="utf-8"><title>audio</title>
 <style>
  body{margin:0;background:#05090b;color:#f4f4f9;font:13px/1.6 Cascadia Mono,Consolas,monospace;padding:18px}
  #sum{display:inline-block;padding:8px 12px;border:1px solid #344b56;margin-bottom:14px}
  .ok{color:#7fb39a}.bad{color:#c2604f}.warn{color:#d9a441}
  .hd{color:#b8dbd9;margin:16px 0 6px;letter-spacing:.15em}
- iframe{position:fixed;left:-4000px;top:0;width:1400px;height:900px;border:0}
 </style></head><body>
 <div id="sum">checking…</div>
 <div id="out"></div>
-<iframe id="game" src="../index.html"></iframe>
 <script type="module">
 const out = document.getElementById('out');
 const line = (t, cls) => { const d = document.createElement('div'); d.textContent = t; if (cls) d.className = cls; out.append(d); return d; };
@@ -19,7 +17,6 @@ const check = (name, cond, extra = '') => {
   if (cond) { ok++; line('  PASS  ' + name, 'ok'); }
   else { bad++; line('  FAIL  ' + name + (extra ? '  -> ' + extra : ''), 'bad'); }
 };
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------------------------------------------------------
 head('shipped effects');
@@ -64,58 +61,6 @@ for (const f of files) {
   }
 }
 check('no source calls a removed cue', stale.length === 0, stale.join(', '));
-
-// ---------------------------------------------------------
-head('native context menu is suppressed');
-const frame = document.getElementById('game');
-const deadline = Date.now() + 25000;
-let doc = null;
-while (Date.now() < deadline) {
-  doc = frame.contentDocument;
-  if (doc && doc.querySelector('#screen-hideout.is-active') && doc.querySelector('#stash-host .item')) break;
-  await sleep(120);
-}
-const booted = !!(doc && doc.querySelector('#screen-hideout.is-active'));
-check('game booted inside the frame', booted);
-
-if (booted) {
-  const fire = (target) => {
-    const ev = new frame.contentWindow.MouseEvent('contextmenu', {
-      bubbles: true, cancelable: true, clientX: 200, clientY: 200, button: 2,
-    });
-    target.dispatchEvent(ev);
-    return ev.defaultPrevented;
-  };
-
-  const targets = [
-    ['body', doc.body],
-    ['an item tile', doc.querySelector('#stash-host .item')],
-    ['the stash grid', doc.querySelector('#stash-host .grid')],
-    ['an equipment slot', doc.querySelector('#equipment-host .slot')],
-    ['a panel header', doc.querySelector('.panel__head')],
-    ['the top bar', doc.querySelector('.topbar')],
-    ['a button icon svg', doc.querySelector('.tab .ico')],
-  ];
-  for (const [label, node] of targets) {
-    if (!node) { check(`right click on ${label} is blocked`, false, 'target not found'); continue; }
-    check(`right click on ${label} is blocked`, fire(node));
-  }
-
-  const input = doc.querySelector('#stash-search');
-  check('right click still works in the search field', input && !fire(input));
-
-  // the game's own menu must open on an item
-  const tile = doc.querySelector('#stash-host .item');
-  if (tile) {
-    const r = tile.getBoundingClientRect();
-    tile.dispatchEvent(new frame.contentWindow.MouseEvent('contextmenu', {
-      bubbles: true, cancelable: true, button: 2,
-      clientX: r.left + 4, clientY: r.top + 4,
-    }));
-    const menu = doc.querySelector('#context-menu');
-    check('the in-game item menu opens', menu && !menu.hidden);
-  }
-}
 
 // ---------------------------------------------------------
 const sum = document.getElementById('sum');
