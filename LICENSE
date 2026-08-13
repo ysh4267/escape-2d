@@ -1,0 +1,41 @@
+Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+(CC BY-NC-SA 4.0)
+
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+-------------------------------------------------------------------------------
+
+Why this licence
+
+The Factory map geometry in src/data/map-factory.json is derived from
+the-hideout/tarkov-dev-svg-maps, which is published under CC BY-NC-SA 4.0.
+That licence is share-alike, so this project — code, data and all — is
+released under the same terms.
+
+You are free to share and adapt this work for non-commercial purposes,
+provided you give attribution and license your derivative under the same
+terms.
+
+-------------------------------------------------------------------------------
+
+Third-party material
+
+  Factory map geometry
+    the-hideout/tarkov-dev-svg-maps
+    https://github.com/the-hideout/tarkov-dev-svg-maps
+    CC BY-NC-SA 4.0
+
+  Item artwork (assets/items/*.webp)
+    assets.tarkov.dev, from the community tarkov.dev project
+    https://tarkov.dev
+
+  Trader portraits (assets/traders/*.png)
+    Escape From Tarkov wiki
+
+  Item templates, names, descriptions, handbook prices
+    SPT database dumps
+    https://github.com/sp-tarkov/server
+
+Escape From Tarkov is a trademark of Battlestate Games. This is a
+non-commercial fan project and is not affiliated with, endorsed by, or
+sponsored by Battlestate Games.

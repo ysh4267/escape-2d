@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>smoke</title>
+<style>
+ body{margin:0;background:#05090b;color:#f4f4f9;font:13px/1.55 Cascadia Mono,Consolas,monospace;padding:16px}
+ .ok{color:#7fb39a}.bad{color:#c2604f}.hd{color:#b8dbd9;margin:14px 0 4px;letter-spacing:.15em}
+ #sum{margin-bottom:12px;padding:8px 12px;border:1px solid #344b56;display:inline-block}
+</style></head><body>
+<div id="sum">running…</div>
+<div id="out"></div>
+<script type="module">
+const out = document.getElementById('out');
+let pass = 0, fail = 0;
+const log = (cls, msg) => { const d = document.createElement('div'); d.className = cls; d.textContent = msg; out.append(d); };
+const head = (t) => log('hd', '== ' + t);
+function check(name, cond, extra = '') {
+  if (cond) { pass++; log('ok', '  PASS  ' + name); }
+  else { fail++; log('bad', '  FAIL  ' + name + (extra ? '  -> ' + extra : '')); }
+}
+
+try {
+  const items = await import('../src/data/items.js');
+  const model = await import('../src/inventory/model.js');
+  const { Item, Grid, Slot, moveToGrid, moveToSlot, autoPlace, splitStack, canNest } = model;
+  await items.loadItems();
+
+  head('item database');
+  const all = items.allTpls();
+  check('templates loaded', all.length >= 180, String(all.length));
+  check('every template has artwork', all.every(t => t.img), all.filter(t => !t.img).map(t => t.key).join(','));
+  check('every template has a sane footprint', all.every(t => t.w >= 1 && t.h >= 1 && t.w <= 8 && t.h <= 8));
+  check('every template has a price', all.every(t => t.price > 0), all.filter(t => !t.price).map(t => t.key).join(','));
+  check('roubles stack big', items.TPL.rub.stack >= 50000);
+  check('salewa is 1x2', items.TPL.salewa.w === 1 && items.TPL.salewa.h === 2);
+  check('gpu is 2x1', items.TPL.gpu.w === 2 && items.TPL.gpu.h === 1);
+  check('containers declare grids', items.TPL.bp_pilgrim.container?.grids?.length > 0);
+  check('scav vest has multiple sub-grids', (items.TPL.rig_scav.container?.grids || []).length > 1,
+        JSON.stringify(items.TPL.rig_scav.container));
+
+  head('grid placement');
+  const g = new Grid(10, 10);
+  const salewa = new Item('salewa');
+  check('place at 0,0', g.canPlace(salewa, 0, 0, 0) && g.place(salewa, 0, 0, 0));
+  check('cells occupied', g.at(0, 0) === salewa.uid && g.at(0, 1) === salewa.uid);
+  check('no overlap', !g.canPlace(new Item('salewa'), 0, 1, 0));
+  check('out of bounds rejected', !g.canPlace(new Item('salewa'), 0, 9, 0));
+  const rot = new Item('salewa');
+  check('rotated 1x2 becomes 2x1', (rot.rot = 1, rot.w === 2 && rot.h === 1));
+  check('rotated placement fits', g.canPlace(rot, 2, 0, 1));
+  const sq = new Item('grizzly');
+  check('square item rotation is a no-op', (sq.rot = 1, sq.w === sq.h && sq.w === 2));
+  check('findSpot returns a legal spot', (() => {
+    const spot = g.findSpot(new Item('bp_pilgrim'));
+    return spot && g.canPlace(new Item('bp_pilgrim'), spot.x, spot.y, spot.rot);
+  })());
+
+  head('stacking and splitting');
+  const g2 = new Grid(6, 6);
+  const a = new Item('am_545ps', { stack: 30 });
+  const b = new Item('am_545ps', { stack: 40 });
+  g2.place(a, 0, 0); g2.place(b, 1, 0);
+  const merged = moveToGrid(b, g2, 0, 0);
+  check('merge action', merged.action === 'merge' || merged.action === 'partial', merged.action);
+  check('merge respects the stack cap', a.stack <= items.TPL.am_545ps.stack, String(a.stack));
+  const big = new Item('rub', { stack: 1000 });
+  const half = splitStack(big, 400);
+  check('split produces a new stack', half && half.stack === 400 && big.stack === 600);
+  check('split rejects the whole stack', splitStack(big, 600) === null);
+
+  head('containers and nesting');
+  const stash = new Grid(10, 20, { tag: 'stash' });
+  const pack = new Item('bp_pilgrim');
+  stash.place(pack, 0, 0);
+  const inner = pack.grids[0];
+  const case1 = new Item('docscase');
+  check('a case fits inside a backpack', canNest(case1, inner));
+  const pack2 = new Item('bp_mbss');
+  check('a backpack cannot go inside a backpack', !canNest(pack2, inner));
+  check('an item cannot be stored within itself', !canNest(pack, inner));
+  const spot = inner.findSpot(case1);
+  inner.place(case1, spot.x, spot.y, spot.rot);
+  check('weight rolls up through containers', pack.weight > items.TPL.bp_pilgrim.weight);
+  const key = new Item('k_bunk');
+  check('docs case accepts a key', case1.grids[0].accepts(key));
+  check('docs case rejects a medkit', !case1.grids[0].accepts(new Item('salewa')));
+
+  head('equipment');
+  const { Equipment } = await import('../src/inventory/equipment.js');
+  const eq = new Equipment();
+  check('four separate 1x1 pockets', eq.pockets.length === 4 && eq.pockets.every(p => p.w === 1 && p.h === 1));
+  const rig = new Item('rig_blackrock');
+  check('rig equips', moveToSlot(rig, eq.get('rig')).ok);
+  check('backpack rejected by the rig slot', !moveToSlot(new Item('bp_mbss'), eq.get('rig')).ok);
+  check('carry grids include rig + pockets', eq.carryGrids().length === rig.grids.length + 4);
+  check('slotFor resolves a helmet', eq.slotFor(new Item('hl_fast'))?.key === 'head');
+  const sec = new Item('sc_alpha');
+  moveToSlot(sec, eq.get('secure'));
+  const stowed = new Item('ledx');
+  autoPlace(stowed, sec.grids);
+  check('secure container holds items', sec.grids[0].count === 1);
+  eq.clearInsecure();
+  check('death keeps the secure container', eq.item('secure') === sec && sec.grids[0].count === 1);
+  check('death drops the rig', eq.item('rig') === null);
+
+  head('state and money');
+  const state = await import('../src/core/state.js');
+  state.setSaveKey('escape2d.smoketest');   // never touch a real profile
+  state.initState();
+  check('add roubles', state.addMoney(250000, 'RUB') && state.countMoney('RUB') === 250000, String(state.countMoney('RUB')));
+  check('spend roubles', state.takeMoney(90000, 'RUB') && state.countMoney('RUB') === 160000, String(state.countMoney('RUB')));
+  check('cannot overspend', !state.takeMoney(9999999, 'RUB'));
+  check('dollars tracked separately', state.addMoney(500, 'USD') && state.countMoney('USD') === 500);
+  check('save round-trips', (() => {
+    state.save();
+    const before = state.countMoney('RUB');
+    state.initState();
+    state.load();
+    return state.countMoney('RUB') === before;
+  })());
+
+  head('traders');
+  const tr = await import('../src/data/traders.js');
+  check('eight traders', tr.TRADERS.length === 8);
+  check('every assort key exists', tr.TRADERS.every(t => t.assort.every(o => items.TPL[o.key])),
+        tr.TRADERS.flatMap(t => t.assort.filter(o => !items.TPL[o.key]).map(o => t.id + ':' + o.key)).join(','));
+  const ledx = new Item('ledx');
+  const therapistPay = tr.sellValue(tr.TRADER_BY_ID.therapist, ledx, items.FX);
+  const fencePay = tr.sellValue(tr.TRADER_BY_ID.fence, ledx, items.FX);
+  check('therapist pays more than fence', therapistPay > fencePay, `${therapistPay} vs ${fencePay}`);
+  check('ragman buys backpacks', tr.canBuyFrom(tr.TRADER_BY_ID.ragman, new Item('bp_mbss')));
+  check('prapor does not buy backpacks', !tr.canBuyFrom(tr.TRADER_BY_ID.prapor, new Item('bp_mbss')));
+  check('fence buys anything', tr.canBuyFrom(tr.TRADER_BY_ID.fence, new Item('bp_mbss')));
+  check('loyalty gates on level', tr.loyaltyFor(1, 0) === 1 && tr.loyaltyFor(40, 9) === 4);
+
+  head('loot tables');
+  const loot = await import('../src/data/loot.js');
+  const badKeys = [];
+  for (const [type, table] of Object.entries(loot.LOOT_TABLES)) {
+    for (const [pool] of table) for (const [k] of pool) if (!items.TPL[k]) badKeys.push(type + ':' + k);
+  }
+  check('every loot key resolves', badKeys.length === 0, badKeys.join(','));
+  check('every container type has a table', Object.keys(loot.CONTAINERS).every(t => loot.LOOT_TABLES[t]),
+        Object.keys(loot.CONTAINERS).filter(t => !loot.LOOT_TABLES[t]).join(','));
+
+  head('map and navigation');
+  const { NavGrid, loadGeometry } = await import('../src/raid/nav.js');
+  const { MAPS } = await import('../src/data/maps.js');
+  const geo = await loadGeometry(MAPS.factory.geometry);
+  check('geometry has a ground floor', !!geo.levels.ground?.floor?.length);
+  const t0 = performance.now();
+  const nav = new NavGrid(geo, 'ground');
+  const buildMs = Math.round(performance.now() - t0);
+  let walkables = 0;
+  for (let i = 0; i < nav.walk.length; i++) walkables += nav.walk[i];
+  check('nav grid built quickly', buildMs < 2500, buildMs + 'ms');
+  check('nav grid has walkable space', walkables > 3000, String(walkables));
+
+  const mapDef = MAPS.factory;
+  let spawnOk = 0;
+  for (const s of mapDef.spawns) if (nav.snap(s.x, s.y)) spawnOk++;
+  check('every spawn snaps to walkable floor', spawnOk === mapDef.spawns.length, `${spawnOk}/${mapDef.spawns.length}`);
+  let exOk = 0;
+  for (const e of mapDef.extracts) if (nav.snap(e.x, e.y)) exOk++;
+  check('every extract snaps to walkable floor', exOk === mapDef.extracts.length, `${exOk}/${mapDef.extracts.length}`);
+
+  const s0 = nav.snap(mapDef.spawns[0].x, mapDef.spawns[0].y);
+  let routed = 0;
+  const routeLog = [];
+  for (const e of mapDef.extracts) {
+    const tgt = nav.snap(e.x, e.y);
+    const p = nav.findPath(s0[0], s0[1], tgt[0], tgt[1]);
+    if (p && p.length) routed++; else routeLog.push(e.id);
+  }
+  check('a route exists from spawn 1 to every extract', routed === mapDef.extracts.length, 'unreachable: ' + routeLog.join(','));
+
+  let pairOk = 0, pairTotal = 0;
+  for (const a2 of mapDef.spawns) {
+    for (const e of mapDef.extracts) {
+      pairTotal++;
+      const sa = nav.snap(a2.x, a2.y), sb = nav.snap(e.x, e.y);
+      if (sa && sb && nav.findPath(sa[0], sa[1], sb[0], sb[1])) pairOk++;
+    }
+  }
+  check('all spawn/extract pairs are connected', pairOk === pairTotal, `${pairOk}/${pairTotal}`);
+
+  head('raid session');
+  const { Raid } = await import('../src/raid/raid.js');
+  state.initState();
+  const raid = new Raid({ mapDef, geo, nav, seed: 12345 });
+  check('containers placed', raid.containers.length > 40, String(raid.containers.length));
+  check('containers sit on walkable floor', raid.containers.every(c => nav.walkable(c.x, c.y)));
+  const totalLoot = raid.containers.reduce((n, c) => n + c.grid.count, 0);
+  check('containers contain loot', totalLoot > 60, String(totalLoot));
+  const lootValue = raid.containers.reduce((n, c) => n + c.grid.items().reduce((m, i) => m + i.value, 0), 0);
+  check('map loot value is in a sane band', lootValue > 300000 && lootValue < 60000000, String(Math.round(lootValue)));
+  let regionsWithLoot = new Set(raid.containers.map(c => c.region)).size;
+  check('loot spread across regions', regionsWithLoot >= 8, String(regionsWithLoot));
+
+  raid.player.x = s0[0]; raid.player.y = s0[1];
+  const near = raid.containers.slice().sort((c1, c2) =>
+    Math.hypot(c1.x - raid.player.x, c1.y - raid.player.y) - Math.hypot(c2.x - raid.player.x, c2.y - raid.player.y))[0];
+  check('can path to the nearest container', raid.interactWith(near));
+  for (let i = 0; i < 4000 && raid.path.length; i++) raid.update(1 / 30);
+  check('player reached the container', Math.hypot(raid.player.x - near.x, raid.player.y - near.y) < 3.2,
+        Math.hypot(raid.player.x - near.x, raid.player.y - near.y).toFixed(2));
+  for (let i = 0; i < 400 && !near.searched; i++) raid.update(1 / 30);
+  check('search completes', near.searched);
+
+  head('full loop: loot -> extract -> stash -> sell');
+  state.initState();
+  const eq2 = state.game.equipment;
+  moveToSlot(new Item('rig_blackrock'), eq2.get('rig'));
+  moveToSlot(new Item('bp_pilgrim'), eq2.get('backpack'));
+  moveToSlot(new Item('sc_alpha'), eq2.get('secure'));
+  const raid2 = new Raid({ mapDef, geo, nav, seed: 999 });
+
+  let taken = 0;
+  for (const c of raid2.containers) {
+    if (taken >= 10) break;
+    c.searched = true;
+    for (const it of c.grid.items()) {
+      if (taken >= 10) break;
+      if (autoPlace(it, eq2.carryGrids())) taken++;
+    }
+  }
+  check('looted items into carried gear', taken >= 8, String(taken));
+  const carried = [...eq2.everything()];
+  check('loot is flagged as raid loot', carried.some(i => i.raidLoot));
+  check('nothing is found-in-raid yet', carried.every(i => !i.fir));
+
+  const exit = mapDef.extracts.find(e => !e.req);
+  const ep = nav.snap(exit.x, exit.y);
+  raid2.player.x = ep[0]; raid2.player.y = ep[1];
+  raid2.update(0.016);
+  check('extract zone detected', raid2.nearExtract?.id === exit.id, String(raid2.nearExtract?.id));
+  for (let i = 0; i < 500 && raid2.status === 'running'; i++) raid2.holdExtract(0.05);
+  check('extraction completes', raid2.status === 'survived', raid2.status);
+
+  const kept = [...eq2.everything()];
+  check('extracted loot is now found-in-raid', kept.filter(i => i.tpl.cat !== 'rig' && i.tpl.cat !== 'backpack' && i.tpl.cat !== 'secure').every(i => i.fir),
+        kept.filter(i => !i.fir).map(i => i.tpl.key).join(','));
+
+  const before = state.game.stash.count;
+  Raid.depositToStash();
+  check('loot moved into the stash', state.game.stash.count > before, `${before} -> ${state.game.stash.count}`);
+  check('the pouch stays on the character', !!eq2.item('secure'));
+
+  const tr2 = tr.TRADER_BY_ID.fence;
+  const sellable = state.game.stash.items().filter(i => i.tpl.cat !== 'money');
+  const cashBefore = state.countMoney('RUB');
+  let payout = 0;
+  for (const it of sellable.slice(0, 5)) { payout += tr.sellValue(tr2, it, items.FX); model.detach(it); }
+  state.addMoney(payout, 'RUB');
+  check('selling pays out', state.countMoney('RUB') === cashBefore + payout, `${cashBefore} + ${payout}`);
+
+  head('death keeps only the pouch');
+  state.initState();
+  const eq3 = state.game.equipment;
+  moveToSlot(new Item('rig_blackrock'), eq3.get('rig'));
+  moveToSlot(new Item('sc_alpha'), eq3.get('secure'));
+  const raid3 = new Raid({ mapDef, geo, nav, seed: 77 });
+  autoPlace(new Item('ledx'), eq3.item('secure').grids);
+  autoPlace(new Item('gpu'), eq3.carryGrids());
+  const res3 = raid3.finish('kia');
+  check('died drops carried gear', eq3.item('rig') === null);
+  check('died keeps the pouch and its contents', eq3.item('secure')?.grids[0].count === 1);
+  check('result lists lost items', res3.lost.length > 0);
+
+  head('summary');
+} catch (err) {
+  fail++;
+  log('bad', 'EXCEPTION: ' + (err && err.stack ? err.stack : err));
+}
+
+const sum = document.getElementById('sum');
+sum.textContent = `${pass} passed, ${fail} failed`;
+sum.style.color = fail ? '#c2604f' : '#7fb39a';
+sum.style.borderColor = fail ? '#c2604f' : '#7fb39a';
+document.title = fail ? `FAIL ${fail}` : `PASS ${pass}`;
+</script></body></html>

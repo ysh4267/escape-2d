@@ -1,0 +1,12 @@
+# downloaded source dumps used only to regenerate src/data (18 MB+)
+tools/cache/
+
+# headless verification captures
+tools/_*.png
+
+# editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store

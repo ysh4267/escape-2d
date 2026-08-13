@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>nav</title>
+<style>html,body{margin:0;background:#000;color:#f4f4f9;font:12px/1.4 Cascadia Mono,monospace}
+canvas{display:block}#hud{position:fixed;left:8px;top:8px;background:#0e1519e8;border:1px solid #344b56;padding:8px 10px;white-space:pre;max-height:96vh;overflow:auto}</style>
+</head><body>
+<canvas id="c" width="1400" height="1500"></canvas>
+<div id="hud">…</div>
+<script type="module">
+import { NavGrid, loadGeometry, CELL } from '../src/raid/nav.js';
+import { MAPS } from '../src/data/maps.js';
+
+const geo = await loadGeometry(MAPS.factory.geometry);
+const nav = new NavGrid(geo, 'ground');
+const m = MAPS.factory;
+
+// connected components over the walkable mask
+const comp = new Int32Array(nav.walk.length).fill(-1);
+const sizes = [];
+for (let i = 0; i < nav.walk.length; i++) {
+  if (!nav.walk[i] || comp[i] !== -1) continue;
+  const id = sizes.length;
+  let n = 0;
+  const stack = [i];
+  comp[i] = id;
+  while (stack.length) {
+    const cur = stack.pop(); n++;
+    const cx = cur % nav.w, cy = (cur / nav.w) | 0;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= nav.w || ny >= nav.h) continue;
+      const ni = ny * nav.w + nx;
+      if (nav.walk[ni] && comp[ni] === -1) { comp[ni] = id; stack.push(ni); }
+    }
+  }
+  sizes.push(n);
+}
+const order = sizes.map((n, i) => [n, i]).sort((a, b) => b[0] - a[0]);
+
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const [, , vw, vh] = geo.viewBox;
+const s = Math.min(cv.width / vw, cv.height / vh);
+g.fillStyle = '#05090b'; g.fillRect(0, 0, cv.width, cv.height);
+
+const COLORS = ['#2f4550','#7fb39a','#d9a441','#c2604f','#7f9fc2','#b8dbd9','#8f6fb0','#6fb0a4','#b07f6f','#6f8fb0'];
+const rank = new Map(order.map(([, id], r) => [id, r]));
+const px = CELL * s;
+for (let cy = 0; cy < nav.h; cy++) {
+  for (let cx = 0; cx < nav.w; cx++) {
+    const i = cy * nav.w + cx;
+    if (!nav.walk[i]) continue;
+    const r = rank.get(comp[i]) ?? 9;
+    g.fillStyle = COLORS[Math.min(r, COLORS.length - 1)];
+    g.fillRect(cx * px, cy * px, px + 0.6, px + 0.6);
+  }
+}
+// walls on top
+g.strokeStyle = 'rgba(244,244,249,.35)'; g.lineWidth = 1;
+for (const line of geo.levels.ground.walls) {
+  g.beginPath(); line.forEach((p, i) => (i ? g.lineTo(p[0]*s, p[1]*s) : g.moveTo(p[0]*s, p[1]*s))); g.stroke();
+}
+
+const lines = [`components: ${sizes.length}`, `top sizes: ${order.slice(0,8).map(([n,i])=>`#${rank.get(i)}=${n}`).join(' ')}`, ''];
+function mark(x, y, label, color) {
+  const sx = x * s, sy = y * s;
+  g.strokeStyle = color; g.lineWidth = 2;
+  g.beginPath(); g.arc(sx, sy, 8, 0, Math.PI*2); g.stroke();
+  g.fillStyle = color; g.font = '11px monospace'; g.fillText(label, sx + 11, sy + 4);
+  const sn = nav.snap(x, y);
+  const c = sn ? comp[nav.idx(...nav.toCell(sn[0], sn[1]))] : -1;
+  return c === -1 ? '?' : rank.get(c);
+}
+lines.push('EXTRACTS');
+for (const e of m.extracts) lines.push(`  ${e.id.padEnd(10)} comp #${mark(e.x, e.y, e.id, '#f4f4f9')}`);
+lines.push('SPAWNS');
+m.spawns.forEach((sp, i) => lines.push(`  spawn${i} ${sp.name.padEnd(24)} comp #${mark(sp.x, sp.y, 's'+i, '#b8dbd9')}`));
+lines.push('REGIONS');
+for (const r of m.regions) {
+  const [x0,y0,x1,y1] = r.rect;
+  g.strokeStyle = 'rgba(184,219,217,.25)'; g.setLineDash([4,4]); g.lineWidth = 1;
+  g.strokeRect(x0*s, y0*s, (x1-x0)*s, (y1-y0)*s); g.setLineDash([]);
+  let ok = 0;
+  for (let t = 0; t < 200; t++) {
+    const x = x0 + Math.random()*(x1-x0), y = y0 + Math.random()*(y1-y0);
+    if (nav.walkable(x, y)) ok++;
+  }
+  lines.push(`  ${r.id.padEnd(16)} walkable ${Math.round(ok/2)}%`);
+}
+document.getElementById('hud').textContent = lines.join('\n');
+document.title = 'ready';
+</script></body></html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>map preview</title>
+<style>
+  html,body{margin:0;background:#000;color:#f4f4f9;font:12px/1.4 Bahnschrift,system-ui,sans-serif}
+  canvas{display:block}
+  #hud{position:fixed;left:8px;top:8px;background:#0e1519cc;border:1px solid #344b56;padding:6px 10px;white-space:pre}
+</style></head><body>
+<canvas id="c" width="1500" height="1500"></canvas>
+<div id="hud">loading</div>
+<script type="module">
+const level = new URLSearchParams(location.search).get('level') || 'ground';
+const showNav = new URLSearchParams(location.search).get('nav') === '1';
+const res = await fetch('../src/data/map-factory.json');
+const map = await res.json();
+const L = map.levels[level];
+const c = document.getElementById('c'), g = c.getContext('2d');
+const [vx, vy, vw, vh] = map.viewBox;
+const pad = 20;
+const s = Math.min((c.width - pad * 2) / vw, (c.height - pad * 2) / vh);
+const T = (p) => [pad + (p[0] - vx) * s, pad + (p[1] - vy) * s];
+
+g.fillStyle = '#05090b'; g.fillRect(0, 0, c.width, c.height);
+
+function poly(list, fill, stroke, lw = 1) {
+  for (const p of list) {
+    g.beginPath();
+    p.forEach((pt, i) => { const t = T(pt); i ? g.lineTo(t[0], t[1]) : g.moveTo(t[0], t[1]); });
+    g.closePath();
+    if (fill) { g.fillStyle = fill; g.fill('evenodd'); }
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); }
+  }
+}
+// floor as one even-odd path so interior holes punch through
+g.beginPath();
+for (const p of L.floor) { p.forEach((pt, i) => { const t = T(pt); i ? g.lineTo(t[0], t[1]) : g.moveTo(t[0], t[1]); }); g.closePath(); }
+g.fillStyle = '#2f4550'; g.fill('evenodd');
+g.strokeStyle = '#b8dbd9'; g.lineWidth = 1; g.stroke();
+
+poly(L.ledge, '#586f7c88', null);
+poly(L.stairs, '#b8dbd955', null);
+poly(L.obstacles, '#16232b', '#586f7c', 1);
+poly(L.building, '#1b2a33', '#7fb3a4', 1.5);
+
+g.strokeStyle = '#d9a441'; g.lineWidth = Math.max(1.5, 0.35 * s); g.lineCap = 'round';
+for (const w of L.walls) {
+  g.beginPath();
+  w.forEach((pt, i) => { const t = T(pt); i ? g.lineTo(t[0], t[1]) : g.moveTo(t[0], t[1]); });
+  g.stroke();
+}
+
+// coordinate ticks every 10 svg units
+g.font = '10px monospace';
+for (let x = 0; x <= vw; x += 10) {
+  const t = T([x, 0]);
+  g.strokeStyle = '#ffffff18'; g.beginPath(); g.moveTo(t[0], pad); g.lineTo(t[0], pad + vh * s); g.stroke();
+  g.fillStyle = '#7fb3a4'; g.fillText(String(x), t[0] + 2, 12);
+}
+for (let y = 0; y <= vh; y += 10) {
+  const t = T([0, y]);
+  g.strokeStyle = '#ffffff18'; g.beginPath(); g.moveTo(pad, t[1]); g.lineTo(pad + vw * s, t[1]); g.stroke();
+  g.fillStyle = '#7fb3a4'; g.fillText(String(y), 2, t[1] - 2);
+}
+document.getElementById('hud').textContent =
+  `level=${level}  viewBox=${map.viewBox.join(' ')}\nfloor=${L.floor.length} walls=${L.walls.length} obstacles=${L.obstacles.length} building=${L.building.length} stairs=${L.stairs.length}\nbounds=${L.bounds.map(v=>v.toFixed(1)).join(', ')}`;
+document.title = 'ready';
+</script></body></html>

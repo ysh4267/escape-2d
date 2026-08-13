@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ESCAPE 2D — Factory</title>
+<meta name="description" content="2D top-down extraction shooter sandbox with a faithful Tarkov-style grid inventory.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Cpath d='M6 6h20v20H6z' fill='none' stroke='%23b8dbd9' stroke-width='2'/%3E%3Cpath d='M11 16h10M16 11v10' stroke='%23586f7c' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles/base.css">
+<link rel="stylesheet" href="styles/inventory.css">
+<link rel="stylesheet" href="styles/screens.css">
+</head>
+<body>
+
+<!-- ============ icon sprite (line icons, no emoji) ============ -->
+<svg class="svg-sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-stash" viewBox="0 0 24 24"><path d="M3 4h18v16H3z"/><path d="M3 10h18M3 15h18M9 4v16"/></symbol>
+  <symbol id="i-trader" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5 9 4z"/><path d="M9 4v13M15 6.5v13"/></symbol>
+  <symbol id="i-weight" viewBox="0 0 24 24"><path d="M8 7h8l3 13H5L8 7z"/><circle cx="12" cy="5" r="2"/></symbol>
+  <symbol id="i-cash" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="1.5"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4h-4"/></symbol>
+  <symbol id="i-split" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M4 8h5M15 8h5M4 16h5M15 16h5"/></symbol>
+  <symbol id="i-discard" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.6v.9"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5l5.5 5.5L20 7"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l9.5 17H2.5L12 3z"/><path d="M12 9.5v5M12 17.2v.6"/></symbol>
+  <symbol id="i-extract" viewBox="0 0 24 24"><path d="M14 4h5v16h-5"/><path d="M4 12h11"/><path d="M11 8l4 4-4 4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 3l8.5 4.5v9L12 21l-8.5-4.5v-9L12 3z"/><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"/></symbol>
+  <symbol id="i-body" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="2.5"/><path d="M12 8v7M12 15l-3.5 5M12 15l3.5 5M7 10.5h10"/></symbol>
+  <symbol id="i-health" viewBox="0 0 24 24"><path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7V3z"/></symbol>
+  <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 8.5V13l3 2M9 2h6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 12H4"/><path d="M10 6l-6 6 6 6"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2.5l2.6 11.5h9.4L20 7H6.2"/><circle cx="9.5" cy="19" r="1.4"/><circle cx="17.5" cy="19" r="1.4"/></symbol>
+  <symbol id="i-sell" viewBox="0 0 24 24"><path d="M3 12h13"/><path d="M12 7l5 5-5 5"/><path d="M20 4v16"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+  <symbol id="i-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 1.5v5M12 17.5v5M1.5 12h5M17.5 12h5"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4"/><path d="M6 4h11l-2.5 4L17 12H6"/></symbol>
+</svg>
+
+<div id="app">
+
+  <!-- ===================== BOOT ===================== -->
+  <section class="screen is-active" id="screen-boot">
+    <div class="boot-wrap">
+      <div class="boot-mark">
+        <span class="boot-mark__a">ESCAPE</span><span class="boot-mark__b">2D</span>
+      </div>
+      <div class="boot-sub">FACTORY / TOP-DOWN EXTRACTION SANDBOX</div>
+      <div class="boot-bar"><i id="boot-bar-fill"></i></div>
+      <div class="boot-status" id="boot-status">initialising</div>
+    </div>
+  </section>
+
+  <!-- ===================== HIDEOUT SHELL ===================== -->
+  <section class="screen" id="screen-hideout">
+    <header class="topbar">
+      <div class="topbar__mark"><span class="topbar__a">ESCAPE</span><span class="topbar__b">2D</span></div>
+      <nav class="tabs" id="hideout-tabs">
+        <button class="tab is-active" data-tab="stash"><svg class="ico"><use href="#i-stash"/></svg><span>STASH</span></button>
+        <button class="tab" data-tab="traders"><svg class="ico"><use href="#i-trader"/></svg><span>TRADERS</span></button>
+        <button class="tab" data-tab="raid"><svg class="ico"><use href="#i-map"/></svg><span>RAID</span></button>
+      </nav>
+      <div class="topbar__stats">
+        <div class="stat" title="Roubles"><svg class="ico"><use href="#i-cash"/></svg><span id="stat-rub">0</span><em>₽</em></div>
+        <div class="stat" title="Dollars"><span id="stat-usd">0</span><em>$</em></div>
+        <div class="stat" title="Euros"><span id="stat-eur">0</span><em>€</em></div>
+        <div class="stat stat--sep" title="Level"><span class="stat__k">LVL</span><span id="stat-level">1</span></div>
+        <button class="btn btn--ghost btn--sm" id="btn-settings" title="Settings">…</button>
+      </div>
+    </header>
+
+    <div class="hideout-body">
+      <!-- ---- STASH PANE ---- -->
+      <div class="pane is-active" id="pane-stash">
+        <div class="pane-grid pane-grid--stash">
+          <div class="panel" id="panel-equipment">
+            <div class="panel__head">
+              <h2>GEAR</h2>
+              <div class="panel__meta"><svg class="ico"><use href="#i-weight"/></svg><span id="equip-weight">0.00</span> kg</div>
+            </div>
+            <div class="panel__body" id="equipment-host"></div>
+          </div>
+          <div class="panel" id="panel-stash">
+            <div class="panel__head">
+              <h2>STASH</h2>
+              <div class="panel__tools">
+                <div class="field field--search">
+                  <svg class="ico"><use href="#i-search"/></svg>
+                  <input type="text" id="stash-search" placeholder="filter items" autocomplete="off" spellcheck="false">
+                </div>
+                <button class="btn btn--sm" id="btn-sort-stash">SORT</button>
+              </div>
+            </div>
+            <div class="panel__body panel__body--scroll" id="stash-host"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- TRADERS PANE ---- -->
+      <div class="pane" id="pane-traders">
+        <div class="trader-shell">
+          <aside class="trader-rail" id="trader-rail"></aside>
+          <div class="trader-main">
+            <div class="trader-head" id="trader-head"></div>
+            <div class="trader-modes">
+              <button class="seg is-active" data-mode="buy">BUY</button>
+              <button class="seg" data-mode="sell">SELL</button>
+            </div>
+            <div class="trader-content" id="trader-content"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- RAID PANE ---- -->
+      <div class="pane" id="pane-raid">
+        <div class="deploy">
+          <div class="deploy__maps" id="deploy-maps"></div>
+          <div class="deploy__brief" id="deploy-brief"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== RAID ===================== -->
+  <section class="screen" id="screen-raid">
+    <canvas id="raid-canvas"></canvas>
+
+    <div class="raid-hud">
+      <div class="hud-left">
+        <div class="hud-vitals">
+          <div class="vital"><svg class="ico"><use href="#i-health"/></svg>
+            <div class="bar"><i id="hp-fill"></i></div><span id="hp-text">100</span>
+          </div>
+          <div class="vital"><svg class="ico"><use href="#i-weight"/></svg>
+            <div class="bar bar--weight"><i id="wt-fill"></i></div><span id="wt-text">0.0 kg</span>
+          </div>
+          <div class="vital vital--stam"><span class="vital__k">STAM</span>
+            <div class="bar bar--stam"><i id="stam-fill"></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="hud-center">
+        <div class="hud-clock"><svg class="ico"><use href="#i-timer"/></svg><span id="raid-timer">40:00</span></div>
+      </div>
+      <div class="hud-right">
+        <div class="hud-keys">
+          <span><b>RMB</b> move / interact</span>
+          <span><b>TAB</b> inventory</span>
+          <span><b>SHIFT</b> sprint</span>
+          <span><b>F</b> extract</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="raid-toast" id="raid-toast"></div>
+
+    <div class="interact-prompt" id="interact-prompt" hidden>
+      <div class="interact-prompt__label"><span id="interact-label">—</span></div>
+      <div class="interact-prompt__bar"><i id="interact-fill"></i></div>
+    </div>
+
+    <div class="extract-prompt" id="extract-prompt" hidden>
+      <svg class="ico ico--lg"><use href="#i-extract"/></svg>
+      <div>
+        <div class="extract-prompt__name" id="extract-name">EXTRACT</div>
+        <div class="extract-prompt__bar"><i id="extract-fill"></i></div>
+        <div class="extract-prompt__hint">hold <b>F</b></div>
+      </div>
+    </div>
+
+    <!-- in-raid inventory overlay -->
+    <div class="overlay" id="raid-inventory" hidden>
+      <div class="overlay__grid">
+        <div class="panel panel--loot" id="panel-loot">
+          <div class="panel__head">
+            <h2 id="loot-title">CONTAINER</h2>
+            <button class="btn btn--ghost btn--sm" id="btn-close-loot"><svg class="ico"><use href="#i-close"/></svg></button>
+          </div>
+          <div class="panel__body panel__body--scroll" id="loot-host"></div>
+        </div>
+        <div class="panel" id="panel-raid-gear">
+          <div class="panel__head">
+            <h2>GEAR</h2>
+            <div class="panel__meta"><svg class="ico"><use href="#i-weight"/></svg><span id="raid-weight">0.00</span> kg</div>
+          </div>
+          <div class="panel__body panel__body--scroll" id="raid-equipment-host"></div>
+        </div>
+      </div>
+      <button class="overlay__close" id="btn-close-overlay"><svg class="ico"><use href="#i-close"/></svg> CLOSE (TAB)</button>
+    </div>
+  </section>
+
+  <!-- ===================== RESULT ===================== -->
+  <section class="screen" id="screen-result">
+    <div class="result-wrap">
+      <div class="result-head">
+        <div class="result-verdict" id="result-verdict">SURVIVED</div>
+        <div class="result-sub" id="result-sub">Factory · Gate 3</div>
+      </div>
+      <div class="result-stats" id="result-stats"></div>
+      <div class="result-loot">
+        <h3>EXTRACTED</h3>
+        <div class="result-loot__list" id="result-loot"></div>
+      </div>
+      <button class="btn btn--primary btn--lg" id="btn-result-continue">CONTINUE</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- floating layers -->
+<div id="drag-layer" class="drag-layer"></div>
+<div id="tooltip" class="tooltip" hidden></div>
+<div id="context-menu" class="ctx" hidden></div>
+<div id="modal-root" class="modal-root" hidden></div>
+<div id="toasts" class="toasts"></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

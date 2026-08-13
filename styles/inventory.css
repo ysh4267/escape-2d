@@ -1,0 +1,309 @@
+/* =========================================================
+   ESCAPE 2D — grid inventory (Tarkov-style)
+   ========================================================= */
+
+/* ---------------- container block ---------------- */
+.cnt {
+  margin-bottom: 10px;
+}
+.cnt__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 2px 6px;
+  color: var(--tx-2);
+  font-size: 11px; letter-spacing: .16em;
+  cursor: default;
+}
+.cnt__head .ico { color: var(--tx-3); width: 14px; height: 14px; }
+.cnt__name { color: var(--tx-1); }
+.cnt__fill { margin-left: auto; color: var(--tx-dim); font-variant-numeric: tabular-nums; }
+.cnt__collapse { color: var(--tx-dim); transition: transform .12s; }
+.cnt.is-collapsed .cnt__collapse { transform: rotate(-90deg); }
+.cnt.is-collapsed .grid { display: none; }
+
+/* ---------------- the grid ---------------- */
+.grid {
+  position: relative;
+  background-color: rgba(0,0,0,.42);
+  background-image:
+    linear-gradient(to right,  var(--line-1) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--line-1) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  background-position: -1px -1px;
+  border: 1px solid var(--line-2);
+  box-shadow: inset 0 0 40px rgba(0,0,0,.55);
+  touch-action: none;
+}
+.grid.is-dragover { border-color: var(--line-3); }
+
+/* per-cell inner glow to sell the "slot" feel */
+.grid::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(184,219,217,.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(184,219,217,.045) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+  background-position: 0 0;
+  mix-blend-mode: screen;
+}
+
+/* ---------------- item tile ---------------- */
+.item {
+  position: absolute;
+  overflow: hidden;
+  background: var(--val-1);
+  border: 1px solid rgba(184,219,217,.16);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.55), 0 1px 4px rgba(0,0,0,.5);
+  cursor: grab;
+  z-index: 2;
+  transition: box-shadow .1s, filter .1s;
+}
+/* Tarkov's own per-template background colours, desaturated toward the
+   project palette so the grid still reads as one surface */
+.item[data-bg="default"] { background: linear-gradient(150deg, #2b3b42 0%, #1a252a 100%); }
+.item[data-bg="black"]   { background: linear-gradient(150deg, #222d33 0%, #10171a 100%); }
+.item[data-bg="grey"]    { background: linear-gradient(150deg, #35444b 0%, #1e282d 100%); }
+.item[data-bg="blue"]    { background: linear-gradient(150deg, #2b4b5c 0%, #172a34 100%); }
+.item[data-bg="green"]   { background: linear-gradient(150deg, #2c5145 0%, #172d26 100%); }
+.item[data-bg="yellow"]  { background: linear-gradient(150deg, #564c26 0%, #2e2814 100%); }
+.item[data-bg="orange"]  { background: linear-gradient(150deg, #5a4126 0%, #2f2214 100%); }
+.item[data-bg="red"]     { background: linear-gradient(150deg, #563029 0%, #2c1815 100%); }
+.item[data-bg="violet"]  { background: linear-gradient(150deg, #443253 0%, #241a2c 100%); }
+.item[data-bg="tracerGreen"]  { background: linear-gradient(150deg, #2c5145 0%, #172d26 100%); }
+.item[data-bg="tracerRed"]    { background: linear-gradient(150deg, #563029 0%, #2c1815 100%); }
+.item[data-bg="tracerYellow"] { background: linear-gradient(150deg, #564c26 0%, #2e2814 100%); }
+
+.item:hover { filter: brightness(1.18); box-shadow: inset 0 0 0 1px rgba(184,219,217,.35), 0 2px 10px rgba(0,0,0,.6); z-index: 3; }
+.item.is-dragging { opacity: .28; filter: grayscale(.5); }
+.item.is-selected { box-shadow: inset 0 0 0 2px var(--pale), 0 0 14px rgba(184,219,217,.3); z-index: 4; }
+
+.item__img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  image-rendering: -webkit-optimize-contrast;
+  pointer-events: none;
+  padding: 2px;
+}
+.item__img.is-rot { transform: rotate(90deg) scale(var(--rot-scale, 1)); }
+
+/* text fallback when the sprite is missing */
+.item__fallback {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 4px;
+  text-align: center;
+  font-size: 10px; line-height: 1.15; letter-spacing: .04em;
+  color: var(--tx-1); text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+  word-break: break-word;
+}
+
+.item__name {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 1px 3px 2px;
+  font-size: 9px; line-height: 1.1; letter-spacing: .02em;
+  color: var(--tx-1);
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,.82) 55%);
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.item__stack {
+  position: absolute; right: 2px; bottom: 2px;
+  padding: 0 3px;
+  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--white); text-shadow: 0 1px 3px #000, 0 0 6px #000;
+  pointer-events: none;
+}
+.item__stack::before { content: "x"; font-size: 9px; opacity: .7; }
+
+.item__tag {
+  position: absolute; left: 2px; top: 2px;
+  display: flex; gap: 2px; pointer-events: none;
+}
+.item__fir {
+  width: 12px; height: 12px;
+  color: var(--ok);
+  filter: drop-shadow(0 1px 2px #000);
+}
+.item__unexamined {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6,10,12,.9);
+  color: var(--tx-2); font-size: 22px; font-weight: 700;
+  pointer-events: none;
+}
+
+/* resource / durability bars on the tile */
+.item__bar {
+  position: absolute; left: 2px; right: 2px; bottom: 2px;
+  height: 2px; background: rgba(0,0,0,.65);
+  pointer-events: none;
+}
+.item__bar > i { display: block; height: 100%; background: var(--pale); }
+.item__bar--dura > i { background: var(--info); }
+.item__bar--res  > i { background: var(--ok); }
+.item__bar.is-low > i { background: var(--warn); }
+.item__bar.is-crit > i { background: var(--danger); }
+
+/* container-in-container badge */
+.item__cnt-badge {
+  position: absolute; right: 2px; top: 2px;
+  padding: 0 3px;
+  font-size: 9px; letter-spacing: .04em;
+  color: var(--tx-2); background: rgba(0,0,0,.6);
+  border: 1px solid var(--line-1);
+  pointer-events: none;
+}
+
+/* ---------------- placement highlight ---------------- */
+.ghost-slot {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+  border: 1px solid;
+  transition: left .04s linear, top .04s linear;
+}
+.ghost-slot.is-ok  { background: rgba(127,179,154,.22); border-color: var(--ok); box-shadow: inset 0 0 18px rgba(127,179,154,.25); }
+.ghost-slot.is-bad { background: rgba(194,96,79,.22);  border-color: var(--danger); box-shadow: inset 0 0 18px rgba(194,96,79,.25); }
+.ghost-slot.is-swap{ background: rgba(217,164,65,.2);  border-color: var(--warn); }
+
+/* ---------------- drag layer ---------------- */
+.drag-layer { position: fixed; inset: 0; pointer-events: none; z-index: 800; }
+.drag-item {
+  position: absolute;
+  opacity: .92;
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,.75));
+  transform-origin: top left;
+}
+.drag-item .item { position: absolute; inset: 0; cursor: grabbing; }
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
+
+/* ---------------- equipment slots ---------------- */
+.equip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.equip__row { display: flex; gap: 8px; flex-wrap: wrap; }
+.equip__group {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line-1);
+  margin-top: 4px; padding-top: 8px;
+  color: var(--tx-dim); font-size: 10px; letter-spacing: .2em;
+}
+
+.slot {
+  position: relative;
+  background: rgba(0,0,0,.4);
+  border: 1px solid var(--line-1);
+  min-height: calc(var(--cell) + 2px);
+  transition: border-color .12s, background .12s;
+}
+.slot:hover { border-color: var(--line-2); }
+.slot.is-ok  { border-color: var(--ok);     background: rgba(127,179,154,.13); }
+.slot.is-bad { border-color: var(--danger); background: rgba(194,96,79,.13); }
+.slot__label {
+  position: absolute; left: 5px; top: 4px;
+  color: var(--tx-dim); font-size: 9px; letter-spacing: .18em;
+  pointer-events: none; z-index: 1;
+}
+.slot__hint {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--line-2); pointer-events: none;
+}
+.slot__hint .ico { width: 22px; height: 22px; opacity: .5; }
+.slot .item { z-index: 2; }
+.slot--wide { grid-column: 1 / -1; }
+
+/* ---------------- tooltip ---------------- */
+.tooltip {
+  position: fixed; z-index: 990;
+  width: 268px;
+  padding: 0;
+  background: linear-gradient(180deg, rgba(18,26,30,.985) 0%, rgba(8,12,14,.985) 100%);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+  font-size: 12px;
+  animation: tip-in .08s ease-out;
+}
+@keyframes tip-in { from { opacity: 0; } }
+.tooltip__head { padding: 9px 11px 7px; border-bottom: 1px solid var(--line-1); }
+.tooltip__name { color: var(--white); font-size: 13.5px; letter-spacing: .03em; line-height: 1.25; }
+.tooltip__short { color: var(--tx-3); font-size: 10px; letter-spacing: .16em; margin-top: 3px; }
+.tooltip__body { padding: 8px 11px; color: var(--tx-2); }
+.tooltip__desc { color: var(--tx-3); font-size: 11.5px; line-height: 1.5; margin-bottom: 8px; }
+.tooltip__rows { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; }
+.tooltip__rows dt { color: var(--tx-dim); font-size: 11px; letter-spacing: .08em; }
+.tooltip__rows dd { margin: 0; color: var(--tx-1); text-align: right; font-variant-numeric: tabular-nums; }
+.tooltip__foot {
+  padding: 7px 11px; border-top: 1px solid var(--line-1);
+  display: flex; justify-content: space-between; align-items: center;
+  color: var(--tx-3); font-size: 11px;
+}
+.tooltip__value { color: var(--rare); font-weight: 700; font-variant-numeric: tabular-nums; }
+.tooltip__fir { color: var(--ok); display: flex; align-items: center; gap: 4px; font-size: 10px; letter-spacing: .12em; }
+
+/* ---------------- context menu ---------------- */
+.ctx {
+  position: fixed; z-index: 995;
+  min-width: 190px;
+  background: linear-gradient(180deg, rgba(20,29,33,.99) 0%, rgba(9,14,16,.99) 100%);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2);
+  padding: 4px;
+  animation: tip-in .08s ease-out;
+}
+.ctx__title {
+  padding: 5px 9px 7px; margin-bottom: 3px;
+  border-bottom: 1px solid var(--line-1);
+  color: var(--pale); font-size: 11px; letter-spacing: .1em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ctx__item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 7px 9px;
+  color: var(--tx-1); font-size: 12px; letter-spacing: .05em;
+  border-radius: 2px;
+  text-align: left;
+}
+.ctx__item .ico { color: var(--tx-3); }
+.ctx__item:hover { background: rgba(88,111,124,.26); color: var(--white); }
+.ctx__item:hover .ico { color: var(--pale); }
+.ctx__item[disabled] { opacity: .35; cursor: not-allowed; }
+.ctx__item[disabled]:hover { background: none; color: var(--tx-1); }
+.ctx__item--danger:hover { background: rgba(194,96,79,.24); color: #f0c1b8; }
+.ctx__item--danger:hover .ico { color: var(--danger); }
+.ctx__key { margin-left: auto; color: var(--tx-dim); font-size: 10px; font-family: var(--font-mono); }
+.ctx__sep { height: 1px; background: var(--line-1); margin: 4px 2px; }
+
+/* ---------------- split dialog ---------------- */
+.split {
+  width: 300px;
+}
+.split__row { display: flex; align-items: center; gap: 12px; }
+.split__val {
+  width: 78px; text-align: center;
+  background: rgba(0,0,0,.5); border: 1px solid var(--line-2);
+  color: var(--white); padding: 7px; font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.split input[type="range"] { flex: 1; accent-color: var(--pale); }
+.split__hint { margin-top: 8px; color: var(--tx-dim); font-size: 11px; }
+
+/* ---------------- inspect modal ---------------- */
+.inspect { width: 460px; }
+.inspect__body { display: flex; gap: 16px; }
+.inspect__art {
+  flex: none; width: 190px; height: 190px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 40%, #22323a 0%, #0a1013 75%);
+  border: 1px solid var(--line-1);
+}
+.inspect__art img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.inspect__info { flex: 1; min-width: 0; }
