@@ -19,9 +19,11 @@ export const MAX_NEST_DEPTH = 3;
 /** categories that may never be nested inside the given owner category */
 const NEST_DENY = {
   backpack: ['backpack', 'rig', 'secure'],
-  rig: ['rig', 'backpack', 'armor'],
-  secure: ['backpack', 'rig', 'armor', 'weapon'],
-  container: ['backpack'],
+  rig: ['rig', 'backpack', 'armor', 'secure'],
+  secure: ['backpack', 'rig', 'armor', 'weapon', 'secure'],
+  // a secure container hidden inside a case would be destroyed with the case
+  // on death, defeating its whole point — the real game forbids this too
+  container: ['backpack', 'secure'],
 };
 
 // ---------------------------------------------------------
@@ -117,6 +119,9 @@ export class Item {
     if (!tpl.stack || tpl.stack <= 1) return false;
     if (other.tplId !== this.tplId) return false;
     if (this.stack >= tpl.stack) return false;
+    // found-in-raid never mixes with not-found-in-raid: merging would either
+    // launder the incoming units or demote the whole stack
+    if (!!this.fir !== !!other.fir) return false;
     return true;
   }
 
@@ -191,6 +196,9 @@ export class Grid {
 
   /** category filter check only */
   accepts(item) {
+    // hosts can install an arbitrary gate (the trading table only takes what
+    // the active trader actually buys)
+    if (this.mayAccept && !this.mayAccept(item)) return false;
     const f = this.filter;
     if (!f) return true;
     const cat = item.cat;
@@ -291,12 +299,20 @@ export class Grid {
       if (a.cat !== b.cat) return a.cat < b.cat ? -1 : 1;
       return a.name < b.name ? -1 : 1;
     });
+    // greedy repacking can fail on arrangements the player packed by hand, so
+    // remember where everything was: a failed sort must never destroy items
+    const before = list.map((it) => ({ it, pos: this.posOf(it), rot: it.rot }));
     for (const it of list) this.remove(it);
     const leftovers = [];
     for (const it of list) {
       const spot = this.findSpot(it);
       if (spot) this.place(it, spot.x, spot.y, spot.rot);
       else leftovers.push(it);
+    }
+    if (leftovers.length) {
+      // roll the whole thing back to the pre-sort layout, which is known-legal
+      for (const { it } of before) this.remove(it);
+      for (const { it, pos, rot } of before) this.place(it, pos.x, pos.y, rot);
     }
     return leftovers;
   }
@@ -368,7 +384,8 @@ export class Slot {
 
   toJSON() { return this.item ? this.item.toJSON() : null; }
   loadJSON(o) {
-    this.item = o ? Item.fromJSON(o) : null;
+    // one stale template in a slot must not void the whole save
+    try { this.item = o ? Item.fromJSON(o) : null; } catch { this.item = null; }
     if (this.item) { this.item.rot = 0; this.item.holder = { kind: 'slot', slot: this }; }
   }
 }
@@ -376,6 +393,18 @@ export class Slot {
 // ---------------------------------------------------------
 // nesting legality
 // ---------------------------------------------------------
+/** deepest container chain inside `item` (0 when it holds no containers) */
+function innerDepth(item) {
+  if (!item.grids) return 0;
+  let deepest = 0;
+  for (const g of item.grids) {
+    for (const child of g.items()) {
+      if (child.isContainer) deepest = Math.max(deepest, 1 + innerDepth(child));
+    }
+  }
+  return deepest;
+}
+
 export function canNest(item, targetGrid) {
   const owner = targetGrid.owner;
   if (!owner) return true;                       // top-level grid (stash, loot, ground)
@@ -387,10 +416,11 @@ export function canNest(item, targetGrid) {
   if (deny && deny.includes(item.cat)) return false;
 
   if (item.isContainer) {
-    // depth of the target grid's owner chain
+    // depth of the target grid's owner chain, plus whatever the moved
+    // container is already carrying inside itself
     let d = 1, cur = owner.holder;
     while (cur && cur.kind === 'grid' && cur.grid.owner) { d++; cur = cur.grid.owner.holder; }
-    if (d + 1 > MAX_NEST_DEPTH) return false;
+    if (d + 1 + innerDepth(item) > MAX_NEST_DEPTH) return false;
   }
   return true;
 }
@@ -448,7 +478,10 @@ export function moveToSlot(item, slot) {
   detach(item);
   if (prev) {
     slot.clear();
-    if (from && from.kind === 'grid' && from.grid.canPlace(prev, from.x, from.y, prev.rot)) {
+    if (from && from.kind === 'slot' && from.slot.canAccept(prev)) {
+      // slot-to-slot: the displaced item takes the vacated slot
+      from.slot.set(prev);
+    } else if (from && from.kind === 'grid' && from.grid.canPlace(prev, from.x, from.y, prev.rot)) {
       from.grid.place(prev, from.x, from.y, prev.rot);
     } else {
       const host = from && from.kind === 'grid' ? from.grid : null;
@@ -477,10 +510,12 @@ function restore(item, from) {
 /**
  * Try to place `item` into the first of `grids` that has room,
  * merging into partial stacks first. Returns true when fully placed.
+ * Pass { merge: false } when the caller may have to roll the move back:
+ * merges mutate other stacks and cannot be undone by detaching the item.
  */
-export function autoPlace(item, grids) {
+export function autoPlace(item, grids, opts = {}) {
   // merge pass
-  if ((item.tpl.stack || 1) > 1) {
+  if (opts.merge !== false && (item.tpl.stack || 1) > 1) {
     for (const g of grids) {
       for (const other of g.items()) {
         if (other === item || !other.canStackWith(item)) continue;
@@ -506,6 +541,9 @@ export function splitStack(item, n) {
   if (n <= 0 || n >= item.stack) return null;
   item.stack -= n;
   const copy = new Item(item.tplId, { stack: n, fir: item.fir, examined: item.examined, res: item.res, dura: item.dura });
+  // the raid-session marker must survive the split or the copy would neither
+  // turn found-in-raid on extraction nor register as fresh loot
+  if (item.raidLoot) copy.raidLoot = true;
   return copy;
 }
 

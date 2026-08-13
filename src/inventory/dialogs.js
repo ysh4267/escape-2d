@@ -6,6 +6,7 @@ import { $, el, icon, clamp, fmtNum, fmtWeight } from '../core/util.js';
 import { hide as hideTooltip } from './tooltip.js';
 import { catLabel } from './view.js';
 import { isKnown } from './examine.js';
+import { isDragging } from './dnd.js';
 
 // ---------------------------------------------------------
 // context menu
@@ -26,6 +27,9 @@ export function initContextMenu() {
 }
 
 function onContext(e) {
+  // right button during a drag means "rotate the carried item" — the menu
+  // popping up over the drag would swallow the drop
+  if (isDragging()) { e.preventDefault(); e.stopPropagation(); return; }
   const tile = e.target.closest('.item');
   if (!tile || !tile._item) { closeContext(); return; }
   e.preventDefault();

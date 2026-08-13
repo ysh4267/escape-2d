@@ -28,17 +28,15 @@ export function emit(type, payload) {
   }
 }
 
+// only events that are actually emitted AND handled live here — a constant
+// nobody fires is a trap for the next contributor
 export const EV = {
   INVENTORY_CHANGED: 'inventory:changed',
-  MONEY_CHANGED: 'money:changed',
   SCREEN_CHANGED: 'screen:changed',
-  RAID_START: 'raid:start',
   RAID_END: 'raid:end',
   LOOT_OPENED: 'loot:opened',
   LOOT_FOUND: 'loot:found',
   LOOT_CLOSED: 'loot:closed',
   TOAST: 'ui:toast',
   RAID_TOAST: 'raid:toast',
-  TRADER_CHANGED: 'trader:changed',
-  SAVE_DIRTY: 'save:dirty',
 };

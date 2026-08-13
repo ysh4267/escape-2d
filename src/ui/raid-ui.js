@@ -6,15 +6,15 @@ import { $, el, icon, clamp, fmtClock, fmtNum, fmtWeight } from '../core/util.js
 import { Raid, RAID_STATUS } from '../raid/raid.js';
 import { Renderer } from '../raid/renderer.js';
 import { NavGrid } from '../raid/nav.js';
-import { game, saveSoon } from '../core/state.js';
+import { game, saveSoon, registerSaveSection } from '../core/state.js';
 import { renderGrid, renderItem } from '../inventory/view.js';
 import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
 import { openContainerWindow, refreshContainerWindows, closeAllContainerWindows } from '../inventory/window.js';
 import { sfx, startAmbient, stopAmbient } from '../core/audio.js';
-import { dndContext, quickTransfer } from '../inventory/dnd.js';
+import { dndContext, quickTransfer, isDragging } from '../inventory/dnd.js';
 import { setContextProvider, splitDialog, inspectDialog, confirmDialog } from '../inventory/dialogs.js';
 import { autoPlace, detach, splitStack, moveToSlot } from '../inventory/model.js';
-import { startExamine, examining, needsExamine, isKnown } from '../inventory/examine.js';
+import { startExamine, examining, needsExamine, isKnown, cancelExamine } from '../inventory/examine.js';
 import { paintExamine } from '../inventory/view.js';
 import { showScreen, raidToast, toast, refreshTopbar } from './shell.js';
 import { emit, on, EV } from '../core/events.js';
@@ -80,7 +80,9 @@ function loop(now) {
     player: raid.player,
     nav,
     containers: raid.containers,
-    extracts: raid.extracts,
+    // all of them, scav lanes included — the renderer marks those SCAVS ONLY
+    extracts: raid.map.extracts,
+    keyed: new Set(raid.extracts.filter((e) => e.req && raid.hasKey(e.req))),
     hover: raid.hover,
     path: raid.path,
     seen: raid.seen,
@@ -113,6 +115,10 @@ function drawHud() {
   $('#wt-text').textContent = `${fmtWeight(w)} kg`;
   $('#stam-fill').style.width = `${p.stamina}%`;
 
+  // the sprint toggle can flip from the keyboard or from running dry, so the
+  // button mirrors the actual state every frame instead of tracking clicks
+  $('#btn-hud-sprint').classList.toggle('is-on', raid.player.sprint);
+
   const weapon = raid.activeWeapon();
   const ammoRow = $('#ammo-count').parentElement;
   if (weapon) {
@@ -131,14 +137,14 @@ function drawHud() {
   clock.parentElement.classList.toggle('is-low', raid.timeLeft < 300);
   clock.parentElement.classList.toggle('is-crit', raid.timeLeft < 60);
 
-  // search progress, mirrored on the HUD while the panel is open
+  // while searching, progress lives in the loot panel itself; the HUD prompt
+  // instead narrates the walk toward a right-clicked container
   const ip = $('#interact-prompt');
-  const sc = raid.searching;
-  if (sc) {
+  const pi = raid.pendingInteract;
+  if (pi && raid.path.length) {
     ip.hidden = false;
-    $('#interact-label').textContent =
-      `SEARCHING ${sc.def.name.toUpperCase()} — ${sc.found.size}/${sc.order.length}`;
-    $('#interact-fill').style.width = `${Math.round(raid.searchFraction(sc) * 100)}%`;
+    $('#interact-label').textContent = `MOVING TO ${pi.def.name.toUpperCase()}`;
+    $('#interact-fill').style.width = '0%';
   } else {
     ip.hidden = true;
   }
@@ -173,8 +179,10 @@ function bindRaidInput(canvas) {
     const [wx, wy] = pointerWorld(e);
     aim = [wx, wy];
     if (e.button === 2) {
+      // only containers the player has actually seen can be interacted with —
+      // right-clicking into the fog must not reveal what is out there
       const c = raid.containerAt(wx, wy, 1.8);
-      if (c) raid.interactWith(c);
+      if (c && raid.seen.has(c.id)) raid.interactWith(c);
       else raid.cancelSearch();
     } else if (e.button === 0) {
       const enemy = raid.scavAt(wx, wy, 1.9);
@@ -214,8 +222,7 @@ function bindRaidInput(canvas) {
 
   $('#btn-close-overlay').addEventListener('click', closeOverlay);
   $('#btn-close-loot').addEventListener('click', () => {
-    if (raid) raid.closeLoot();
-    renderOverlay();
+    if (raid) raid.closeLoot();   // repaints via the LOOT_CLOSED listener
   });
 
   // on-screen equivalents for everything that used to need a key
@@ -241,6 +248,7 @@ function bindRaidInput(canvas) {
 
   on(EV.LOOT_OPENED, () => openOverlay());
   on(EV.LOOT_FOUND, () => { if (overlayOpen) renderOverlay(); });
+  on(EV.LOOT_CLOSED, () => { if (overlayOpen) renderOverlay(); });
 }
 
 function pointerWorld(e) {
@@ -251,6 +259,9 @@ function pointerWorld(e) {
 function onKeyDown(e) {
   if (!raid || document.getElementById('screen-raid')?.classList.contains('is-active') === false) return;
   if (e.target.tagName === 'INPUT') return;
+  // a modal or an in-flight drag owns Escape (and every other key) — the raid
+  // handler acting too would close the dialog AND pop the leave prompt
+  if (!$('#modal-root').hidden || isDragging()) return;
 
   if (e.key === 'Tab') {
     e.preventDefault();
@@ -439,13 +450,34 @@ on(EV.RAID_END, (result) => {
   stopLoop();
   holdingF = false;
   firing = false;
+  cancelExamine();               // whatever was being inspected is moot now
   closeOverlay();
   closeAllContainerWindows();
   stopAmbient();
   showResult(result);
 });
 
+// ---------------------------------------------------------
+// closing the tab mid-raid must not be a free extraction: the save carries a
+// live-raid marker, and a boot that finds it treats the run as MIA
+let pendingMIA = false;
+registerSaveSection('raidLive', {
+  dump: () => (raid && raid.status === RAID_STATUS.RUNNING ? { live: 1 } : null),
+  restore: (v) => { pendingMIA = !!(v && v.live); },
+});
+export function consumePendingMIA() {
+  const v = pendingMIA;
+  pendingMIA = false;
+  return v;
+}
+
 function showResult(result) {
+  // the result screen is a summary, not an inventory: the raid context menu
+  // staying live here meant one right-click DROP could delete extracted loot
+  setContextProvider(() => []);
+  dndContext.canMove = () => false;
+  dndContext.onActivate = null;
+
   const verdict = $('#result-verdict');
   const map = {
     [RAID_STATUS.SURVIVED]: ['SURVIVED', ''],
@@ -469,13 +501,30 @@ function showResult(result) {
     stat('HAUL VALUE', `${fmtNum(result.value)} ₽`));
 
   const lootHost = $('#result-loot');
+  lootHost.parentElement.querySelector('h3').textContent =
+    result.status === RAID_STATUS.SURVIVED ? 'EXTRACTED' : 'SECURED';
   lootHost.replaceChildren();
-  const shown = result.status === RAID_STATUS.SURVIVED ? result.kept : result.kept;
-  if (!shown.length) lootHost.append(el('div', { class: 'empty-note' }, 'NOTHING CAME BACK'));
-  for (const it of shown.slice(0, 60)) {
+  if (!result.kept.length) lootHost.append(el('div', { class: 'empty-note' }, 'NOTHING CAME BACK'));
+  for (const it of result.kept.slice(0, 60)) {
     const tile = renderItem(it, { static: true, noName: false });
     tile.style.position = 'relative';
     lootHost.append(tile);
+  }
+
+  // a lost raid also shows what went down with you
+  const lostWrap = $('#result-lost');
+  if (lostWrap) lostWrap.remove();
+  if (result.lost.length) {
+    const wrap = el('div', { class: 'result-loot result-loot--lost', id: 'result-lost' },
+      el('h3', {}, `LOST IN ACTION — ${result.lost.length} ITEM${result.lost.length > 1 ? 'S' : ''}`));
+    const list = el('div', { class: 'result-loot__list' });
+    for (const it of result.lost.slice(0, 60)) {
+      const tile = renderItem(it, { static: true, noName: false });
+      tile.style.position = 'relative';
+      list.append(tile);
+    }
+    wrap.append(list);
+    lootHost.parentElement.after(wrap);
   }
 
   showScreen('result');

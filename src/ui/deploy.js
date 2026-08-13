@@ -60,8 +60,8 @@ export function renderDeploy() {
   ]));
 
   brief.append(block('RULES OF ENGAGEMENT', [
-    note('Right-click the ground to move, right-click a container to search it.'),
-    note('Anything you carry out is marked found in raid.'),
+    note('Left-click the ground to move, right-click a container to search it.'),
+    note('Loot found in raid keeps its status when you extract; gear you brought does not.'),
     note('Die or run out of time and only your secure container comes back.'),
   ]));
 

@@ -48,7 +48,7 @@ export class Raid {
     this.scavs = [];
     this.shots = [];
     this.playerCooldown = 0;
-    this.stats = { searched: 0, found: 0, picked: 0, distance: 0, kills: 0, shots: 0 };
+    this.stats = { searched: 0, found: 0, distance: 0, kills: 0, shots: 0 };
 
     const spawn = this.rng.pick(mapDef.spawns);
     const p = nav.snap(spawn.x, spawn.y) || [spawn.x, spawn.y];
@@ -64,8 +64,23 @@ export class Raid {
     };
 
     this.placeLoot();
+    this.placeBodies();
     this.spawnScavs();
     this.markRaidStart();
+  }
+
+  /** a raid or two went badly before you arrived: dead PMCs with real gear */
+  placeBodies() {
+    const def = CONTAINERS.pmcbody;
+    if (!def) return;
+    const n = this.rng.int(1, 2);
+    for (let i = 0; i < n; i++) {
+      const region = this.rng.pick(this.map.regions);
+      const [x0, y0, x1, y1] = region.rect;
+      const pos = this.findSpot(x0, y0, x1, y1);
+      if (!pos) continue;
+      this.containers.push(this.makeContainer('pmcbody', def, pos[0], pos[1], { name: 'Fallen PMC' }));
+    }
   }
 
   // ---------------------------------------------------------
@@ -144,8 +159,20 @@ export class Raid {
       grid,
     };
     this.rollLoot(c);
-    c.order = this.rng.shuffle(c.grid.items().map((it) => it.uid));
+    this.finalizeContainer(c);
     return c;
+  }
+
+  /**
+   * Freeze the search bookkeeping once a container's spawned loot is final.
+   * Every container MUST pass through here — a container without found/order
+   * crashes the search loop, and orderSet is what tells spawned loot apart
+   * from items the player stows in later (those are always visible).
+   */
+  finalizeContainer(c) {
+    if (!c.found) c.found = new Set();
+    c.order = this.rng.shuffle(c.grid.items().map((it) => it.uid));
+    c.orderSet = new Set(c.order);
   }
 
   /** seconds to uncover one item from this container */
@@ -171,7 +198,18 @@ export class Raid {
       if (rng.chance(emptyChance)) continue;
       const pool = rng.weighted(pools, (e) => e[1])?.[0];
       if (!pool) continue;
-      const entry = rng.weighted(pool, (e) => e[1]);
+      // re-roll picks that physically cannot fit this container (a figurine
+      // pool in a jacket, say) instead of silently wasting the roll
+      let entry = null;
+      for (let tries = 0; tries < 6; tries++) {
+        const pick = rng.weighted(pool, (e) => e[1]);
+        if (!pick) break;
+        const t = TPL[pick[0]];
+        if (t && (t.w <= c.grid.w && t.h <= c.grid.h || t.h <= c.grid.w && t.w <= c.grid.h)) {
+          entry = pick;
+          break;
+        }
+      }
       if (!entry) continue;
       const [key, , range] = entry;
       const tpl = TPL[key];
@@ -282,6 +320,9 @@ export class Raid {
     if (!h || h.kind !== 'grid' || h.grid.tag !== 'loot') return true;
     const c = this.containers.find((k) => k.grid === h.grid);
     if (!c) return true;
+    // items the player stowed in here were never part of the spawned loot,
+    // so they are always visible — only unsearched spawns stay hidden
+    if (c.orderSet && !c.orderSet.has(item.uid)) return true;
     return c.searched || c.found.has(item.uid);
   }
 
@@ -505,6 +546,7 @@ export class Raid {
       id: uid('c'), type: 'deadscav', def,
       x: scav.x, y: scav.y, rot: this.rng.float(-0.4, 0.4),
       region: 'Body', searched: false,
+      found: new Set(), order: [],
       grid: new Grid(def.w, def.h, { tag: 'loot', label: def.name }),
     };
     this.rollLoot(body);
@@ -521,6 +563,8 @@ export class Raid {
       const spot = body.grid.findSpot(it);
       if (spot) body.grid.place(it, spot.x, spot.y, spot.rot);
     }
+    // like every other container, a body has to be searched item by item
+    this.finalizeContainer(body);
     this.containers.push(body);
     this.seen.add(body.id);
     this.scavs = this.scavs.filter((s) => s !== scav);
@@ -589,6 +633,20 @@ export class Raid {
       for (const it of eq.everything()) {
         if (it.raidLoot) { it.fir = true; delete it.raidLoot; }
       }
+      // a keyed exfil consumes one use of the key, and the key breaks dry
+      if (viaExtract?.req) {
+        for (const it of eq.everything()) {
+          if (it.tpl.key !== viaExtract.req) continue;
+          if (it.tpl.uses) {
+            it.res = (it.res ?? it.tpl.uses) - 1;
+            if (it.res <= 0) {
+              detach(it);
+              emit(EV.RAID_TOAST, { kind: 'warn', text: `${it.tpl.name} broke` });
+            }
+          }
+          break;
+        }
+      }
       for (const d of eq.slotList()) if (d.item) result.kept.push(d.item);
       for (const g of eq.pockets) result.kept.push(...g.items());
       result.value = result.kept.reduce((n, it) => n + it.value, 0);
@@ -601,8 +659,9 @@ export class Raid {
       const sec = eq.item('secure');
       if (sec) {
         result.kept.push(sec);
-        for (const g of sec.grids || []) {
-          for (const it of g.items()) { if (it.raidLoot) { it.fir = true; delete it.raidLoot; } }
+        // recurse: raid loot tucked into a case inside the pouch counts too
+        for (const it of sec.descendants()) {
+          if (it.raidLoot) { it.fir = true; delete it.raidLoot; }
         }
       }
       eq.clearInsecure();

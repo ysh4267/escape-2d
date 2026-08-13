@@ -2,12 +2,12 @@
 // ESCAPE 2D — bootstrap
 // =========================================================
 
-import { $, el } from './core/util.js';
+import { $, el, fmtNum } from './core/util.js';
 import { on, emit, EV } from './core/events.js';
 import { loadItems, TPL } from './data/items.js';
 import { MAPS } from './data/maps.js';
 import { loadGeometry } from './raid/nav.js';
-import { game, initState, load, save, saveSoon, addMoney } from './core/state.js';
+import { game, initState, load, save, saveSoon, addMoney, netWorthRub } from './core/state.js';
 import { Item, autoPlace, moveToSlot } from './inventory/model.js';
 import { initDnd } from './inventory/dnd.js';
 import { initTooltip } from './inventory/tooltip.js';
@@ -17,7 +17,7 @@ import { initShell, showScreen, showPane, refreshTopbar, bootProgress, toast } f
 import { initStash, renderStash, activateStashContext } from './ui/stash.js';
 import { initDeploy, renderDeploy } from './ui/deploy.js';
 import { initTrade, renderTrade, activateTradeContext, rerollFence } from './ui/trade.js';
-import { startRaid } from './ui/raid-ui.js';
+import { startRaid, consumePendingMIA } from './ui/raid-ui.js';
 
 let geo = null;
 
@@ -63,6 +63,15 @@ async function boot() {
   initState();
   const restored = load();
   if (!restored) seedNewProfile();
+  else if (consumePendingMIA()) {
+    // the last session was closed mid-raid — that run ends as MIA, exactly
+    // as if the timer had run out: unsecured gear does not come home
+    game.equipment.clearInsecure();
+    game.profile.raids++;
+    game.profile.died++;
+    save();
+    setTimeout(() => toast('MISSING IN ACTION — the interrupted raid took your unsecured gear', 'bad', 5600), 900);
+  }
 
   bootProgress(0.82, 'building interface');
   initAudio();
@@ -168,6 +177,11 @@ function runDevHooks() {
   const mode = new URLSearchParams(location.search).get('dev');
   if (!mode) return;
   if (mode === 'traders') { showPane('traders'); return; }
+  if (mode === 'trade-sell' || mode === 'trade-dialog') {
+    showPane('traders');
+    import('./ui/trade.js').then((m) => m.devTrade(mode.slice(6)));
+    return;
+  }
   if (mode === 'deploy') { showPane('raid'); return; }
   if (mode === 'rot') {
     // rotate every rotatable item in the stash so the sprite geometry can be
@@ -298,8 +312,10 @@ function openSettings() {
             el('dt', {}, 'EXPERIENCE'), el('dd', {}, String(stats.exp)),
             el('dt', {}, 'RAIDS'), el('dd', {}, String(stats.raids)),
             el('dt', {}, 'SURVIVED'), el('dd', {}, String(stats.survived)),
+            el('dt', {}, 'EXTRACTED'), el('dd', {}, String(stats.extracted)),
             el('dt', {}, 'DIED'), el('dd', {}, String(stats.died)),
-            el('dt', {}, 'BEST HAUL'), el('dd', {}, `${Math.round(stats.bestHaul).toLocaleString('en-US')} ₽`)),
+            el('dt', {}, 'BEST HAUL'), el('dd', {}, `${Math.round(stats.bestHaul).toLocaleString('en-US')} ₽`),
+            el('dt', {}, 'NET WORTH'), el('dd', {}, `${fmtNum(netWorthRub())} ₽`)),
           volumeRow(),
           el('div', { class: 'tooltip__desc', style: { marginTop: '14px', borderTop: '1px solid var(--line-1)', paddingTop: '10px' } },
             'Non-commercial fan project. Escape From Tarkov is a trademark of Battlestate Games. '

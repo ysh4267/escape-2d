@@ -5,6 +5,7 @@
 import { Grid, Item, autoPlace, detach } from '../inventory/model.js';
 import { Equipment } from '../inventory/equipment.js';
 import { TPL, getTpl, CURRENCY_KEY, FX } from '../data/items.js';
+import { seedUidCounter } from './util.js';
 import { emit, EV } from './events.js';
 
 export let SAVE_KEY = 'escape2d.save.v1';
@@ -35,7 +36,7 @@ export const game = {
   equipment: null,
   /** live raid session, null outside of a raid */
   raid: null,
-  settings: { showNames: true, autoSave: true },
+  settings: { autoSave: true },
 };
 
 export function initState() {
@@ -116,6 +117,28 @@ export function takeMoney(amount, cur = 'RUB', grids = null) {
   return left <= 0;
 }
 
+/**
+ * Whether addMoney(amount) is guaranteed to fully succeed right now.
+ * Currency tiles are 1x1, so any free cell can take an overflow stack.
+ */
+export function canAddMoney(amount, cur = 'RUB', grids = null) {
+  if (amount <= 0) return true;
+  const key = CURRENCY_KEY[cur];
+  const tpl = TPL[key];
+  if (!tpl) return false;
+  const targets = grids || [game.stash];
+  let left = amount;
+  let freeCells = 0;
+  for (const g of targets) {
+    freeCells += g.capacity - g.usedCells();
+    for (const it of g.items()) {
+      if (it.tpl.key === key) left -= it.spaceLeft();
+    }
+  }
+  if (left <= 0) return true;
+  return Math.ceil(left / (tpl.stack || 1)) <= freeCells;
+}
+
 /** total wealth in roubles, converting foreign currency at FX */
 export function netWorthRub() {
   let v = 0;
@@ -146,13 +169,27 @@ export function isExamined(tplKey) {
 }
 
 export function traderState(id) {
-  if (!game.profile.traders[id]) game.profile.traders[id] = { rep: 0, spent: 0, bought: {} };
-  return game.profile.traders[id];
+  if (!game.profile.traders[id]) game.profile.traders[id] = { rep: 0, spent: 0 };
+  const st = game.profile.traders[id];
+  if (st.spent == null) st.spent = 0;   // profiles saved before spent-gating
+  if (st.rep == null) st.rep = 0;
+  return st;
 }
 
 // ---------------------------------------------------------
 // save / load
 // ---------------------------------------------------------
+
+/**
+ * Modules outside core can persist a section of their own (the trading table,
+ * for instance) without state.js having to import them: they register a dump
+ * and a restore, and save()/load() call these by key.
+ */
+const SAVE_SECTIONS = {};
+export function registerSaveSection(key, { dump, restore }) {
+  SAVE_SECTIONS[key] = { dump, restore };
+}
+
 export function save() {
   try {
     const data = {
@@ -164,6 +201,10 @@ export function save() {
       stash: game.stash.toJSON(),
       eq: game.equipment.toJSON(),
     };
+    for (const [key, sec] of Object.entries(SAVE_SECTIONS)) {
+      const v = sec.dump();
+      if (v != null) (data.x || (data.x = {}))[key] = v;
+    }
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;
   } catch (err) {
@@ -184,11 +225,38 @@ export function load() {
     game.profile.traders = data.p?.traders || {};
     game.stash.loadJSON(data.stash);
     game.equipment.loadJSON(data.eq);
+    if (data.x) {
+      for (const [key, v] of Object.entries(data.x)) {
+        try { SAVE_SECTIONS[key]?.restore(v); } catch (err) { console.error(`[load] section ${key}`, err); }
+      }
+    }
+    reseedUids();
     return true;
   } catch (err) {
     console.error('[load] failed', err);
     return false;
   }
+}
+
+/**
+ * Push the uid counter past every uid we just loaded. Without this a fresh
+ * session restarts the counter at zero and can mint a uid that collides with
+ * a saved item — two items sharing a uid silently shadow each other in the
+ * grid's item map and one of them is dropped by the next save.
+ */
+function reseedUids() {
+  let maxN = 0;
+  const track = (it) => {
+    // uid layout: 1-letter prefix + base36 counter + 3 random base36 chars
+    const m = /^[a-z]([0-9a-z]+)[0-9a-z]{3}$/.exec(it.uid || '');
+    if (m) {
+      const n = parseInt(m[1], 36);
+      if (Number.isFinite(n)) maxN = Math.max(maxN, n);
+    }
+  };
+  for (const it of game.stash.items()) { track(it); for (const d of it.descendants()) track(d); }
+  for (const it of game.equipment.everything()) track(it);
+  seedUidCounter(maxN);
 }
 
 export function wipe() {

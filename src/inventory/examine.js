@@ -78,6 +78,8 @@ function finish() {
   if (!active) return;
   const { item, onChange } = active;
   active = null;
+  // the item may have been discarded or sold mid-examination
+  if (!item.holder) { onChange(); return; }
   item.examined = true;
   markExamined(item.tpl.key);
   addExp(item.tpl.examineXp || DEFAULT_XP);

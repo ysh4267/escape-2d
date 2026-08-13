@@ -375,19 +375,25 @@ export class Renderer {
       const active = state.nearExtract === ex;
       g.save();
       g.strokeStyle = active ? '#7fb39a' : usable ? 'rgba(127,179,154,.55)' : 'rgba(217,164,65,.45)';
-      g.fillStyle = active ? 'rgba(127,179,154,.16)' : 'rgba(127,179,154,.07)';
+      g.fillStyle = active ? 'rgba(127,179,154,.16)'
+        : usable ? 'rgba(127,179,154,.07)' : 'rgba(217,164,65,.05)';
       g.lineWidth = active ? 2.5 : 1.6;
       g.setLineDash(active ? [] : [6, 5]);
       g.beginPath(); g.arc(sx, sy, r, 0, Math.PI * 2); g.fill(); g.stroke();
       g.setLineDash([]);
-      g.fillStyle = active ? '#d6efee' : 'rgba(184,219,217,.72)';
+      g.fillStyle = active ? '#d6efee' : usable ? 'rgba(184,219,217,.72)' : 'rgba(217,164,65,.6)';
       g.font = '600 11px Bahnschrift, system-ui, sans-serif';
       g.textAlign = 'center';
       g.fillText(ex.name.toUpperCase(), sx, sy - r - 7);
-      if (ex.req) {
-        g.fillStyle = 'rgba(217,164,65,.85)';
-        g.font = '10px Bahnschrift, system-ui, sans-serif';
-        g.fillText('LOCKED', sx, sy + r + 14);
+      g.font = '10px Bahnschrift, system-ui, sans-serif';
+      if (!usable) {
+        g.fillStyle = 'rgba(217,164,65,.7)';
+        g.fillText('SCAVS ONLY', sx, sy + r + 14);
+      } else if (ex.req) {
+        // the label answers the question the player actually has: can I use it
+        const carried = state.keyed && state.keyed.has(ex);
+        g.fillStyle = carried ? 'rgba(127,179,154,.9)' : 'rgba(217,164,65,.85)';
+        g.fillText(carried ? 'KEY CARRIED' : 'LOCKED', sx, sy + r + 14);
       }
       g.restore();
     }

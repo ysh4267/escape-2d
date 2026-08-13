@@ -10,7 +10,7 @@
 import { $, el } from '../core/util.js';
 import { renderItem, gridCellAt } from './view.js';
 import { moveToGrid, moveToSlot, autoPlace, detach, splitStack } from './model.js';
-import { emit, EV } from '../core/events.js';
+import { emit, on, EV } from '../core/events.js';
 
 const DRAG_THRESHOLD = 4;
 
@@ -39,6 +39,12 @@ export function initDnd() {
   document.addEventListener('pointerup', onPointerUp, true);
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('dblclick', onDoubleClick, true);
+
+  // a drag must never outlive its context: the pointer getting cancelled,
+  // the window losing focus or the screen changing all abort it cleanly
+  document.addEventListener('pointercancel', () => { if (drag) cancelDrag(); }, true);
+  window.addEventListener('blur', () => { if (drag) cancelDrag(); });
+  on(EV.SCREEN_CHANGED, () => { if (drag) cancelDrag(); pending = null; });
 
   // this is a game: the browser menu never helps, except inside text fields
   document.addEventListener('contextmenu', (e) => {

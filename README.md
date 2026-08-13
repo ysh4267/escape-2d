@@ -114,8 +114,14 @@ panel.
 **Traders.** Eight traders with the documented buy-back multipliers — Therapist
 0.51, Ragman 0.50, Jaeger 0.48, Mechanic 0.45, Prapor 0.40, Skier 0.39,
 Peacekeeper 0.36, Fence 0.24 — category gating so most items have only two or
-three legal buyers, loyalty levels gated on PMC level and reputation, and
-separate rouble / dollar / euro balances.
+three legal buyers, loyalty levels gated on PMC level, reputation *and* money
+spent, and separate rouble / dollar / euro balances. The screen is laid out
+like the in-game one: portrait tabs with the loyalty numeral, the assortment
+packed into an item grid with price captions, lock plates over higher-tier
+offers and per-restock stock counters, a quantity slider with ALL and DEAL on
+purchase, and selling happens by dragging onto a trading table — unexamined
+items and non-empty containers are refused, and what the trader will not buy
+is greyed out. Fence rerolls his stolen goods for a fee.
 
 ---
 
@@ -140,7 +146,7 @@ python -m http.server 8777
 | `tools/selection.py` | the curated item list the builder resolves |
 | `tools/build_map.py` | extracts Factory wall / floor / obstacle geometry into `src/data/map-factory.json` |
 | `tools/build_sounds.py` | downloads the CC0 sound packs and transcodes the effects into `assets/sfx/` |
-| `tools/smoke.html` | 91 headless assertions over inventory, map, raid, combat, trader and save logic |
+| `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |
 | `tools/preview_map.html` | renders the raw extracted geometry |
 | `tools/preview_nav.html` | renders navmesh connected components, spawn/extract reachability and per-region walkability |
 | `tools/sfx_test.html` | checks the shipped effects are served and that the audio surface is what the game calls |

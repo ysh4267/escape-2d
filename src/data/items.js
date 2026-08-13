@@ -50,6 +50,11 @@ export async function loadItems() {
     TPL[key] = tpl;
     BY_ID[tpl.id] = tpl;
   }
+  // one exchange rate everywhere: the handbook quotes currency below the FX
+  // table, and two disagreeing rates open buy-low/sell-high loops
+  for (const [key, cur] of Object.entries(CURRENCY)) {
+    if (TPL[key] && FX[cur]) TPL[key].price = FX[cur];
+  }
   return TPL;
 }
 

@@ -7,11 +7,15 @@
 // matters exactly as it does in the game.
 // =========================================================
 
+/**
+ * Loyalty gates work like the real game: PMC level, reputation AND total money
+ * spent with the trader all have to pass before the next tier unlocks.
+ */
 export const LOYALTY_LEVELS = [
-  { level: 1, pmc: 1,  rep: 0 },
-  { level: 2, pmc: 6,  rep: 0.6 },
-  { level: 3, pmc: 18, rep: 2.1 },
-  { level: 4, pmc: 35, rep: 5.8 },
+  { level: 1, pmc: 1,  rep: 0,   spent: 0 },
+  { level: 2, pmc: 6,  rep: 0.6, spent: 500000 },
+  { level: 3, pmc: 18, rep: 2.1, spent: 2200000 },
+  { level: 4, pmc: 35, rep: 5.8, spent: 8000000 },
 ];
 
 export const TRADERS = [
@@ -69,12 +73,14 @@ export const TRADERS = [
     buyMult: 0.39,
     buys: ['rig', 'weapon', 'pistol', 'mag', 'ammo', 'grenade', 'electronics', 'valuables', 'barter'],
     assort: [
-      { key: 'w_tt', ll: 1, stock: 5 }, { key: 'w_pb', ll: 3, stock: 2 },
-      { key: 'w_saiga', ll: 3, stock: 2 }, { key: 'w_mp153', ll: 2, stock: 3 },
-      { key: 'am_9x19pst', ll: 1, stock: 400 }, { key: 'am_762tt', ll: 1, stock: 400 },
+      { key: 'w_tt', ll: 1, stock: 5 },
+      // his smuggled European stock is priced in the euros he sells
+      { key: 'w_pb', ll: 3, stock: 2, cur: 'EUR' },
+      { key: 'w_saiga', ll: 3, stock: 2, cur: 'EUR' }, { key: 'w_mp153', ll: 2, stock: 3 },
+      { key: 'am_762tt', ll: 1, stock: 400 },
       { key: 'am_12buck', ll: 1, stock: 200 },
       { key: 'mag_pm', ll: 1, stock: 10 },
-      { key: 'ammocase', ll: 3, stock: 1 }, { key: 'magcase', ll: 3, stock: 1 },
+      { key: 'ammocase', ll: 3, stock: 1, cur: 'EUR' }, { key: 'magcase', ll: 3, stock: 1, cur: 'EUR' },
       { key: 'rig_csa', ll: 1, stock: 4 }, { key: 'rig_wartech', ll: 2, stock: 3 },
       { key: 'eur', ll: 1, stock: 40000 },
     ],
@@ -169,11 +175,11 @@ export const TRADERS = [
 
 export const TRADER_BY_ID = Object.fromEntries(TRADERS.map((t) => [t.id, t]));
 
-/** loyalty level unlocked for a trader given profile level and reputation */
-export function loyaltyFor(profileLevel, rep) {
+/** loyalty level unlocked for a trader given profile level, rep and roubles spent */
+export function loyaltyFor(profileLevel, rep, spentRub = 0) {
   let ll = 1;
   for (const l of LOYALTY_LEVELS) {
-    if (profileLevel >= l.pmc && rep >= l.rep) ll = l.level;
+    if (profileLevel >= l.pmc && rep >= l.rep && spentRub >= (l.spent || 0)) ll = l.level;
   }
   return ll;
 }
@@ -191,12 +197,26 @@ export function sellValue(trader, item, fx) {
   if (tpl.dura != null && item.dura != null) condition *= 0.45 + 0.55 * (item.dura / tpl.dura);
   if (tpl.res && item.res != null) condition *= 0.4 + 0.6 * (item.res / tpl.res.max);
   const rub = base * trader.buyMult * condition;
-  return Math.max(1, Math.round(rub / (fx[trader.currency] || 1)));
+  const v = Math.floor(rub / (fx[trader.currency] || 1));
+  // only roubles keep a 1-unit floor: rounding 30-rouble junk UP to a whole
+  // dollar would be a money printer at Peacekeeper
+  return trader.currency === 'RUB' ? Math.max(1, v) : v;
 }
 
-/** what the player pays for one unit, in that trader's currency */
-export function buyPrice(trader, tpl, fx) {
+/**
+ * The currency an offer is paid in. Currency itself is always bought with
+ * roubles — Peacekeeper quoting dollars in dollars would be a free money and
+ * reputation pump. Individual offers may override with `cur` (Skier's
+ * euro-priced smuggled stock).
+ */
+export function buyCurrency(trader, tpl, off = null) {
+  if (tpl.cat === 'money') return 'RUB';
+  return off?.cur || trader.currency;
+}
+
+/** what the player pays for one unit, in buyCurrency(trader, tpl, off) */
+export function buyPrice(trader, tpl, fx, off = null) {
   const markup = 1.08;
   const rub = tpl.price * markup;
-  return Math.max(1, Math.round(rub / (fx[trader.currency] || 1)));
+  return Math.max(1, Math.round(rub / (fx[buyCurrency(trader, tpl, off)] || 1)));
 }

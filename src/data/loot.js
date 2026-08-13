@@ -29,7 +29,7 @@ export const CONTAINERS = {
   filecab:     { name: 'Filing cabinet',      w: 2, h: 2, search: 2.0,  rolls: [1, 2], icon: 'stash' },
   techcrate:   { name: 'Technical supply crate', w: 5, h: 5, search: 5.0, rolls: [2, 4], icon: 'box' },
   deadscav:    { name: 'Dead Scav',           w: 4, h: 4, search: 4.5,  rolls: [2, 4], icon: 'body' },
-  pmcbody:     { name: 'Dead PMC',            w: 4, h: 4, search: 4.5,  rolls: [2, 5], icon: 'body' },
+  pmcbody:     { name: 'Dead PMC',            w: 5, h: 5, search: 4.5,  rolls: [3, 5], icon: 'body' },
 };
 
 // ---------------------------------------------------------
@@ -74,8 +74,9 @@ const P = {
   ],
   drink: [['water', 10], ['vodka', 5], ['beer', 7], ['hotrod', 6], ['vita', 8], ['pineapple', 8]],
   ammo: [
+    // no 9x19 here: nothing in this build chambers it
     ['am_545ps', 10, [20, 60]], ['am_545bp', 4, [15, 40]], ['am_762ps', 9, [20, 60]],
-    ['am_762bp', 4, [15, 40]], ['am_9x19pst', 9, [20, 50]], ['am_9x18pst', 10, [20, 50]],
+    ['am_762bp', 4, [15, 40]], ['am_9x18pst', 10, [20, 50]],
     ['am_12buck', 8, [8, 20]], ['am_762tt', 8, [20, 50]],
   ],
   mags: [['mag_ak74', 8], ['mag_akm', 7], ['mag_pm', 8], ['mag_kedr', 6]],
@@ -124,7 +125,11 @@ export const LOOT_TABLES = {
   filecab:     [[P.info, 34], [P.keys, 26], [P.money, 22], [P.junk, 18]],
   techcrate:   [[P.electronics, 54], [P.tools, 32], [P.junk, 14]],
   deadscav:    [[P.junk, 22], [P.ammo, 16], [P.meds_low, 16], [P.food, 12], [P.mags, 12], [P.money, 10], [P.gear_misc, 6], [P.valuables, 6]],
-  pmcbody:     [[P.mags, 20], [P.ammo, 18], [P.meds_mid, 16], [P.gear_misc, 12], [P.money, 12], [P.valuables, 10], [P.cases, 6], [P.grenades, 6]],
+  // a dead PMC is the only place full gear drops: armor, helmets, rigs,
+  // backpacks and blades all funnel through this table
+  pmcbody:     [[P.mags, 12], [P.ammo, 12], [P.meds_mid, 12], [P.gear_misc, 8], [P.money, 8],
+                [P.valuables, 8], [P.cases, 4], [P.grenades, 5], [P.gear_armor, 8],
+                [P.gear_helmet, 7], [P.gear_rig, 7], [P.gear_backpack, 6], [P.melee, 3]],
 };
 
 /** rarity of an item spawning at all, per container roll */

@@ -39,6 +39,7 @@
   <symbol id="i-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 1.5v5M12 17.5v5M1.5 12h5M17.5 12h5"/></symbol>
   <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4"/><path d="M6 4h11l-2.5 4L17 12H6"/></symbol>
   <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/><path d="M18 7a7.5 7.5 0 0 1 0 10"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
   <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
 </svg>
 
@@ -112,15 +113,21 @@
 
       <!-- ---- TRADERS PANE ---- -->
       <div class="pane" id="pane-traders">
-        <div class="trader-shell">
-          <aside class="trader-rail" id="trader-rail"></aside>
-          <div class="trader-main">
-            <div class="trader-head" id="trader-head"></div>
-            <div class="trader-modes">
-              <button class="seg is-active" data-mode="buy">BUY</button>
-              <button class="seg" data-mode="sell">SELL</button>
+        <div class="trade">
+          <div class="trade__tabs" id="trader-tabs"></div>
+          <div class="trade__bar" id="trader-bar"></div>
+          <div class="trade__body">
+            <div class="trade__left">
+              <div class="trade__modes">
+                <button class="seg is-active" data-mode="buy">BUY</button>
+                <button class="seg" data-mode="sell">SELL</button>
+              </div>
+              <div class="trade__content" id="trader-content"></div>
             </div>
-            <div class="trader-content" id="trader-content"></div>
+            <aside class="panel trade__stash">
+              <div class="panel__head"><h2>STASH</h2><span class="panel__sub" id="trade-stash-note"></span></div>
+              <div class="panel__body panel__body--scroll" id="trade-stash-host"></div>
+            </aside>
           </div>
         </div>
       </div>

@@ -13,3 +13,6 @@ desktop.ini
 
 # sound source packs (regenerate with tools/build_sounds.py)
 tools/cache/sfx/
+
+# local verification captures
+logs/

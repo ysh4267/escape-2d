@@ -79,12 +79,29 @@ export function closeAllContainerWindows() {
   }
 }
 
-export function anyContainerWindowOpen() { return open.size > 0; }
+/**
+ * A window is only valid while its container can still be traced to a live
+ * root (a slot, or a top-level grid like the stash). Checking `holder` alone
+ * missed nested cases: a pouch inside a sold backpack keeps its holder, but
+ * the whole chain is orphaned.
+ */
+function isLive(item) {
+  let cur = item;
+  let guard = 0;
+  while (cur && guard++ < 12) {
+    const h = cur.holder;
+    if (!h) return false;
+    if (h.kind === 'slot') return true;
+    if (!h.grid.owner) return true;   // stash / pocket / loot / trading table
+    cur = h.grid.owner;
+  }
+  return false;
+}
 
 /** re-render every open window; windows whose item has vanished close themselves */
 export function refreshContainerWindows() {
   for (const [uid, rec] of Array.from(open.entries())) {
-    if (!rec.item.holder) { rec.node.remove(); open.delete(uid); continue; }
+    if (!isLive(rec.item)) { rec.node.remove(); open.delete(uid); continue; }
     renderOne(rec.item, rec.node, rec.body);
   }
 }

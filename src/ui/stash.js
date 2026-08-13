@@ -34,6 +34,8 @@ export function initStash() {
 
 function matches(item) {
   if (!filterText) return true;
+  // an unexamined item must not answer to its hidden name
+  if (!isKnown(item)) return false;
   const t = item.tpl;
   return (`${t.name} ${t.short} ${t.cat}`).toLowerCase().includes(filterText);
 }
@@ -154,11 +156,15 @@ export function buildMenu(item, where, extra = []) {
       });
     }
 
-    actions.push({
-      label: where === 'raid' ? 'MOVE TO GEAR' : (isOnCharacter(item) ? 'MOVE TO STASH' : 'MOVE TO GEAR'),
-      icon: 'sell', key: 'CTRL+CLICK',
-      run: () => quickTransfer(item),
-    });
+    // in the trader screen the ctrl+click target is the trading table, and
+    // that already has its own labelled action
+    if (where !== 'trade') {
+      actions.push({
+        label: where === 'raid' ? 'MOVE TO GEAR' : (isOnCharacter(item) ? 'MOVE TO STASH' : 'MOVE TO GEAR'),
+        icon: 'sell', key: 'CTRL+CLICK',
+        run: () => quickTransfer(item),
+      });
+    }
 
     actions.push({ label: 'INSPECT', icon: 'info', run: () => inspectDialog(item) });
   }
@@ -171,7 +177,7 @@ export function buildMenu(item, where, extra = []) {
     run: async () => {
       const ok = await confirmDialog({
         title: 'DISCARD ITEM',
-        body: `${item.tpl.name} will be destroyed permanently.`,
+        body: `${isKnown(item) ? item.tpl.name : 'Unknown item'} will be destroyed permanently.`,
         confirmLabel: 'DISCARD', danger: true,
       });
       if (!ok) return;
@@ -193,15 +199,4 @@ export function examineNow(item) {
 
 function isEquipped(item) {
   return item.holder?.kind === 'slot';
-}
-
-// ---------------------------------------------------------
-/** used by the results screen: pull everything off the character into the stash */
-export function stowIntoStash(items) {
-  const overflow = [];
-  for (const it of items) {
-    detach(it);
-    if (!autoPlace(it, [game.stash])) overflow.push(it);
-  }
-  return overflow;
 }

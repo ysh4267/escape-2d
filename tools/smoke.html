@@ -133,7 +133,100 @@ try {
   check('ragman buys backpacks', tr.canBuyFrom(tr.TRADER_BY_ID.ragman, new Item('bp_mbss')));
   check('prapor does not buy backpacks', !tr.canBuyFrom(tr.TRADER_BY_ID.prapor, new Item('bp_mbss')));
   check('fence buys anything', tr.canBuyFrom(tr.TRADER_BY_ID.fence, new Item('bp_mbss')));
-  check('loyalty gates on level', tr.loyaltyFor(1, 0) === 1 && tr.loyaltyFor(40, 9) === 4);
+  check('loyalty gates on level', tr.loyaltyFor(1, 0, 0) === 1 && tr.loyaltyFor(40, 9, 9e6) === 4);
+  check('loyalty gates on money spent', tr.loyaltyFor(40, 9, 0) === 1 && tr.loyaltyFor(40, 9, 600000) === 2,
+        String(tr.loyaltyFor(40, 9, 0)));
+  check('currency is always bought with roubles', (() => {
+    const pk = tr.TRADER_BY_ID.peacekeeper;
+    const usdCost = tr.buyPrice(pk, items.TPL.usd, items.FX);
+    return tr.buyCurrency(pk, items.TPL.usd) === 'RUB'
+      && usdCost > items.TPL.usd.price;   // never cheaper than face value
+  })(), `cost ${tr.buyPrice(tr.TRADER_BY_ID.peacekeeper, items.TPL.usd, items.FX)}`);
+
+  head('trading table');
+  const tt = new Grid(6, 4, { tag: 'tradeTable' });
+  tt.mayAccept = (it) => it.cat !== 'money';
+  const sellMed = new Item('salewa', { examined: true });
+  const cash = new Item('rub', { stack: 1000 });
+  check('table accepts a sellable item', tt.canPlace(sellMed, 0, 0, 0));
+  check('table gate rejects money', !tt.canPlace(cash, 3, 0, 0));
+  check('gate does not break normal grids', new Grid(6, 4).canPlace(cash, 0, 0, 0));
+
+  head('audit regressions');
+  // a failed SORT must restore the original layout, never destroy items
+  {
+    const g4 = new Grid(4, 3);
+    const wide = new Item('drill');        // 3x2, placed rotated to 2x3
+    const box = new Item('grizzly');       // 2x2
+    g4.place(wide, 0, 0, 1);
+    g4.place(box, 2, 0, 0);
+    const leftovers = g4.sort();
+    check('sort keeps every item even when repacking fails',
+      g4.count === 2 && g4.items().includes(wide) && g4.items().includes(box),
+      `count=${g4.count} leftovers=${leftovers.length}`);
+  }
+  // found-in-raid never merges with non-FiR
+  {
+    const a = new Item('am_545ps', { stack: 30, fir: true });
+    const b = new Item('am_545ps', { stack: 30 });
+    check('FiR stacks refuse to merge with non-FiR', !a.canStackWith(b) && !b.canStackWith(a));
+    const c = new Item('am_545ps', { stack: 30, fir: true });
+    check('matching FiR stacks still merge', a.canStackWith(c));
+  }
+  // no-merge autoPlace keeps purchases rollback-safe
+  {
+    const g5 = new Grid(4, 4);
+    const existing = new Item('am_545ps', { stack: 10 });
+    g5.place(existing, 0, 0, 0);
+    const bought = new Item('am_545ps', { stack: 20 });
+    model.autoPlace(bought, [g5], { merge: false });
+    check('autoPlace merge:false never tops up other stacks',
+      existing.stack === 10 && g5.count === 2, `stack=${existing.stack} count=${g5.count}`);
+  }
+  // slot-to-slot swap
+  {
+    const eqS = new (await import('../src/inventory/equipment.js')).Equipment();
+    const w1 = new Item('w_akm');
+    const w2 = new Item('w_aks74u');
+    moveToSlot(w1, eqS.get('primary'));
+    moveToSlot(w2, eqS.get('secondary'));
+    const res = moveToSlot(w2, eqS.get('primary'));
+    check('slot-to-slot weapon swap works',
+      res.ok && eqS.item('primary') === w2 && eqS.item('secondary') === w1, res.action);
+  }
+  // secure containers cannot hide inside cases or rigs
+  {
+    const pouch = new Item('sc_alpha');
+    const rig = new Item('rig_idea');
+    const box2 = new Item('junkbox');
+    check('secure container refused by a rig', !model.autoPlace(pouch, rig.grids));
+    check('secure container refused by a case', !model.autoPlace(pouch, box2.grids));
+  }
+  // splitStack keeps the raid-session marker
+  {
+    const stack = new Item('am_545ps', { stack: 40 });
+    stack.raidLoot = true;
+    const half = splitStack(stack, 15);
+    check('splitStack keeps raidLoot', half.raidLoot === true && stack.raidLoot === true);
+  }
+  // canAddMoney predicts payout room honestly
+  {
+    const state2 = await import('../src/core/state.js');
+    const tiny = new Grid(1, 1);
+    const blocker = new Item('bandage');
+    tiny.place(blocker, 0, 0, 0);
+    check('canAddMoney refuses a full grid', !state2.canAddMoney(5000, 'RUB', [tiny]));
+    check('canAddMoney accepts a free grid', state2.canAddMoney(5000, 'RUB', [new Grid(1, 1)]));
+  }
+  // no orphan calibers in the loot pools
+  {
+    const loot2 = await import('../src/data/loot.js');
+    const weaponCals = new Set(Object.values(items.TPL)
+      .filter((t) => ['weapon', 'pistol'].includes(t.cat) && t.cal).map((t) => t.cal));
+    const orphan = loot2.POOLS.ammo.filter(([k]) => !weaponCals.has(items.TPL[k]?.cal));
+    check('every lootable ammo has a weapon that chambers it', orphan.length === 0,
+      orphan.map((e) => e[0]).join(','));
+  }
 
   head('loot tables');
   const loot = await import('../src/data/loot.js');
@@ -232,6 +325,9 @@ try {
   state.game.profile.examined.clear();
   const known = new Item('bandage');
   const unknown = new Item('ledx');
+  // examined items always live somewhere; a holderless one counts as
+  // discarded mid-examination and the result is thrown away
+  new Grid(4, 4).place(unknown, 0, 0, 0);
   check('a common item is known on sight', examine.isKnown(known) && !examine.needsExamine(known));
   check('a rare item starts unknown', !examine.isKnown(unknown) && examine.needsExamine(unknown));
   check('templates carry an examine time', items.TPL.ledx.examineTime > 0, String(items.TPL.ledx.examineTime));

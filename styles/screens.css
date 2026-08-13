@@ -46,109 +46,177 @@
 .brief-row b { color: var(--tx-0); font-weight: 600; }
 .brief-row span.muted { margin-left: auto; }
 
-/* ---------------- traders ---------------- */
-.trader-shell { display: grid; grid-template-columns: 210px 1fr; gap: 14px; height: 100%; }
-.trader-rail {
-  display: flex; flex-direction: column; gap: 6px; overflow: auto;
-  padding-right: 4px;
-}
-.trader-chip {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px; text-align: left;
-  border: 1px solid var(--line-1);
-  background: rgba(14,21,25,.8);
-  border-radius: var(--r-sm);
-  transition: border-color .12s, background .12s;
-}
-.trader-chip:hover { border-color: var(--line-2); background: rgba(47,69,80,.28); }
-.trader-chip.is-active { border-color: var(--pale); background: rgba(184,219,217,.1); }
-.trader-chip__pic {
-  width: 46px; height: 46px; flex: none;
-  background: #05090b center/cover no-repeat;
-  border: 1px solid var(--line-1);
-  display: flex; align-items: center; justify-content: center;
-  color: var(--line-3); font-size: 18px; font-weight: 700;
-}
-.trader-chip__pic img { width: 100%; height: 100%; object-fit: cover; }
-.trader-chip__n { min-width: 0; }
-.trader-chip__name { color: var(--tx-0); font-size: 13px; letter-spacing: .08em; }
-.trader-chip__lvl { color: var(--tx-3); font-size: 10px; letter-spacing: .12em; margin-top: 2px; }
+/* ---------------- traders (laid out like the in-game trading screen) ---------------- */
+.trade { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
 
-.trader-main { display: flex; flex-direction: column; min-height: 0; }
-.trader-head {
-  display: flex; align-items: center; gap: 14px;
-  padding: 12px; border: 1px solid var(--line-1); border-radius: var(--r-md);
-  background: linear-gradient(90deg, rgba(47,69,80,.4), rgba(8,12,14,.6));
-}
-.trader-head__pic { width: 64px; height: 64px; flex: none; border: 1px solid var(--line-2); background: #05090b center/cover no-repeat; }
-.trader-head__pic img { width: 100%; height: 100%; object-fit: cover; }
-.trader-head__name { font-size: 19px; letter-spacing: .14em; color: var(--white); }
-.trader-head__tag { color: var(--tx-3); font-size: 11px; letter-spacing: .1em; margin-top: 3px; }
-.trader-head__rep { margin-left: auto; text-align: right; }
-.rep-bar { width: 190px; height: 3px; background: var(--line-1); margin-top: 6px; }
-.rep-bar > i { display: block; height: 100%; background: var(--pale); }
-.trader-modes { display: flex; gap: 4px; margin: 10px 0; border-bottom: 1px solid var(--line-1); }
-.trader-content { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 320px; gap: 12px; }
-
-.assort { overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; align-content: start; padding-right: 4px; }
-.offer {
-  display: flex; gap: 10px; padding: 8px;
-  border: 1px solid var(--line-1); background: rgba(14,21,25,.75);
-  border-radius: var(--r-sm);
+/* portrait tab strip across the top */
+.trade__tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.ttab {
+  flex: none; width: 86px; text-align: center;
+  border: 1px solid var(--line-1); border-radius: 2px;
+  background: rgba(8,12,14,.85);
+  padding: 0; overflow: hidden;
   transition: border-color .12s;
 }
-.offer:hover { border-color: var(--line-2); }
-.offer.is-locked { opacity: .5; }
-.offer__art {
-  width: 62px; height: 62px; flex: none; position: relative;
-  background: rgba(0,0,0,.4); border: 1px solid var(--line-1);
-  display: flex; align-items: center; justify-content: center;
+.ttab:hover { border-color: var(--line-3); }
+.ttab.is-active { border-color: var(--pale); box-shadow: 0 0 0 1px rgba(184,219,217,.22); }
+.ttab__pic { position: relative; height: 64px; background: #05090b; }
+.ttab__pic img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; filter: saturate(.85); }
+.ttab.is-active .ttab__pic img { filter: none; }
+.ttab__ll {
+  position: absolute; right: 3px; bottom: 3px;
+  min-width: 16px; padding: 1px 4px;
+  background: rgba(0,0,0,.78); border: 1px solid var(--line-2);
+  color: var(--pale); font-size: 10px; font-weight: 700; letter-spacing: .08em;
 }
-.offer__art img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.offer__art .item__fallback { font-size: 9px; }
-.offer__n { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.offer__name { color: var(--tx-0); font-size: 12px; line-height: 1.25; }
-.offer__meta { color: var(--tx-dim); font-size: 10px; letter-spacing: .1em; margin-top: 2px; }
-.offer__price { margin-top: auto; color: var(--rare); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.offer__price small { color: var(--tx-3); font-weight: 400; font-size: 10px; margin-left: 3px; }
-.offer__buy { margin-top: 6px; display: flex; gap: 6px; align-items: center; }
-.offer__qty { width: 38px; background: rgba(0,0,0,.5); border: 1px solid var(--line-1); color: var(--tx-0); padding: 3px 4px; text-align: center; font-size: 11px; -moz-appearance: textfield; }
-.offer__qty::-webkit-outer-spin-button, .offer__qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.offer__step {
-  width: 20px; height: 22px; flex: none;
-  background: rgba(0,0,0,.4); border: 1px solid var(--line-1);
-  color: var(--tx-2); font-size: 13px; line-height: 1;
-  display: flex; align-items: center; justify-content: center;
+.ttab__cur {
+  position: absolute; left: 3px; top: 3px;
+  padding: 1px 5px;
+  background: rgba(0,0,0,.78); border: 1px solid var(--line-1);
+  color: var(--tx-2); font-size: 10px;
 }
-.offer__step:hover { border-color: var(--line-3); color: var(--white); background: rgba(88,111,124,.25); }
-.offer__stock { color: var(--tx-dim); font-size: 10px; }
-.offer__lock { color: var(--warn); font-size: 10px; letter-spacing: .1em; display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.ttab__name {
+  padding: 4px 2px 5px; font-size: 9.5px; letter-spacing: .1em;
+  color: var(--tx-2); background: rgba(14,21,25,.9);
+  border-top: 1px solid var(--line-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ttab.is-active .ttab__name { color: var(--white); }
 
-.deal {
-  display: flex; flex-direction: column; min-height: 0;
-  border: 1px solid var(--line-1); border-radius: var(--r-md);
+/* loyalty + balance bar */
+.trade__bar {
+  display: flex; align-items: center; gap: 18px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-1); border-radius: var(--r-sm);
+  background: linear-gradient(90deg, rgba(47,69,80,.35), rgba(8,12,14,.6));
+}
+.tbar__id { min-width: 150px; }
+.tbar__name { color: var(--white); font-size: 17px; letter-spacing: .16em; }
+.tbar__tag { color: var(--tx-3); font-size: 10.5px; letter-spacing: .08em; margin-top: 2px; }
+.tbar__loyal { display: flex; align-items: center; gap: 12px; }
+.tbar__tiers { display: flex; gap: 3px; }
+.tier {
+  width: 30px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line-1);
+  color: var(--tx-dim); font-size: 12px; font-weight: 700; letter-spacing: .05em;
+  background: rgba(0,0,0,.35);
+}
+.tier.is-on { color: var(--tx-0); border-color: var(--line-3); background: rgba(88,111,124,.3); }
+.tier.is-cur { color: var(--white); border-color: var(--pale); background: rgba(184,219,217,.16); }
+.tbar__rep { display: flex; flex-direction: column; gap: 1px; color: var(--tx-3); font-size: 10px; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
+.tbar__next { color: var(--tx-dim); }
+.tbar__wallet { margin-left: auto; display: flex; gap: 6px; }
+.wallet-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--line-1); background: rgba(0,0,0,.4);
+  color: var(--tx-1); font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.wallet-chip.is-active { border-color: var(--line-3); color: var(--white); }
+.wallet-chip__sym { color: var(--rare); font-weight: 700; }
+
+/* body: trader pane left, stash docked right */
+.trade__body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr minmax(330px, 400px); gap: 12px; }
+.trade__left { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.trade__modes { display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 1px solid var(--line-1); }
+.trade__content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.trade__stash { min-height: 0; }
+.panel__sub { margin-left: auto; color: var(--tx-dim); font-size: 10px; letter-spacing: .08em; }
+
+/* BUY: the assortment shelf */
+.assort-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.assort-tools { display: flex; justify-content: flex-end; }
+.assort-scroll {
+  flex: 1; min-height: 0; overflow: auto;
+  padding: 10px; border: 1px solid var(--line-1); border-radius: var(--r-sm);
+  background: rgba(5,9,11,.7);
+}
+.assort-grid .item { cursor: default; }
+.assort-grid .toffer--buyable { cursor: pointer; }
+.assort-grid .toffer--buyable:hover { outline: 1px solid var(--line-3); outline-offset: -1px; }
+.toffer__price {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
+  padding: 1px 4px 2px;
+  background: linear-gradient(0deg, rgba(0,0,0,.88) 55%, transparent);
+  color: var(--rare); font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  font-variant-numeric: tabular-nums; text-align: right;
+  pointer-events: none;
+}
+.toffer__stock {
+  position: absolute; left: 2px; top: 2px; z-index: 4;
+  padding: 0 4px;
+  background: rgba(0,0,0,.8); border: 1px solid var(--line-2);
+  color: var(--tx-2); font-size: 9px; font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.toffer__stock.is-out { color: var(--danger); border-color: var(--danger-dk); }
+.toffer--locked .item__img, .toffer--locked .item__fallback { opacity: .3; filter: grayscale(.7); }
+.toffer__lock {
+  position: absolute; inset: 0; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  background: rgba(4,7,9,.72);
+  color: var(--warn); font-size: 11px; font-weight: 700; letter-spacing: .12em;
+}
+.toffer__lock .ico { width: 15px; height: 15px; }
+.toffer--out .item__img, .toffer--out .item__fallback { opacity: .35; filter: grayscale(.9); }
+.toffer__out {
+  position: absolute; inset: auto 0 40% 0; z-index: 5;
+  text-align: center;
+  color: var(--danger); font-size: 8.5px; font-weight: 700; letter-spacing: .16em;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+
+/* purchase dialog */
+.purchase { width: min(430px, 92vw); }
+.purchase__row { display: flex; gap: 12px; margin-bottom: 14px; }
+.purchase__art {
+  width: 84px; height: 84px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.45); border: 1px solid var(--line-1);
+}
+.purchase__art img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.purchase__info { min-width: 0; }
+.purchase__name { color: var(--tx-0); font-size: 14px; line-height: 1.3; }
+.purchase__meta { color: var(--tx-3); font-size: 11px; margin-top: 5px; letter-spacing: .05em; }
+.purchase__total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line-1);
+}
+.purchase__total b { color: var(--rare); font-size: 19px; font-variant-numeric: tabular-nums; }
+.purchase__total b.is-broke { color: var(--danger); }
+
+/* SELL: the trading table */
+.table-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.table-head { display: flex; align-items: baseline; gap: 12px; font-size: 11px; letter-spacing: .2em; color: var(--pale); }
+.table-head__hint { color: var(--tx-dim); font-size: 10px; letter-spacing: .06em; }
+.table-zone {
+  position: relative; flex: 1; min-height: 0; overflow: auto;
+  padding: 10px; border: 1px dashed var(--line-2); border-radius: var(--r-sm);
+  background:
+    repeating-linear-gradient(45deg, rgba(88,111,124,.05) 0 10px, transparent 10px 20px),
+    rgba(5,9,11,.7);
+}
+.table-empty {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  color: var(--tx-dim); font-size: 12px; letter-spacing: .22em;
+  pointer-events: none;
+}
+.table-empty small { font-size: 10px; letter-spacing: .1em; }
+.table-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-1); border-radius: var(--r-sm);
   background: linear-gradient(180deg, rgba(22,32,37,.9), rgba(8,12,14,.9));
 }
-.deal__head { padding: 9px 12px; border-bottom: 1px solid var(--line-1); font-size: 11px; letter-spacing: .2em; color: var(--pale); display: flex; align-items: center; gap: 8px; }
-.deal__list { flex: 1; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
-.deal-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border: 1px solid var(--line-1); background: rgba(0,0,0,.3); }
-.deal-row__art { width: 34px; height: 34px; flex: none; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.4); }
-.deal-row__art img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.deal-row__n { flex: 1; min-width: 0; font-size: 11.5px; color: var(--tx-1); }
-.deal-row__n small { display: block; color: var(--tx-dim); font-size: 10px; }
-.deal-row__p { color: var(--rare); font-size: 12px; font-variant-numeric: tabular-nums; }
-.deal-row__x { color: var(--tx-dim); }
-.deal-row__x:hover { color: var(--danger); }
-.deal__foot { padding: 10px 12px; border-top: 1px solid var(--line-1); }
-.deal__total { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
-.deal__total b { color: var(--rare); font-size: 18px; font-variant-numeric: tabular-nums; }
-.deal__foot .btn { width: 100%; justify-content: center; }
+.table-foot__total { display: flex; align-items: baseline; gap: 10px; }
+.table-foot__total b { color: var(--rare); font-size: 19px; font-variant-numeric: tabular-nums; }
+.btn--deal { min-width: 130px; justify-content: center; letter-spacing: .24em; }
 
-.sell-shell { display: grid; grid-template-columns: 1fr 320px; gap: 12px; min-height: 0; }
-.sell-stash { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--line-1); border-radius: var(--r-md); background: rgba(8,12,14,.6); }
-.sell-stash__head { padding: 9px 12px; border-bottom: 1px solid var(--line-1); font-size: 11px; letter-spacing: .2em; color: var(--pale); }
-.sell-stash__body { flex: 1; overflow: auto; padding: 10px; }
-.sell-hint { color: var(--tx-dim); font-size: 11px; letter-spacing: .06em; padding: 0 12px 8px; }
+/* items the current trader refuses (sell mode) */
+.is-nosell { opacity: .32; filter: grayscale(.5); }
 
 /* ---------------- raid ---------------- */
 #screen-raid { background: #05080a; }
@@ -300,16 +368,24 @@
 .result-loot h3 { font-size: 11px; letter-spacing: .22em; color: var(--pale); margin-bottom: 8px; }
 .result-loot__list { flex: 1; overflow: auto; display: flex; flex-wrap: wrap; gap: 6px; align-content: start; padding: 10px; border: 1px solid var(--line-1); background: rgba(0,0,0,.35); }
 .result-loot__list .item { position: relative; }
+.result-loot--lost { flex: 0 0 auto; }
+.result-loot--lost h3 { color: var(--danger); }
+.result-loot--lost .result-loot__list { max-height: 26vh; border-color: var(--danger-dk); }
+.result-loot--lost .item { opacity: .45; filter: grayscale(.4); }
 #btn-result-continue { align-self: center; }
+
+/* raid toasts must clear the fullscreen inventory overlay (z 20) */
+.raid-toast { z-index: 30; }
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 1360px) {
   :root { --cell: 54px; }
   .pane-grid--stash { grid-template-columns: minmax(320px, 350px) 1fr; }
-  .trader-content { grid-template-columns: 1fr 280px; }
+  .trade__body { grid-template-columns: 1fr minmax(300px, 340px); }
 }
 @media (max-width: 1100px) {
   :root { --cell: 48px; }
   .deploy { grid-template-columns: 1fr; }
-  .trader-shell { grid-template-columns: 160px 1fr; }
+  .trade__body { grid-template-columns: 1fr; }
+  .tbar__rep { display: none; }
 }
