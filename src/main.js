@@ -12,7 +12,7 @@ import { Item, autoPlace, moveToSlot } from './inventory/model.js';
 import { initDnd } from './inventory/dnd.js';
 import { initTooltip } from './inventory/tooltip.js';
 import { initContextMenu, confirmDialog } from './inventory/dialogs.js';
-import { initAudio, audioState, setEnabled, setVolume, sfx } from './core/audio.js';
+import { initAudio, audioState, setEnabled, setVolume } from './core/audio.js';
 import { initShell, showScreen, showPane, refreshTopbar, bootProgress, toast } from './ui/shell.js';
 import { initStash, renderStash, activateStashContext } from './ui/stash.js';
 import { initDeploy, renderDeploy } from './ui/deploy.js';
@@ -252,7 +252,6 @@ function wireGlobalKeys() {
   soundBtn.addEventListener('click', () => {
     setEnabled(!audioState().enabled);
     paintSound();
-    if (audioState().enabled) sfx.tab();
   });
   paintSound();
 
@@ -278,7 +277,6 @@ function volumeRow() {
     setVolume(Number(slider.value) / 100);
     readout.textContent = `${slider.value}%`;
   });
-  slider.addEventListener('change', () => sfx.click());
   return el('div', {
     style: {
       display: 'flex', alignItems: 'center', gap: '12px',

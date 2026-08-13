@@ -14,7 +14,6 @@ import { openContainerWindow, refreshContainerWindows } from '../inventory/windo
 import { buildMenu } from './stash.js';
 import { emit, EV } from '../core/events.js';
 import { toast, refreshTopbar } from './shell.js';
-import { sfx } from '../core/audio.js';
 
 let activeId = 'prapor';
 let mode = 'buy';
@@ -147,7 +146,6 @@ function renderBuy(t, ll, host) {
       const step = (d) => {
         const cap = off.stock >= 1000 ? 999 : off.stock;
         qty.value = String(clamp((Number(qty.value) || 1) + d, 1, Math.max(1, cap)));
-        sfx.click();
       };
       const minus = el('button', { class: 'offer__step', onclick: () => step(-1) }, '−');
       const plus = el('button', { class: 'offer__step', onclick: () => step(1) }, '+');
@@ -183,10 +181,10 @@ function walletPanel(t) {
 function doBuy(t, off, tpl, qty) {
   const unit = buyPrice(t, tpl, FX);
   const count = Math.min(qty, off.stock);
-  if (count <= 0) { sfx.deny(); toast('Out of stock', 'warn'); return; }
+  if (count <= 0) { toast('Out of stock', 'warn'); return; }
   const total = unit * count;
 
-  if (countMoney(t.currency) < total) { sfx.deny(); toast(`Not enough ${t.currency}`, 'bad'); return; }
+  if (countMoney(t.currency) < total) { toast(`Not enough ${t.currency}`, 'bad'); return; }
 
   // reserve space first so we never take money for items that will not fit
   const made = [];
@@ -209,7 +207,6 @@ function doBuy(t, off, tpl, qty) {
   st.rep = Math.min(10, st.rep + (total * (FX[t.currency] || 1)) / 900000);
   addExp(Math.round(count * 2));
 
-  sfx.money();
   toast(`Bought ${count}x ${tpl.name}`, 'ok');
   renderTrade();
   refreshTopbar();
@@ -266,11 +263,10 @@ function renderSell(t, host) {
 
 function addToSellCart(item) {
   const t = TRADER_BY_ID[activeId];
-  if (!canBuyFrom(t, item)) { sfx.deny(); toast(`${t.name} does not buy that`, 'warn'); return; }
-  if (item.tpl.cat === 'money') { sfx.deny(); toast('Cannot sell currency', 'warn'); return; }
+  if (!canBuyFrom(t, item)) { toast(`${t.name} does not buy that`, 'warn'); return; }
+  if (item.tpl.cat === 'money') { toast('Cannot sell currency', 'warn'); return; }
   if (cart.some((c) => c.item === item)) return;
   cart.push({ item });
-  sfx.click();
   renderTrade();
 }
 
@@ -286,7 +282,6 @@ function doSell(t, total) {
   const rub = total * (FX[t.currency] || 1);
   st.rep = Math.min(10, st.rep + rub / 1400000);
   addExp(Math.round(items.length * 3));
-  sfx.money();
   toast(`Sold ${items.length} item${items.length > 1 ? 's' : ''}`, 'ok');
   renderTrade();
   refreshTopbar();

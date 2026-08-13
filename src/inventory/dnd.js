@@ -11,7 +11,6 @@ import { $, el } from '../core/util.js';
 import { renderItem, gridCellAt } from './view.js';
 import { moveToGrid, moveToSlot, autoPlace, detach, splitStack } from './model.js';
 import { emit, EV } from '../core/events.js';
-import { sfx } from '../core/audio.js';
 
 const DRAG_THRESHOLD = 4;
 
@@ -41,12 +40,27 @@ export function initDnd() {
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('dblclick', onDoubleClick, true);
 
-  // this is a game: the browser menu never helps, except inside text fields
-  document.addEventListener('contextmenu', (e) => {
+  suppressNativeMenu();
+}
+
+/**
+ * Kill the browser context menu everywhere except text fields.
+ *
+ * This has to sit on `window` in the CAPTURE phase: a bubble-phase listener on
+ * `document` runs last, so anything that calls stopPropagation on the way up
+ * leaves the native menu to open on top of the game's own menu.
+ */
+export function suppressNativeMenu() {
+  const handler = (e) => {
     const t = e.target;
-    if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) return;
+    const editable = t instanceof HTMLInputElement
+      || t instanceof HTMLTextAreaElement
+      || (t instanceof HTMLElement && t.isContentEditable);
+    if (editable) return;
     e.preventDefault();
-  });
+  };
+  window.addEventListener('contextmenu', handler, true);
+  document.addEventListener('contextmenu', handler, true);
 }
 
 function onDoubleClick(e) {
@@ -120,7 +134,6 @@ function rotateDrag() {
   drag.rot = drag.rot ? 0 : 1;
   rebuildGhost();
   updateDrag(drag.lastX, drag.lastY);
-  sfx.click();
 }
 
 function onKeyDown(e) {
@@ -159,7 +172,6 @@ function beginDrag(e) {
   node.classList.add('is-dragging');
   document.body.classList.add('is-dragging');
   rebuildGhost();
-  sfx.pick();
 }
 
 function rebuildGhost() {
@@ -270,16 +282,13 @@ function commitDrag(e) {
     if (target.kind === 'grid') {
       const res = moveToGrid(item, target.grid, target.x, target.y, rot);
       changed = res.ok;
-      if (res.ok) sfx.drop();
-      else { sfx.deny(); emit(EV.TOAST, { kind: 'warn', text: 'No room there' }); }
+      if (!res.ok) emit(EV.TOAST, { kind: 'warn', text: 'No room there' });
     } else if (target.kind === 'slot') {
       const res = moveToSlot(item, target.slot);
       changed = res.ok;
-      if (res.ok) sfx.drop();
-      else { sfx.deny(); emit(EV.TOAST, { kind: 'warn', text: 'Slot is not empty' }); }
+      if (!res.ok) emit(EV.TOAST, { kind: 'warn', text: 'Slot is not empty' });
     }
   } else if (target && !target.ok) {
-    sfx.deny();
     emit(EV.TOAST, { kind: 'warn', text: target.kind === 'slot' ? 'Wrong slot' : 'Blocked' });
   }
 
@@ -307,12 +316,10 @@ export function quickTransfer(item) {
   const from = item.holder;
   const before = item.stack;
   if (autoPlace(item, targets)) {
-    sfx.drop();
     dndContext.onChange();
     return true;
   }
-  if (item.stack !== before) { sfx.drop(); dndContext.onChange(); return true; }
-  sfx.deny();
+  if (item.stack !== before) { dndContext.onChange(); return true; }
   if (from) emit(EV.TOAST, { kind: 'warn', text: 'No space' });
   return false;
 }

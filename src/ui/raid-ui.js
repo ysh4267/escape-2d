@@ -223,7 +223,6 @@ function bindRaidInput(canvas) {
     if (!raid) return;
     raid.player.sprint = !raid.player.sprint;
     sprintBtn.classList.toggle('is-on', raid.player.sprint);
-    sfx.click();
   });
   $('#btn-hud-leave').addEventListener('click', () => abandonRaid());
 

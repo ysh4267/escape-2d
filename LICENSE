@@ -36,15 +36,9 @@ Third-party material
     SPT database dumps
     https://github.com/sp-tarkov/server
 
-  Sound effects (assets/sfx/*.ogg) - all CC0 1.0
-    Kenney, "Interface Sounds"
-    https://kenney.nl/assets/interface-sounds
-    rubberduck, "100 CC0 SFX #2"
-    https://opengameart.org/content/100-cc0-sfx-2
+  Sound effects (assets/sfx/*.ogg) - CC0 1.0
     Thimras, "Metal footsteps on concrete"
     https://opengameart.org/content/metal-footsteps-on-concrete
-    yd, "Short alarm"
-    https://opengameart.org/content/short-alarm
 
     No Escape From Tarkov audio is included in this project.
 

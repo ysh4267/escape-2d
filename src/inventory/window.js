@@ -8,7 +8,6 @@
 
 import { $, el, icon, fmtWeight } from '../core/util.js';
 import { renderGrid } from './view.js';
-import { sfx } from '../core/audio.js';
 
 /** uid -> { item, node, body } */
 const open = new Map();
@@ -62,7 +61,6 @@ export function openContainerWindow(item) {
   open.set(item.uid, { item, node, body });
   bringToFront(node);
   renderOne(item, node, body);
-  sfx.windowOpen();
   return node;
 }
 
@@ -71,7 +69,6 @@ export function closeContainerWindow(uid) {
   if (!rec) return;
   rec.node.remove();
   open.delete(uid);
-  sfx.windowClose();
 }
 
 export function closeAllContainerWindows() {

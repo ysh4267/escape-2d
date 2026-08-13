@@ -31,6 +31,7 @@ Everything is playable with the mouse alone.
 | **left click** a hostile | open fire; hold to keep shooting |
 | **right click** a container | walk to it and search it |
 | **wheel** | zoom |
+| **right click** | never opens the browser menu, anywhere except text fields |
 | **INVENTORY / SPRINT / LEAVE** buttons | bottom-right of the raid HUD |
 | hold the **exfil panel** | channel the extraction |
 
@@ -90,17 +91,16 @@ insertion; anything carried out gains it. Die or run the clock out and only the
 secure container comes home. Worn gear stays equipped between raids — only
 loose loot is unloaded into the stash.
 
-**Sound.** Escape From Tarkov's own audio is Battlestate Games' copyrighted
-work and is not redistributed here, so the foley comes from openly licensed
-packs instead — **all CC0**: metal footsteps on concrete for a chemical plant,
-crate and locker rummaging while you search, an alarm for the exfil channel,
-and a clean interface set. Six footstep variants are pitch-shifted per step so
-walking never audibly loops, and the container you open picks its own lid
-sound. The industrial ambience is still synthesised so it can drone without a
-loop point. Weapon fire is deliberately silent for now — gunplay is being
-reworked separately. Full attribution is in
-[`assets/sfx/CREDITS.md`](assets/sfx/CREDITS.md); mute lives in the top bar and
-volume in the profile panel.
+**Sound.** Deliberately sparse: footsteps and the factory ambience, nothing
+else. Six CC0 metal-on-concrete footstep samples
+([Thimras](https://opengameart.org/content/metal-footsteps-on-concrete)) are
+cycled so the same one never plays twice in a row and each is pitch-shifted,
+with a tighter cadence when sprinting. The ambience is synthesised so it drones
+without a loop point and ships no file. Interface, container and extraction
+cues were removed by request, and weapon fire is silent until the combat pass —
+the vetted picks for all of them are parked in `tools/build_sounds.py` so they
+can be restored in one edit. Mute lives in the top bar, volume in the profile
+panel.
 
 **Traders.** Eight traders with the documented buy-back multipliers — Therapist
 0.51, Ragman 0.50, Jaeger 0.48, Mechanic 0.45, Prapor 0.40, Skier 0.39,
@@ -134,7 +134,7 @@ python -m http.server 8777
 | `tools/smoke.html` | 91 headless assertions over inventory, map, raid, combat, trader and save logic |
 | `tools/preview_map.html` | renders the raw extracted geometry |
 | `tools/preview_nav.html` | renders navmesh connected components, spawn/extract reachability and per-region walkability |
-| `tools/sfx_test.html` | checks every effect is served and decodable, and that no weapon sounds crept back in |
+| `tools/sfx_test.html` | checks the shipped effects, the audio surface, and that the browser context menu is blocked on every game surface |
 
 Regenerate everything:
 
@@ -167,12 +167,9 @@ Battlestate Games; this project is not affiliated with or endorsed by them.
   [SPT](https://github.com/sp-tarkov/server) database dumps.
 - **Extract names, spawn locations and container behaviour** — the Escape From
   Tarkov wiki.
-- **Sound effects** — all CC0: [Kenney](https://kenney.nl/assets/interface-sounds)
-  (interface), [rubberduck](https://opengameart.org/content/100-cc0-sfx-2)
-  (crates, lockers, doors, impacts),
-  [Thimras](https://opengameart.org/content/metal-footsteps-on-concrete)
-  (footsteps) and [yd](https://opengameart.org/content/short-alarm) (exfil
-  alarm). No Battlestate Games audio is included.
+- **Sound effects** — CC0:
+  [Thimras](https://opengameart.org/content/metal-footsteps-on-concrete),
+  "Metal footsteps on concrete". No Battlestate Games audio is included.
 
 Because the map geometry is CC BY-NC-SA, this project inherits the same terms:
 share alike, non-commercial, with attribution.

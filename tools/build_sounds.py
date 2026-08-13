@@ -4,11 +4,11 @@
 #
 # Escape From Tarkov's own audio is Battlestate Games' copyrighted work and is
 # not redistributable, so this pulls equivalent foley from openly licensed
-# libraries instead: metal footsteps on concrete for a chemical plant, crate
-# and locker foley for searching, and a clean UI set.
+# libraries instead.
 #
-# Everything below is CC0 except the noted CC-BY entries, which are credited
-# in assets/sfx/CREDITS.md.
+# The game currently ships footsteps only — every other cue was removed by
+# request, and the factory ambience is synthesised at runtime. PARKED keeps
+# the vetted picks for the rest so they can be restored in one edit.
 #
 # output: ../assets/sfx/*.ogg  +  ../assets/sfx/CREDITS.md
 # =========================================================
@@ -76,8 +76,10 @@ PICKS = [
     ('step_4', 'thimras_steps', 'metal_steps_14.wav', None),
     ('step_5', 'thimras_steps', 'metal_steps_18.wav', None),
     ('step_6', 'thimras_steps', 'metal_steps_22.wav', None),
+]
 
-    # --- world foley: opening and rummaging through containers
+# Vetted but not shipped. Move a row into PICKS to bring the cue back.
+PARKED = [
     ('open_wood',  'rubberduck_sfx100', 'sfx100v2_wood_03.ogg', None),
     ('open_metal', 'rubberduck_sfx100', 'sfx100v2_metal_01.ogg', None),
     ('open_door',  'rubberduck_sfx100', 'sfx100v2_door_03.ogg', None),
@@ -87,8 +89,6 @@ PICKS = [
     ('search_4',   'rubberduck_sfx100', 'sfx100v2_metal_05.ogg', None),
     ('thud',       'rubberduck_sfx100', 'sfx100v2_stones_02.ogg', None),
     ('hurt',       'rubberduck_sfx100', 'sfx100v2_hit_02.ogg', None),
-
-    # --- interface
     ('ui_click',     'kenney_interface', 'Audio/click_003.ogg', None),
     ('ui_tab',       'kenney_interface', 'Audio/switch_003.ogg', None),
     ('item_pick',    'kenney_interface', 'Audio/scratch_002.ogg', None),
@@ -99,8 +99,6 @@ PICKS = [
     ('money',        'kenney_interface', 'Audio/bong_001.ogg', None),
     ('window_open',  'kenney_interface', 'Audio/open_002.ogg', None),
     ('window_close', 'kenney_interface', 'Audio/close_002.ogg', None),
-
-    # --- extraction
     ('extract_alarm', 'yd_alarm', 'alarm_0.ogg', 1.7),
 ]
 
@@ -128,8 +126,11 @@ def main():
     ff = ffmpeg_bin()
 
     print('[1/3] fetching source packs')
+    needed = {k for _, k, _, _ in PICKS}
     extracted = {}
     for key, src in SOURCES.items():
+        if key not in needed:
+            continue
         path = fetch(src['url'], os.path.join(CACHE, src['file']))
         target = os.path.join(CACHE, key)
         if src['kind'] == 'zip':
@@ -179,6 +180,11 @@ def main():
 
     print('[3/3] writing manifest and credits')
     manifest = sorted(n for n, _, _ in made)
+    keep = {n + '.ogg' for n in manifest} | {'manifest.json', 'CREDITS.md'}
+    for fn in os.listdir(OUT):
+        if fn not in keep:
+            os.remove(os.path.join(OUT, fn))
+            print(f'      removed stale {fn}')
     with open(os.path.join(OUT, 'manifest.json'), 'w', encoding='utf-8') as f:
         json.dump(manifest, f, indent=0)
 
@@ -201,8 +207,9 @@ def main():
             '',
         ]
     lines += [
-        'Ambient beds and a few short cues are still synthesised at runtime in',
-        '`src/core/audio.js` and ship no files.',
+        'The factory ambience is synthesised at runtime in `src/core/audio.js`',
+        'and ships no file. Every other cue was removed by request; the vetted',
+        'picks for them are parked in `tools/build_sounds.py` under `PARKED`.',
         '',
     ]
     with open(os.path.join(OUT, 'CREDITS.md'), 'w', encoding='utf-8') as f:
