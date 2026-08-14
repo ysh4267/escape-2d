@@ -406,7 +406,7 @@
   gap: 14px;
 }
 .overlay__grid.is-solo { grid-template-columns: minmax(320px, 380px) minmax(280px, 330px); justify-content: center; }
-.overlay__close { align-self: center; margin-top: 12px; display: flex; align-items: center; gap: 8px; color: var(--tx-3); font-size: 11px; letter-spacing: .18em; }
+.overlay__close { align-self: center; flex: 0 0 auto; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--tx-3); font-size: 11px; letter-spacing: .18em; }
 .overlay__close:hover { color: var(--tx-0); }
 
 .panel--loot .panel__head h2 { color: var(--warn); }
