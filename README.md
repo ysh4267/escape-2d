@@ -1,10 +1,9 @@
 # ESCAPE 2D — Factory
 
 A top-down, browser-based extraction shooter sandbox built around a faithful
-reimplementation of Escape From Tarkov's grid inventory. Click to move,
-right-click a container to search it, drag the loot into your rig, then walk to
-an exfil and hold the button to take it home. Mouse only — the keyboard is
-optional.
+reimplementation of Escape From Tarkov's grid inventory. Click to move, click a
+container to search it, drag the loot into your rig, then walk to an exfil and
+hold the button to take it home. Mouse only — the keyboard is optional.
 
 **Play it: https://ysh4267.github.io/escape-2d/**
 
@@ -28,8 +27,8 @@ Everything is playable with the mouse alone.
 | | |
 |---|---|
 | **left click** the ground | move there (A\* pathfinding around the real Factory walls) |
+| **left click** a container | walk to it and search it |
 | **left click** a hostile | open fire; hold to keep shooting |
-| **right click** a container | walk to it and search it |
 | **wheel** | zoom |
 | **INVENTORY / SPRINT / LEAVE** buttons | bottom-right of the raid HUD |
 | hold the **exfil panel** | channel the extraction |

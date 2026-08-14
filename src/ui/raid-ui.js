@@ -98,6 +98,7 @@ function loop(now) {
     shots: raid.shots,
     hoverEnemy: raid.hoverEnemy,
     time: now / 1000,
+    dt,
     rawTime: raid.time,
     nearExtract: raid.nearExtract,
   });
@@ -146,7 +147,7 @@ function drawHud() {
   clock.parentElement.classList.toggle('is-crit', raid.timeLeft < 60);
 
   // while searching, progress lives in the loot panel itself; the HUD prompt
-  // instead narrates the walk toward a right-clicked container
+  // instead narrates the walk toward a container that was clicked from afar
   const ip = $('#interact-prompt');
   const pi = raid.pendingInteract;
   if (pi && raid.path.length) {
@@ -180,27 +181,36 @@ function bindRaidInput(canvas) {
 
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  // left button moves, or opens fire when the cursor is on a visible hostile;
-  // right button searches containers. No keyboard needed for either.
+  // One button does everything. Left click reads what is under the cursor and
+  // picks the obvious action: shoot a visible hostile, search a container the
+  // player has already seen, otherwise walk there. Right click is left as a
+  // second way to search rather than the only way.
   canvas.addEventListener('pointerdown', (e) => {
     if (!raid || raid.status !== RAID_STATUS.RUNNING) return;
+    if (e.button !== 0 && e.button !== 2) return;
     const [wx, wy] = pointerWorld(e);
     aim = [wx, wy];
+
+    // only containers the player has actually seen can be interacted with —
+    // clicking into the fog must not reveal what is out there
+    const container = raid.containerAt(wx, wy, 1.8);
+    const reachable = container && raid.seen.has(container.id) ? container : null;
+
     if (e.button === 2) {
-      // only containers the player has actually seen can be interacted with —
-      // right-clicking into the fog must not reveal what is out there
-      const c = raid.containerAt(wx, wy, 1.8);
-      if (c && raid.seen.has(c.id)) raid.interactWith(c);
+      if (reachable) raid.interactWith(reachable);
       else raid.cancelSearch();
-    } else if (e.button === 0) {
-      const enemy = raid.scavAt(wx, wy, 1.9);
-      if (enemy) {
-        firing = true;
-        raid.playerFire(enemy.x, enemy.y);
-      } else {
-        raid.cancelSearch();
-        raid.moveTo(wx, wy);
-      }
+      return;
+    }
+
+    const enemy = raid.scavAt(wx, wy, 1.9);
+    if (enemy) {
+      firing = true;
+      raid.playerFire(enemy.x, enemy.y);
+    } else if (reachable) {
+      raid.interactWith(reachable);
+    } else {
+      raid.cancelSearch();
+      raid.moveTo(wx, wy);
     }
   });
 

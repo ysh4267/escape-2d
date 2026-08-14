@@ -47,15 +47,22 @@ PICKS = {
     "step_stop": {"clips": ["stop_metal1", "stop_metal2", "stop_metal3"], "trim": [0, 1.4]},
 
     # ---------------- container search ----------------
-    # one file per container family; raid.js picks by container type
-    "search_wood": {"clips": ["woodbox_looting"], "trim": [0, 3.0]},
-    "search_metal": {"clips": ["drawer_metal_looting"], "trim": [0, 3.0]},
-    "search_drawer": {"clips": ["drawer_wood_looting"], "trim": [0, 3.0]},
-    "search_safe": {"clips": ["safe_looting"], "trim": [0, 3.0]},
-    "search_bag": {"clips": ["sportbag_looting"], "trim": [0, 3.0]},
-    "search_techno": {"clips": ["techno_box_looting_01"], "trim": [0, 3.0]},
+    # itemsounds.bundle carries exactly ten rummage loops and this uses all of
+    # them; audio.js maps container type -> cue. They run 5-14s in the install
+    # and a container here is searched for 1.5-5s, so each is trimmed to a bit
+    # over the longest search that uses it rather than to a flat 3s - cutting
+    # them all at 3s was lopping the body off the longer rummages.
+    "search_wood": {"clips": ["woodbox_looting"], "trim": [0, 5.5]},
+    "search_industrial": {"clips": ["industrialbox_looting"], "trim": [0, 6.0]},
+    "search_metal": {"clips": ["drawer_metal_looting"], "trim": [0, 5.0]},
+    "search_drawer": {"clips": ["drawer_wood_looting"], "trim": [0, 4.0]},
+    "search_safe": {"clips": ["safe_looting"], "trim": [0, 5.0]},
+    "search_bag": {"clips": ["sportbag_looting"], "trim": [0, 5.0]},
+    "search_techno": {"clips": ["techno_box_looting_01"], "trim": [0, 6.0]},
     "search_cash": {"clips": ["cashregister_looting"], "trim": [0, 3.0]},
-    "search_body": {"clips": ["looting_body_extended"], "trim": [0, 3.5]},
+    # clothing has its own rummage in the install - the coat-pocket rustle
+    "search_jacket": {"clips": ["jacket_looting"], "trim": [0, 4.0]},
+    "search_body": {"clips": ["looting_body_extended"], "trim": [0, 5.5]},
     # the little "something turned up" flourish
     "found": {"clips": ["looting_luck2_other"], "trim": [0, 2.0], "gain": 1},
 

@@ -85,7 +85,13 @@ export class Raid {
   }
 
   // ---------------------------------------------------------
-  spawnScavs(count = 7) {
+  /**
+   * Hostiles are switched off while the farming loop is being built out - a
+   * raid is currently a looting exercise and being shot mid-search only gets
+   * in the way of tuning it. Everything downstream (the AI, the combat, the
+   * bodies they leave) is intact and comes back by raising this to 7.
+   */
+  spawnScavs(count = 0) {
     const rng = this.rng;
     for (let i = 0; i < count; i++) {
       let pos = null;
@@ -284,7 +290,7 @@ export class Raid {
     if (container.searched) return;
     this.searching = container;
     this.searchProgress = 0;
-    sfx.search(container.type);
+    sfx.searchStart(container.type);
   }
 
   openLoot(container) {
@@ -298,6 +304,7 @@ export class Raid {
   }
 
   cancelSearch() {
+    if (this.searching) sfx.searchStop();
     this.searching = null;
     this.searchProgress = 0;
   }
@@ -378,8 +385,6 @@ export class Raid {
           this.stats.found++;
           addExp(4);
           sfx.found();
-          // keep rummaging while there is more to turn up
-          if (c.found.size < c.order.length) sfx.search(c.type);
           emit(EV.LOOT_FOUND, c);
         }
         if (c.found.size >= c.order.length && this.searchProgress >= step * 0.5) {
@@ -388,6 +393,7 @@ export class Raid {
           addExp(6);
           this.searching = null;
           this.searchProgress = 0;
+          sfx.searchStop();
           emit(EV.LOOT_FOUND, c);
         }
       }
@@ -624,6 +630,7 @@ export class Raid {
   finish(status, viaExtract = null) {
     if (this.status !== RAID_STATUS.RUNNING) return;
     this.status = status;
+    this.cancelSearch();
     this.closeLoot();
 
     const survived = status === RAID_STATUS.SURVIVED;

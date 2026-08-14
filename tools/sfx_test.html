@@ -124,7 +124,8 @@ const audio = await import('../src/core/audio.js');
 for (const fn of ['play', 'hasCue', 'setEnabled', 'setVolume', 'audioState', 'startAmbient', 'stopAmbient']) {
   check(`exports ${fn}`, typeof audio[fn] === 'function');
 }
-for (const m of ['footstep', 'halt', 'ui', 'trade', 'item', 'search', 'openContainer', 'use', 'fire', 'found', 'death', 'extract']) {
+for (const m of ['footstep', 'halt', 'ui', 'trade', 'item', 'searchStart', 'searchStop',
+  'openContainer', 'use', 'fire', 'found', 'death', 'extract']) {
   check(`sfx.${m} exists`, typeof audio.sfx[m] === 'function');
 }
 // a cue with no audio behind it must be a quiet no-op, never a throw
@@ -132,7 +133,8 @@ let threw = null;
 try {
   audio.play('definitely_not_a_cue');
   audio.sfx.item('nonexistent_category', 'pickup');
-  audio.sfx.search('nonexistent_container');
+  audio.sfx.searchStart('nonexistent_container');
+  audio.sfx.searchStop();
   audio.sfx.fire(null);
   audio.sfx.ui('nope');
 } catch (e) { threw = e; }
@@ -171,6 +173,27 @@ if (pack) {
     'open_case', 'item_med_pickup', 'item_weapon_drop', 'found', 'amb_factory']) {
     check(`cue present: ${cue}`, !!manifest[cue]);
   }
+
+  // every rummage loop in itemsounds.bundle is mapped to some container type,
+  // and every type the game can place resolves to one that exists
+  const RUMMAGE = ['search_wood', 'search_industrial', 'search_metal', 'search_drawer',
+    'search_safe', 'search_bag', 'search_techno', 'search_cash', 'search_jacket', 'search_body'];
+  const missingLoop = RUMMAGE.filter((c) => !manifest[c]);
+  check('every rummage loop is in the pack', missingLoop.length === 0, missingLoop.join(','));
+
+  const audioSrc = await (await fetch('../src/core/audio.js')).text();
+  const cueBlock = audioSrc.match(/const SEARCH_CUE = \{([\s\S]*?)\n\};/);
+  const mapped = new Set([...(cueBlock ? cueBlock[1] : '').matchAll(/'(search_[a-z]+)'/g)].map((m) => m[1]));
+  const unmapped = RUMMAGE.filter((c) => !mapped.has(c));
+  check('every rummage loop is mapped to a container', unmapped.length === 0, unmapped.join(','));
+
+  const lootSrc = await (await fetch('../src/data/loot.js')).text();
+  const types = [...lootSrc.matchAll(/^\s{2}([a-z0-9_]+):\s*\{\s*name:/gm)].map((m) => m[1]);
+  const unresolved = types.filter((t) => {
+    const hit = (cueBlock ? cueBlock[1] : '').match(new RegExp(`\\b${t}:\\s*'(search_[a-z]+)'`));
+    return !hit || !manifest[hit[1]];
+  });
+  check('every container type resolves to a real loop', unresolved.length === 0, unresolved.join(','));
 } else {
   note('no pack answered — cue coverage cannot be checked');
 }

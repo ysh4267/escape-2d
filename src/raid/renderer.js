@@ -127,6 +127,8 @@ export class Renderer {
     fg.fillRect(0, 0, fog.width, fog.height);
     this.fog = fog;
     this.fogScale = fs;
+    // a fresh map means the eased silhouette has nothing to ease from
+    this.resetVisibility();
   }
 
   /** carve the current view out of the fog so explored ground stays legible */
@@ -166,22 +168,59 @@ export class Renderer {
   }
 
   // ---------------------------------------------------------
-  /** visibility polygon by ray marching the nav grid */
-  visibility(nav, px, py, radius = 30, rays = 200) {
+  /**
+   * Visibility polygon by ray marching the nav grid.
+   *
+   * Two things keep the edge from crawling. The march itself is coarse, so
+   * every hit used to land on a multiple of the step and the whole silhouette
+   * snapped outward a third of a metre at a time as the player walked; a short
+   * bisection after the break puts the vertex on the actual wall instead.
+   * Even then a ray can flip between two sides of a corner on consecutive
+   * frames, so each ray's length is eased toward its new value rather than
+   * assigned. The angles are world-aligned and fixed, so ray i is always the
+   * same direction and smoothing per index is meaningful.
+   */
+  visibility(nav, px, py, radius = 30, dt = 0, rays = 260) {
+    if (!this.visR || this.visR.length !== rays) {
+      this.visR = new Float32Array(rays);
+      this.visWarm = false;
+    }
+    // Easing is one-sided. A ray that shortens has hit something, and letting
+    // that lag would float the lit edge past the wall and bleed light through
+    // it, so closing is instant. Only opening is eased, which is what turns a
+    // corner flicking in and out into a soft sweep.
+    const k = this.visWarm ? 1 - Math.exp(-Math.max(dt, 0.0001) / 0.05) : 1;
+
+    const coarse = 0.4;
     const pts = [];
-    const step = 0.45;
     for (let i = 0; i < rays; i++) {
       const a = (i / rays) * Math.PI * 2;
       const dx = Math.cos(a), dy = Math.sin(a);
+
       let d = 0;
-      while (d < radius) {
-        d += step;
-        if (!nav.walkable(px + dx * d, py + dy * d)) break;
+      while (d + coarse < radius && nav.walkable(px + dx * (d + coarse), py + dy * (d + coarse))) {
+        d += coarse;
       }
-      pts.push([px + dx * Math.min(d, radius), py + dy * Math.min(d, radius)]);
+      // d is the last clear sample, d + coarse the first blocked one; close on
+      // the boundary between them
+      let lo = d, hi = Math.min(d + coarse, radius);
+      for (let b = 0; b < 6; b++) {
+        const mid = (lo + hi) * 0.5;
+        if (nav.walkable(px + dx * mid, py + dy * mid)) lo = mid; else hi = mid;
+      }
+
+      const target = Math.min(lo, radius);
+      const cur = this.visR[i];
+      const r = target < cur ? target : cur + (target - cur) * k;
+      this.visR[i] = r;
+      pts.push([px + dx * r, py + dy * r]);
     }
+    this.visWarm = true;
     return pts;
   }
+
+  /** drop the smoothed silhouette so a new raid does not sweep out of the old one */
+  resetVisibility() { this.visWarm = false; }
 
   // ---------------------------------------------------------
   draw(state) {
@@ -200,7 +239,7 @@ export class Renderer {
     //   restore full brightness inside the current line of sight
     g.drawImage(this.mapCanvas, ox, oy, this.mapCanvas.width * s, this.mapCanvas.height * s);
 
-    const vis = this.visibility(nav, player.x, player.y, player.viewRange);
+    const vis = this.visibility(nav, player.x, player.y, player.viewRange, state.dt || 0);
     this.rememberSeen(vis);
 
     g.fillStyle = 'rgba(2,5,7,.56)';

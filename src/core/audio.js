@@ -88,18 +88,29 @@ const ITEM_CLASS = {
   info: 'generic', key: 'metal', money: 'generic',
 };
 
-/** container type -> the rummage loop that fits its material */
+/**
+ * Container type -> rummage loop, by what the thing is actually made of.
+ * The install ships ten of these and every one is used here: rummaging a
+ * jacket is a coat-pocket rustle, not the cloth-bag loop it used to borrow,
+ * and hard cases get the industrial clatter rather than the electronics one.
+ */
 const SEARCH_CUE = {
+  // bare wood: crates and the boxes built like them
   crate: 'search_wood', ammobox: 'search_wood', weaponbox: 'search_wood',
   weaponbox6: 'search_wood', grenadebox: 'search_wood', rationcrate: 'search_wood',
-  suitcase: 'search_bag', medbag: 'search_bag', sportbag: 'search_bag',
-  duffle: 'search_bag', medcase: 'search_bag',
-  toolbox: 'search_techno', techcrate: 'search_techno', pcblock: 'search_techno',
-  medcrate: 'search_techno',
+  // hard shells - metal and moulded plastic clattering as you dig
+  toolbox: 'search_industrial', suitcase: 'search_industrial',
+  medcase: 'search_industrial', medcrate: 'search_industrial',
+  // circuit boards and cable
+  pcblock: 'search_techno', techcrate: 'search_techno',
+  // fabric
+  sportbag: 'search_bag', duffle: 'search_bag', medbag: 'search_bag',
+  jacket: 'search_jacket',
+  // furniture
   safe: 'search_safe', banksafe: 'search_safe',
-  cashreg: 'search_cash',
   drawer: 'search_drawer', filecab: 'search_metal',
-  jacket: 'search_bag',
+  cashreg: 'search_cash',
+  // pockets and webbing on a corpse
   deadscav: 'search_body', pmcbody: 'search_body',
 };
 
@@ -111,6 +122,10 @@ let unlocked = false;
 let enabled = true;
 let volume = 0.7;
 let ambientNodes = null;
+/** the looping rummage while a container is being searched */
+let searchNodes = null;
+/** bumped whenever the search changes, so a late decode cannot revive it */
+let searchToken = 0;
 let lastFootstep = 0;
 
 /** cue -> [file base names] */
@@ -370,8 +385,61 @@ export const sfx = {
     if (!play(`item_${cls}_${action}`)) play(`item_generic_${action}`);
   },
 
-  /** the rummage loop that matches a container type */
-  search(type) { play(SEARCH_CUE[type] || 'search_wood', { gain: 0.5 }); },
+  /**
+   * Rummaging runs for as long as the search does, so it is one looping
+   * source held open rather than a cue re-fired on every item that turns up -
+   * these loops are 4-6s and the finds land about a second apart, so
+   * retriggering stacked four copies of the same clip on top of itself.
+   */
+  searchStart(type) {
+    const cue = SEARCH_CUE[type] || 'search_wood';
+    if (searchNodes && searchNodes.cue === cue) return;
+    sfx.searchStop();
+    if (!enabled || !ensure()) return;
+    const names = manifest[cue];
+    if (!names || !names.length) return;
+    const name = names[0];
+    const buf = buffers.get(name);
+    if (buf === undefined) {
+      load(name);
+      const want = ++searchToken;
+      // come back once it has decoded, unless the search ended meanwhile
+      setTimeout(() => { if (want === searchToken && !searchNodes) sfx.searchStart(type); }, 250);
+      return;
+    }
+    if (buf === 'pending') {
+      const want = ++searchToken;
+      setTimeout(() => { if (want === searchToken && !searchNodes) sfx.searchStart(type); }, 250);
+      return;
+    }
+    if (buf === 'failed') return;
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const g = ctx.createGain();
+    g.gain.value = 0.0001;
+    g.gain.exponentialRampToValueAtTime(0.5, ctx.currentTime + 0.08);
+    src.connect(g);
+    g.connect(buses.sfx);
+    src.start();
+    searchNodes = { src, gain: g, cue };
+  },
+
+  /** let the rummage fall away rather than cutting it dead */
+  searchStop() {
+    searchToken++;
+    if (!searchNodes) return;
+    const { src, gain } = searchNodes;
+    searchNodes = null;
+    try {
+      const t = ctx.currentTime;
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(Math.max(0.0001, gain.gain.value), t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      src.stop(t + 0.14);
+    } catch { /* already stopped */ }
+  },
 
   /** a container lid, picked from the container's material */
   openContainer(type) {

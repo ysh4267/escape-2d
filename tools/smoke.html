@@ -396,7 +396,11 @@ try {
   moveToSlot(new Item('w_ak74n'), eq4.get('primary'));
   autoPlace(new Item('am_545ps', { stack: 60 }), eq4.carryGrids());
   const raid4 = new Raid({ mapDef, geo, nav, seed: 4242 });
-  check('scavs spawned', raid4.scavs.length >= 4, String(raid4.scavs.length));
+  // raids place no hostiles while the farming loop is being built, so combat
+  // coverage asks for them explicitly rather than relying on the raid default
+  check('raids start with no hostiles', raid4.scavs.length === 0, String(raid4.scavs.length));
+  raid4.spawnScavs(7);
+  check('scavs spawned on request', raid4.scavs.length >= 4, String(raid4.scavs.length));
   check('scavs spawn away from the player',
         raid4.scavs.every(s => Math.hypot(s.x - raid4.player.x, s.y - raid4.player.y) >= 30));
   check('scavs stand on walkable floor', raid4.scavs.every(s => nav.walkable(s.x, s.y)));
@@ -440,6 +444,7 @@ try {
   head('scavs run without throwing');
   state.initState();
   const raid5 = new Raid({ mapDef, geo, nav, seed: 5150 });
+  raid5.spawnScavs(7);
   for (let i = 0; i < 900; i++) raid5.update(1 / 30);
   check('30 simulated seconds are stable', raid5.status === 'running', raid5.status);
   check('scavs stayed on walkable floor', raid5.scavs.every(s => nav.walkable(s.x, s.y)),
