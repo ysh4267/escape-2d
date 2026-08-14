@@ -31,6 +31,7 @@ let holdingF = false;
 let firing = false;
 let aim = null;
 let wasMoving = false;
+let wasSprinting = false;
 let hoverDoor = null;
 let hoverStair = null;
 let onFinishCb = () => {};
@@ -38,6 +39,9 @@ let onFinishCb = () => {};
 // ---------------------------------------------------------
 export function startRaid({ mapDef, geo, onFinish }) {
   onFinishCb = onFinish || (() => {});
+  // gait carried over from the last raid would scuff on the first frame of this one
+  wasMoving = false;
+  wasSprinting = false;
   raid = new Raid({ mapDef, geo });
   const canvas = $('#raid-canvas');
   if (!renderer || renderer.geo !== geo) {
@@ -107,9 +111,12 @@ function loop(now) {
     if (raid.player.moving && !overlayOpen) {
       sfx.footstep(raid.player.sprint, game.equipment.weight() <= 35, surface);
     }
-    // one settling scuff when the player comes to rest
-    if (wasMoving && !raid.player.moving && !overlayOpen) sfx.halt(surface);
+    // One settling scuff when the player pulls up out of a sprint. Coming to a
+    // stop at walking pace does not scuff — you only skid when you were
+    // carrying speed, and a scuff on every little reposition was constant.
+    if (wasMoving && wasSprinting && !raid.player.moving && !overlayOpen) sfx.halt(surface);
     wasMoving = raid.player.moving;
+    wasSprinting = raid.player.moving && raid.player.sprint;
   }
   renderer.setLevel(raid.level);
   renderer.followCamera(raid.player.x, raid.player.y, dt);
