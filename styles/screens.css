@@ -4,7 +4,10 @@
 
 /* ---------------- stash pane ---------------- */
 .pane-grid { display: grid; gap: 14px; height: 100%; }
-.pane-grid--stash { grid-template-columns: minmax(300px, 340px) minmax(300px, 380px) 1fr; }
+/* the GEAR column has to clear the widest thing that can be worn — a 5-wide
+   Pilgrim backpack, drawn at the stash's own cell size (5 * 62 + 2 + 24 of
+   panel padding) — or the doll scrolls sideways */
+.pane-grid--stash { grid-template-columns: minmax(336px, 360px) minmax(300px, 380px) 1fr; }
 
 /* ---------------- deploy pane ---------------- */
 .deploy { display: grid; grid-template-columns: 1fr minmax(320px, 380px); gap: 14px; height: 100%; }
@@ -292,9 +295,12 @@
 }
 .deal-empty small { font-size: 10px; letter-spacing: .08em; }
 /* a staged line: the item cell, then "X" and a typed quantity box, the way
-   the real transaction area reads — no +/- steppers there */
+   the real transaction area reads — no +/- steppers there. It wraps, because
+   the artwork is drawn at full stash size and a big backpack is wider than
+   the column has room for beside the quantity box. */
 .deal-row {
   display: flex; align-items: center; justify-content: center; gap: 8px;
+  flex-wrap: wrap;
   padding: 6px 4px;
 }
 /* sized to the item's own footprint from renderBuyTable, so a rifle reads as a
@@ -553,13 +559,15 @@
   backdrop-filter: blur(3px);
   padding: 16px;
 }
+/* the last column is the gear doll, which now draws at stash cell size — the
+   widest worn item is 5 cells across, same budget as the stash pane */
 .overlay__grid {
   flex: 1; min-height: 0;
   display: grid;
-  grid-template-columns: 1fr minmax(320px, 380px) minmax(280px, 330px);
+  grid-template-columns: 1fr minmax(320px, 380px) minmax(336px, 360px);
   gap: 14px;
 }
-.overlay__grid.is-solo { grid-template-columns: minmax(320px, 380px) minmax(280px, 330px); justify-content: center; }
+.overlay__grid.is-solo { grid-template-columns: minmax(320px, 380px) minmax(336px, 360px); justify-content: center; }
 .overlay__close { align-self: center; flex: 0 0 auto; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--tx-3); font-size: 11px; letter-spacing: .18em; }
 .overlay__close:hover { color: var(--tx-0); }
 
@@ -615,7 +623,8 @@
    a single column is genuinely all that fits. */
 @media (max-width: 1360px) {
   :root { --cell: 54px; }
-  .pane-grid--stash { grid-template-columns: minmax(240px, 280px) minmax(240px, 300px) 1fr; }
+  /* 5 * 54 + 2 + 24 = 296 */
+  .pane-grid--stash { grid-template-columns: minmax(296px, 310px) minmax(240px, 300px) 1fr; }
   .trade__body { grid-template-columns: 34fr 26fr 34fr; }
 }
 @media (max-width: 1100px) {

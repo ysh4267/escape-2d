@@ -137,9 +137,10 @@ try {
     const art = $('.deal-row__art');
     const ar = art.getBoundingClientRect();
     const tpl = W.ESCAPE2D.TPL[key];
-    check(`${key} artwork is ${tpl.w}x${tpl.h}-shaped, not a single square`,
-          Math.abs((ar.width / ar.height) - (tpl.w / tpl.h)) < 0.12,
-          `box ${ar.width.toFixed(0)}x${ar.height.toFixed(0)} ratio ${(ar.width / ar.height).toFixed(2)} vs ${(tpl.w / tpl.h).toFixed(2)}`);
+    const cell = parseFloat(getComputedStyle(D.documentElement).getPropertyValue('--cell'));
+    check(`${key} artwork is exactly ${tpl.w}x${tpl.h} stash cells`,
+          Math.abs(ar.width - cell * tpl.w) < 1.5 && Math.abs(ar.height - cell * tpl.h) < 1.5,
+          `box ${ar.width.toFixed(0)}x${ar.height.toFixed(0)} want ${(cell * tpl.w).toFixed(0)}x${(cell * tpl.h).toFixed(0)}`);
     const d = $('.deal-row__drop'); if (d) { click(d); await sleep(120); }
   }
 
@@ -366,14 +367,22 @@ try {
   fire(scrollTile, 'contextmenu', { button: 2 });
   await sleep(80);
   check('menu open before the scroll', !$('#context-menu').hidden);
-  $('#trade-stash-host').scrollTop = 60;
-  $('#trade-stash-host').dispatchEvent(new W.Event('scroll', { bubbles: false }));
+  $('#trade-stash-host').dispatchEvent(new W.WheelEvent('wheel', { bubbles: true, deltaY: 120 }));
   await sleep(120);
-  check('menu closed when the panel scrolled', $('#context-menu').hidden);
-  // a programmatic scrollTop queues a real scroll event on the next frame, and
-  // that would close the menu the next section is about to open
-  $('#trade-stash-host').scrollTop = 0;
-  await sleep(300);
+  check('menu closed when the player scrolled the panel', $('#context-menu').hidden);
+
+  // ...but a re-render restoring a panel's scroll offset must NOT close a menu
+  const reTile = $$('#trade-stash-host .item')[0];
+  $('#trade-stash-host').scrollTop = 80;
+  await sleep(120);
+  fire(reTile, 'contextmenu', { button: 2 });
+  await sleep(60);
+  check('menu opened over a scrolled panel', !$('#context-menu').hidden);
+  $('#trade-stash-host').scrollTop = 0;   // what keepScroll does on every render
+  await sleep(200);
+  check('a programmatic scroll restore does not close the menu', !$('#context-menu').hidden);
+  D.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(120);
 
   head('context menu does not outlive a pane switch');
   const anyStash = $$('#trade-stash-host .item')[0];
@@ -434,6 +443,54 @@ try {
         $$('.pane').find((p) => p.classList.contains('is-active')).id === paneBefore);
   D.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await sleep(120);
+
+  head('worn gear is drawn at the stash cell size, 1:1');
+  {
+    const cell = parseFloat(getComputedStyle(D.documentElement).getPropertyValue('--cell'));
+    const stashTile = $$('#stash-host .item')[0];
+    const sr = stashTile.getBoundingClientRect();
+    check('a 1x1 stash tile is one cell', Math.abs(sr.width - cell * stashTile._item.w) < 1.5,
+          `${sr.width.toFixed(1)} vs ${(cell * stashTile._item.w).toFixed(1)}`);
+
+    // force the extremes into the doll: the widest backpack there is, and a
+    // rifle that is larger than the outline of the slot it hangs in
+    const eq = game.equipment;
+    if (eq.get('backpack').item) eq.get('backpack').item.tplId = 'bp_pilgrim';
+    const donor = game.stash.items().find((i) => !i.isContainer);
+    if (donor && !eq.get('primary').item) {
+      game.stash.remove(donor);
+      donor.tplId = 'w_akm';
+      eq.get('primary').set(donor);
+    }
+    D.dispatchEvent(new W.KeyboardEvent('keydown', { key: '2', bubbles: true }));
+    await sleep(200);
+    D.dispatchEvent(new W.KeyboardEvent('keydown', { key: '1', bubbles: true }));
+    await sleep(400);
+
+    const tiles = $$('#equipment-host .slot .item');
+    check('the doll has gear in it', tiles.length >= 4, String(tiles.length));
+    const off = tiles.filter((n) => {
+      const b = n.getBoundingClientRect();
+      return Math.abs(b.width - cell * n._item.w) > 1.5 || Math.abs(b.height - cell * n._item.h) > 1.5;
+    });
+    check('every worn item measures exactly cell x footprint', off.length === 0,
+          off.map((n) => {
+            const b = n.getBoundingClientRect();
+            return `${n._item.tplId} ${n._item.w}x${n._item.h} -> ${b.width.toFixed(0)}x${b.height.toFixed(0)}`;
+          }).join(', '));
+    const big = tiles.find((n) => n._item.tplId === 'bp_pilgrim');
+    check('the 5x7 backpack is drawn full size, not shrunk to its outline',
+          !big || Math.abs(big.getBoundingClientRect().width - cell * 5) < 1.5,
+          big ? big.getBoundingClientRect().width.toFixed(1) : 'not equipped');
+    const gun = tiles.find((n) => n._item.tplId === 'w_akm');
+    check('a rifle bigger than its slot outline grows the slot instead of squashing',
+          !gun || Math.abs(gun.getBoundingClientRect().height - cell * gun._item.h) < 1.5,
+          gun ? `${gun.getBoundingClientRect().width.toFixed(0)}x${gun.getBoundingClientRect().height.toFixed(0)}` : 'no rifle');
+    const gearHost = $('#equipment-host');
+    check('the gear panel does not scroll sideways',
+          gearHost.scrollWidth <= gearHost.clientWidth + 1,
+          `${gearHost.scrollWidth} vs ${gearHost.clientWidth}`);
+  }
 
   head('final');
   check('still no runtime errors', $('#errbox').style.display === 'none',

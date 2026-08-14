@@ -209,19 +209,21 @@ export function renderSlot(slot, opts = {}) {
   node._slot = slot;
   if (slot.wide) node.classList.add('slot--wide');
 
-  const wCells = opts.w || 2;
-  const hCells = opts.h || 1;
+  // A slot is at least its own outline and grows to whatever it holds, so worn
+  // gear is drawn at exactly one stash cell per grid square. It used to be
+  // stretched to fill the outline instead, which squashed a 5x2 rifle into a
+  // 4x1 box and blew a 1x1 up to twice its size.
+  const wCells = Math.max(opts.w || 2, slot.item ? slot.item.w : 0);
+  const hCells = Math.max(opts.h || 1, slot.item ? slot.item.h : 0);
   node.style.width = `calc(var(--cell) * ${wCells} + 2px)`;
   node.style.height = `calc(var(--cell) * ${hCells} + 2px)`;
 
   node.append(el('div', { class: 'slot__label' }, slot.label));
   if (slot.item) {
-    const tile = renderItem(slot.item, { x: 0, y: 0 });
-    // fit oversized gear into the slot box
-    tile.style.width = '100%';
-    tile.style.height = '100%';
-    tile.style.left = '0';
-    tile.style.top = '0';
+    const tile = renderItem(slot.item, { static: true });
+    tile.style.left = '50%';
+    tile.style.top = '50%';
+    tile.style.transform = 'translate(-50%, -50%)';
     node.append(tile);
   } else {
     node.append(el('div', { class: 'slot__hint' }, icon(slot.icon)));

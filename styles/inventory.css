@@ -206,13 +206,14 @@
 body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 
 /* ---------------- equipment slots ---------------- */
+/* The doll runs at the stash's own cell size — a helmet on the character is
+   the same size as the same helmet in the stash — so the slots cannot sit on
+   a fixed two-column grid any more: they pack, and as many fit per row as the
+   panel has room for. */
 .equip {
-  /* the doll uses smaller cells than a working grid so two columns of gear
-     always fit the panel without clipping */
-  --cell: 40px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  justify-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
   gap: 8px;
 }
 .equip__row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -225,6 +226,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 
 .slot {
   position: relative;
+  /* like .grid: its size comes from the gear it holds, never from the row */
+  flex: none;
   background: rgba(0,0,0,.4);
   border: 1px solid var(--line-1);
   min-height: calc(var(--cell) + 2px);
@@ -245,7 +248,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 }
 .slot__hint .ico { width: 22px; height: 22px; opacity: .5; }
 .slot .item { z-index: 2; }
-.slot--wide { grid-column: 1 / -1; }
+/* the long gun slots read better on a line of their own */
+.slot--wide { break-before: always; }
 
 /* ---------------- floating container windows ---------------- */
 .cwin-layer { position: fixed; inset: 0; pointer-events: none; z-index: 700; }
