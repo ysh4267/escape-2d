@@ -47,13 +47,19 @@ tradeTable.mayAccept = (item) => sellableTo(TRADER_BY_ID[activeId], item);
 
 /**
  * The buy-side trading table. Picking an offer stages it here; nothing is
- * bought until DEAL!. Several offers can sit on the table and commit in one
- * transaction, which is how the real screen works - the previous flow went
- * straight from a double-click to a completed purchase and skipped all of it.
+ * bought until DEAL!.
  *
- * Entries are { off, tpl, qty }.
+ * One offer at a time, with a quantity - not a cart. The client's own locale
+ * is singular throughout: the header key is "Item to purchase", and the
+ * restock limits read "This item is purchased in quantities of {0} pcs." and
+ * "You have already bought the maximum amount of this item". The multi-select
+ * wording that does exist ("Amount of items to purchase:", "Are you sure you
+ * want to buy selected items for {0}?") is all prefixed ragfair/ - it belongs
+ * to the flea market, which is a different screen.
+ *
+ * Either null or { off, tpl, qty }.
  */
-let basket = [];
+let staged = null;
 /**
  * Whether the payment has been allocated. The game makes you put the money
  * on the table too - by hand, or with the "Fill items" button - and DEAL!
@@ -61,17 +67,16 @@ let basket = [];
  */
 let filled = false;
 
-function clearBasket() {
-  basket = [];
+function clearStaged() {
+  staged = null;
   filled = false;
 }
 
-const basketTotal = (t) =>
-  basket.reduce((sum, e) => sum + buyPrice(t, e.tpl, FX, e.off) * e.qty, 0);
+const stagedTotal = (t) =>
+  (staged ? buyPrice(t, staged.tpl, FX, staged.off) * staged.qty : 0);
 
-/** every offer on the table has to be paid in the same currency to total up */
-const basketCurrency = (t) =>
-  (basket.length ? buyCurrency(t, basket[0].tpl, basket[0].off) : t.currency);
+const stagedCurrency = (t) =>
+  (staged ? buyCurrency(t, staged.tpl, staged.off) : t.currency);
 
 function sellableTo(trader, item) {
   if (!trader || !canBuyFrom(trader, item)) return false;
@@ -96,7 +101,7 @@ export function initTrade() {
       mode = seg.dataset.mode;
       sfx.trade('click');
       returnTableItems();
-      clearBasket();
+      clearStaged();
       renderTrade();
     });
   }
@@ -272,9 +277,9 @@ export function renderTrade() {
 
   const clear = $('#btn-trade-clear');
   if (clear) {
-    clear.disabled = mode === 'buy' ? !basket.length : !tradeTable.count;
+    clear.disabled = mode === 'buy' ? !staged : !tradeTable.count;
     clear.onclick = () => {
-      if (mode === 'buy') clearBasket();
+      if (mode === 'buy') clearStaged();
       else returnTableItems();
       sfx.trade('click');
       renderTrade();
@@ -304,7 +309,7 @@ function renderTabs(host) {
           sfx.trade('tab');
           returnTableItems();
           // an unfinished deal does not follow you to the next trader
-          clearBasket();
+          clearStaged();
           renderTrade();
         }
       },
@@ -454,7 +459,7 @@ function renderBuy(t, host, idle = false) {
           stageOffer(t, off);
         });
       }
-      if (basket.some((e) => e.off === off)) tile.classList.add('toffer--staged');
+      if (staged && staged.off === off) tile.classList.add('toffer--staged');
     }
   }
 
@@ -474,20 +479,13 @@ function stageOffer(t, off) {
   if (off.ll > loyaltyLevel(t)) { toast('Bad user loyalty level', 'warn'); sfx.ui('error'); return; }
   if (off.stock <= 0) { toast('Item is out of stock', 'warn'); sfx.ui('error'); return; }
 
-  // one currency per table, or the total is meaningless
-  const cur = buyCurrency(t, tpl, off);
-  if (basket.length && cur !== basketCurrency(t)) {
-    toast('Finish this deal before mixing currencies', 'warn');
-    sfx.ui('error');
-    return;
-  }
-
-  const entry = basket.find((e) => e.off === off);
-  if (entry) {
-    if (entry.qty >= off.stock) { toast('Item is out of stock', 'warn'); sfx.ui('error'); return; }
-    entry.qty++;
+  // one offer at a time: picking a different one replaces what is on the
+  // table, picking the same one again adds another of it
+  if (staged && staged.off === off) {
+    if (staged.qty >= off.stock) { toast('Item is out of stock', 'warn'); sfx.ui('error'); return; }
+    staged.qty++;
   } else {
-    basket.push({ off, tpl, qty: 1 });
+    staged = { off, tpl, qty: 1 };
   }
   // the money has to be allocated again once the price moves
   filled = false;
@@ -497,9 +495,9 @@ function stageOffer(t, off) {
 
 /** why DEAL! cannot be pressed yet, in the game's own words */
 function dealBlocker(t) {
-  if (!basket.length) return 'No selected items';
-  const cur = basketCurrency(t);
-  const total = basketTotal(t);
+  if (!staged) return 'No selected items';
+  const cur = stagedCurrency(t);
+  const total = stagedTotal(t);
   if (countMoney(cur) < total) return 'Not enough money';
   if (!filled) return 'You don\'t have some items required to finish the deal';
   return null;
@@ -511,43 +509,41 @@ function dealBlocker(t) {
  * allocate the money and "DEAL!" to commit the lot in one go.
  */
 function renderBuyTable(t, host) {
-  const cur = basketCurrency(t);
-  const total = basketTotal(t);
+  const cur = stagedCurrency(t);
+  const total = stagedTotal(t);
   const blocker = dealBlocker(t);
 
   // the deal bar sits at the top of the column and carries the total itself
   const dealBtn = el('button', { class: 'deal-bar', disabled: !!blocker, dataset: { sfx: 'own' } },
     el('span', { class: 'deal-bar__key' }, 'SPACE'),
     el('span', { class: 'deal-bar__label' }, 'DEAL!'),
-    el('span', { class: 'deal-bar__sum' }, `${CUR_SYM[cur]} ${fmtNum(total)}`));
-  dealBtn.addEventListener('click', () => doBuyBasket(t));
+    el('span', { class: 'deal-bar__sum' }, CUR_SYM[cur] + ' ' + fmtNum(total)));
+  dealBtn.addEventListener('click', () => doBuyStaged(t));
   host.append(dealBtn);
 
   const wrap = el('div', { class: 'deal-wrap' });
   wrap.append(el('div', { class: 'deal-head' },
-    basket.length === 1
-      ? `Item to purchase: ${basket[0].tpl.name}`
-      : 'Item to purchase'));
+    staged ? 'Item to purchase: ' + staged.tpl.name : 'Item to purchase'));
 
   const rows = el('div', { class: 'deal-rows' });
-  if (!basket.length) {
+  if (!staged) {
     rows.append(el('div', { class: 'deal-empty' }, 'No selected items',
       el('small', {}, 'click an offer on the shelf to put it on the table')));
-  }
-  for (const e of basket) {
-    const unit = buyPrice(t, e.tpl, FX, e.off);
-    const cap = Math.min(e.off.stock, 999);
+  } else {
+    const unit = buyPrice(t, staged.tpl, FX, staged.off);
+    const cap = Math.min(staged.off.stock, 999);
 
     const art = el('div', { class: 'deal-row__art' });
-    if (e.tpl.imgUrl) art.append(el('img', { src: e.tpl.imgUrl, alt: '' }));
-    else art.append(el('div', { class: 'item__fallback' }, e.tpl.short));
+    if (staged.tpl.imgUrl) art.append(el('img', { src: staged.tpl.imgUrl, alt: '' }));
+    else art.append(el('div', { class: 'item__fallback' }, staged.tpl.short));
 
     const qtyEl = el('input', {
-      class: 'deal-row__qty', type: 'number', min: '1', max: String(cap), value: String(e.qty),
-      title: `${fmtNum(unit)} ${CUR_SYM[cur]} each · ${e.off.stock >= 1000 ? 'plenty' : e.off.stock} in stock`,
+      class: 'deal-row__qty', type: 'number', min: '1', max: String(cap), value: String(staged.qty),
+      title: fmtNum(unit) + ' ' + CUR_SYM[cur] + ' each, '
+        + (staged.off.stock >= 1000 ? 'plenty' : staged.off.stock) + ' in stock',
     });
     qtyEl.addEventListener('change', () => {
-      e.qty = clamp(Math.round(Number(qtyEl.value) || 1), 1, cap);
+      staged.qty = clamp(Math.round(Number(qtyEl.value) || 1), 1, cap);
       filled = false;
       renderTrade();
     });
@@ -560,7 +556,7 @@ function renderBuyTable(t, host) {
       qtyEl,
       el('button', {
         class: 'deal-row__drop', title: 'Take it back off the table',
-        onclick: () => { basket = basket.filter((x) => x !== e); filled = false; sfx.trade('click'); renderTrade(); },
+        onclick: () => { clearStaged(); sfx.trade('click'); renderTrade(); },
       }, '\u00D7')));
   }
   wrap.append(rows);
@@ -568,7 +564,7 @@ function renderBuyTable(t, host) {
   // what has to be handed over, with the same n/n progress the real slot shows
   const funds = countMoney(cur);
   const short = total > funds;
-  if (basket.length) {
+  if (staged) {
     wrap.append(el('div', { class: 'deal-need' }, 'This item(s) is required from your stash:'));
     const paid = filled ? total : Math.min(funds, total);
     wrap.append(el('div', { class: `deal-slot${filled ? ' is-filled' : ''}${short ? ' is-short' : ''}` },
@@ -580,7 +576,7 @@ function renderBuyTable(t, host) {
   }
 
   const fillBtn = el('button', {
-    class: 'btn', disabled: !basket.length || short || filled,
+    class: 'btn', disabled: !staged || short || filled,
     title: 'Select to auto-fill requirements',
     onclick: () => { filled = true; sfx.trade('buy'); renderTrade(); },
   }, 'Fill items');
@@ -591,47 +587,43 @@ function renderBuyTable(t, host) {
 }
 
 /** commit every offer on the table as one transaction, the way DEAL! does */
-function doBuyBasket(t) {
+function doBuyStaged(t) {
   if (dealBlocker(t)) { sfx.ui('error'); return; }
-  const cur = basketCurrency(t);
-  const total = basketTotal(t);
+  const cur = stagedCurrency(t);
+  const total = stagedTotal(t);
   if (countMoney(cur) < total) { toast('Not enough money', 'bad'); sfx.ui('error'); return; }
 
-  // reserve space for everything first: a partial commit would take the money
-  // for items that then have nowhere to go
+  // reserve space for the whole quantity first: a partial commit would take
+  // the money for items that then have nowhere to go
   const made = [];
-  let bought = 0;
-  for (const e of basket) {
-    const count = Math.min(e.qty, e.off.stock);
-    for (let i = 0; i < count;) {
-      const stackSize = e.tpl.stack > 1 ? Math.min(e.tpl.stack, count - i) : 1;
-      const it = new Item(e.tpl.key, { stack: stackSize, examined: true });
-      // merging is off: it tops up stacks already in the stash, and that
-      // cannot be rolled back by detaching the purchased item
-      if (!autoPlace(it, [game.stash], { merge: false })) {
-        for (const m of made) detach(m);
-        toast('Not enough space in stash', 'warn');
-        sfx.ui('error');
-        return;
-      }
-      made.push(it);
-      i += stackSize;
+  const bought = Math.min(staged.qty, staged.off.stock);
+  for (let i = 0; i < bought;) {
+    const stackSize = staged.tpl.stack > 1 ? Math.min(staged.tpl.stack, bought - i) : 1;
+    const it = new Item(staged.tpl.key, { stack: stackSize, examined: true });
+    // merging is off: it tops up stacks already in the stash, and that
+    // cannot be rolled back by detaching the purchased item
+    if (!autoPlace(it, [game.stash], { merge: false })) {
+      for (const m of made) detach(m);
+      toast('Not enough space in stash', 'warn');
+      sfx.ui('error');
+      return;
     }
-    bought += count;
+    made.push(it);
+    i += stackSize;
   }
   if (!bought) { toast('Item is out of stock', 'warn'); return; }
 
   takeMoney(total, cur);
   const st = traderState(t.id);
-  for (const e of basket) e.off.stock -= Math.min(e.qty, e.off.stock);
+  const name = staged.tpl.name;
+  staged.off.stock -= bought;
   st.spent += total * (FX[cur] || 1);
   st.rep = Math.min(10, st.rep + (total * (FX[cur] || 1)) / 900000);
   addExp(Math.round(bought * 2));
 
-  const lines = basket.length;
-  clearBasket();
+  clearStaged();
   sfx.trade('deal');
-  toast(`Bought ${bought} item${bought > 1 ? 's' : ''} across ${lines} offer${lines > 1 ? 's' : ''}`, 'ok');
+  toast(`Bought ${bought > 1 ? `${bought}x ` : ''}${name}`, 'ok');
   renderTrade();
   refreshTopbar();
   emit(EV.INVENTORY_CHANGED);
@@ -771,13 +763,11 @@ export function devTrade(kind) {
     }
     renderTrade();
   } else if (kind === 'dialog') {
-    // stage a couple of offers so the capture shows a populated deal panel
+    // stage one offer, twice, so the capture shows a populated deal panel
     mode = 'buy';
-    clearBasket();
-    for (const o of t.assort) {
-      if (basket.length >= 2) break;
-      if (o.ll <= loyaltyLevel(t) && o.stock > 0) stageOffer(t, o);
-    }
+    clearStaged();
+    const o = t.assort.find((x) => x.ll <= loyaltyLevel(t) && x.stock > 1);
+    if (o) { stageOffer(t, o); stageOffer(t, o); }
     renderTrade();
   }
 }
