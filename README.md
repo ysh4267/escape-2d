@@ -113,8 +113,10 @@ ready-to-play files. Any cue with no sample behind it is a silent no-op.
 
 The mapping follows the game's own taxonomy rather than one invented here:
 footsteps are `<gait>_<surface>` layered with a `gear_stereo` webbing rustle,
-looting is per furniture (`woodbox`, `safe`, `cashregister`, `drawer`,
-`sportbag`, body), and item foley is per class (`med_medkit`, `gear_helmet`,
+looting uses all ten of the game's rummage loops, one per material (`woodbox`,
+`industrialbox`, `safe`, `drawer_wood`, `drawer_metal`, `cashregister`,
+`sportbag`, `techno_box`, `jacket`, body), and item foley is per class
+(`med_medkit`, `gear_helmet`,
 `weap_rifle`, `magazine_metal`…) so a helmet lands like a helmet. Mute lives
 in the top bar, volume in the profile panel.
 
@@ -125,10 +127,18 @@ three legal buyers, loyalty levels gated on PMC level, reputation *and* money
 spent, and separate rouble / dollar / euro balances. The screen is laid out
 like the in-game one: portrait tabs with the loyalty numeral, the assortment
 packed into an item grid with price captions, lock plates over higher-tier
-offers and per-restock stock counters, a quantity slider with ALL and DEAL on
-purchase, and selling happens by dragging onto a trading table — unexamined
-items and non-empty containers are refused, and what the trader will not buy
-is greyed out. Fence rerolls his stolen goods for a fee.
+offers and per-restock stock counters.
+
+Both sides of a deal go through the trading table rather than completing on a
+click. Picking an offer *stages* it — several can sit on the table at once,
+each with its own quantity and line total — then the payment has to be
+allocated with **Fill items** before **DEAL!** commits the lot in one
+transaction. Selling mirrors it: drag items over, each carries what the trader
+will pay for it, then DEAL!. Neither side pops a confirmation; staging is the
+confirmation, which is how the real screen works. Unexamined items and
+non-empty containers are refused, what the trader will not buy is greyed out,
+and the blocked states use the game's own wording. Fence rerolls his stolen
+goods for a fee.
 
 ---
 

@@ -215,6 +215,76 @@
 .table-foot__total b { color: var(--rare); font-size: 19px; font-variant-numeric: tabular-nums; }
 .btn--deal { min-width: 130px; justify-content: center; letter-spacing: .24em; }
 
+/* BUY: the trading table an offer is staged on before the deal commits */
+.deal-wrap {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: 8px; padding: 10px 12px;
+  border: 1px solid var(--line-1); border-radius: var(--r-sm);
+  background: linear-gradient(180deg, rgba(22,32,37,.9), rgba(8,12,14,.9));
+}
+.deal-head {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 11px; letter-spacing: .2em; color: var(--pale);
+}
+.deal-head .btn { margin-left: auto; }
+.deal-rows { display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow: auto; }
+.deal-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 14px; color: var(--tx-dim); font-size: 11px; letter-spacing: .18em;
+}
+.deal-empty small { font-size: 10px; letter-spacing: .08em; }
+.deal-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 8px; border: 1px solid var(--line-1); border-radius: var(--r-sm);
+  background: rgba(5,9,11,.6);
+}
+.deal-row__art {
+  width: 42px; height: 42px; flex: none; display: grid; place-items: center;
+  background: rgba(0,0,0,.35); border: 1px solid var(--line-1); border-radius: 2px;
+}
+.deal-row__art img { max-width: 100%; max-height: 100%; }
+.deal-row__info { min-width: 0; flex: 1; }
+.deal-row__name { color: var(--tx-1); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.deal-row__meta { color: var(--tx-dim); font-size: 10px; letter-spacing: .04em; }
+.deal-row__qtybox { display: flex; align-items: center; gap: 3px; flex: none; }
+.deal-row__qty {
+  width: 54px; text-align: center; font-variant-numeric: tabular-nums;
+  background: rgba(0,0,0,.4); border: 1px solid var(--line-2); border-radius: 2px;
+  color: var(--white); font: inherit; font-size: 12px; padding: 3px 4px;
+}
+.deal-row__sum { flex: none; min-width: 96px; text-align: right; color: var(--rare); font-variant-numeric: tabular-nums; }
+
+.deal-total {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding-top: 6px; border-top: 1px solid var(--line-1);
+  font-size: 11px; letter-spacing: .12em;
+}
+.deal-total b { color: var(--rare); font-size: 19px; font-variant-numeric: tabular-nums; }
+.deal-total b.is-broke { color: var(--danger); }
+
+/* the requirement slot: what has to be handed over, empty until allocated */
+.deal-slot {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px;
+  border: 1px dashed var(--line-2); border-radius: var(--r-sm);
+  background: rgba(0,0,0,.25);
+  font-size: 11px; letter-spacing: .1em;
+}
+.deal-slot b { color: var(--tx-1); font-variant-numeric: tabular-nums; }
+.deal-slot__state { margin-left: auto; color: var(--tx-dim); font-size: 10px; letter-spacing: .16em; }
+.deal-slot.is-filled { border-style: solid; border-color: var(--ok, #7fb39a); background: rgba(127,179,154,.09); }
+.deal-slot.is-filled b { color: var(--ok, #7fb39a); }
+.deal-slot.is-filled .deal-slot__state { color: var(--ok, #7fb39a); }
+.deal-slot.is-short { border-color: var(--danger); background: rgba(194,96,79,.09); }
+.deal-slot.is-short b, .deal-slot.is-short .deal-slot__state { color: var(--danger); }
+
+.deal-foot { display: flex; align-items: center; gap: 8px; }
+.deal-foot .btn--deal { margin-left: auto; }
+.deal-warn { color: var(--danger); font-size: 10.5px; letter-spacing: .1em; text-align: right; }
+
+/* an offer already sitting on the table */
+.assort-grid .toffer--staged { outline: 1px solid var(--rare); outline-offset: -1px; }
+
 /* items the current trader refuses (sell mode) */
 .is-nosell { opacity: .32; filter: grayscale(.5); }
 
