@@ -29,6 +29,9 @@ export function renderItem(item, opts = {}) {
   });
   node._item = item;
 
+  // this tile may be the replacement for one that was rendered away mid-drag
+  if (document.body.dataset.dragUid === item.uid) node.classList.add('is-dragging');
+
   if (!opts.static) {
     node.style.left = `calc(var(--cell) * ${opts.x || 0})`;
     node.style.top = `calc(var(--cell) * ${opts.y || 0})`;
@@ -143,8 +146,12 @@ export function renderGrid(gridModel, opts = {}) {
   for (const item of gridModel.items()) {
     const p = gridModel.posOf(item);
     if (!p) continue;
-    if (opts.filterFn && !opts.filterFn(item)) continue;
-    node.append(renderItem(item, { x: p.x, y: p.y }));
+    const tile = renderItem(item, { x: p.x, y: p.y });
+    // A filter must not delete tiles: the model still holds those cells, so a
+    // hidden item silently blocks drops onto space that looks free, and a
+    // stack dropped nearby merges into something invisible. Dim instead.
+    if (opts.filterFn && !opts.filterFn(item)) tile.classList.add('is-filtered');
+    node.append(tile);
   }
   return node;
 }
@@ -242,9 +249,12 @@ export function catLabel(cat) { return CAT_LABEL[cat] || cat; }
 /** update the examination bar in place, so ticking does not rebuild the DOM */
 export function paintExamine(item, root = document) {
   const p = examineProgress(item);
-  for (const node of root.querySelectorAll
-    ? root.querySelectorAll(`.item[data-uid="${item.uid}"]`)
-    : [root]) {
+  // the tile itself may be the root: an Element has querySelectorAll, so the
+  // descendant branch used to swallow that case and paint nothing
+  const nodes = root instanceof Element && root.matches('.item')
+    ? [root]
+    : root.querySelectorAll(`.item[data-uid="${item.uid}"]`);
+  for (const node of nodes) {
     const bar = node.querySelector('.item__exambar');
     if (!bar) continue;
     bar.classList.toggle('is-on', p > 0);

@@ -67,9 +67,19 @@ export function initShell() {
 
   // every button in the shell answers to the pointer the same way; anything
   // carrying data-sfx plays its own cue instead and is skipped here
+  // pointerenter is dispatched at every element entered along the ancestor
+  // chain, and a capture listener on the document hears all of them — so
+  // sliding from a card's artwork onto its caption replayed the cue for a
+  // control the pointer never left. Only speak up when the control changes.
+  let lastHover = null;
   document.addEventListener('pointerenter', (e) => {
     const b = e.target instanceof Element ? e.target.closest('.btn, .seg, .ttab, .map-card') : null;
-    if (b && !b.disabled) sfx.ui('hover');
+    if (b && !b.disabled && b !== lastHover) { lastHover = b; sfx.ui('hover'); }
+  }, true);
+  // cleared by identity, not by closest(): the inner leaves fire first and
+  // would otherwise reset the tracker just before the next enter
+  document.addEventListener('pointerleave', (e) => {
+    if (e.target === lastHover) lastHover = null;
   }, true);
   document.addEventListener('click', (e) => {
     const b = e.target instanceof Element ? e.target.closest('.btn, .seg, .map-card') : null;

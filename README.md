@@ -214,6 +214,7 @@ python -m http.server 8777
 | `tools/pack_sfx.py` | compresses and seals the sound pack (and `--unpack` reverses it) |
 | `tools/sfx_picks.py` | which clip backs which cue |
 | `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |
+| `tools/ui-smoke.html` | drives the real game in an iframe with synthetic pointer and key events, asserting the trader screen, drag & drop, menus and modals behave |
 | `tools/preview_map.html` | `?level=…` renders the raw extracted geometry for one storey |
 | `tools/preview_nav.html` | `?level=basement\|ground\|second\|third` — navmesh components, spawn/extract reachability, doors, stairwells and per-area walkability |
 | `tools/sfx_test.html` | checks the shipped effects are served and that the audio surface is what the game calls |

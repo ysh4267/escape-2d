@@ -183,6 +183,25 @@ try {
     check('autoPlace merge:false never tops up other stacks',
       existing.stack === 10 && g5.count === 2, `stack=${existing.stack} count=${g5.count}`);
   }
+  // a gated grid gates merges too — the shop showcase used to swallow a real
+  // stack into its display-only copy, destroying it
+  {
+    const shelf = new Grid(6, 6);
+    shelf.mayAccept = (it) => !!it.virtual;
+    const display = new Item('am_545ps', { stack: 30 });
+    display.virtual = true;
+    shelf.place(display, 0, 0);
+    const mine = new Item('am_545ps', { stack: 60 });
+    const holder = new Grid(6, 6);
+    holder.place(mine, 0, 0);
+    const res = moveToGrid(mine, shelf, 0, 0, 0);
+    check('a refusing grid refuses the merge as well as the drop',
+      !res.ok && mine.stack === 60 && display.stack === 30,
+      `${res.action} mine=${mine.stack} display=${display.stack}`);
+    check('autoPlace will not merge into a grid that refuses the item',
+      !autoPlace(mine, [shelf]) && mine.stack === 60 && display.stack === 30,
+      `mine=${mine.stack} display=${display.stack}`);
+  }
   // slot-to-slot swap
   {
     const eqS = new (await import('../src/inventory/equipment.js')).Equipment();

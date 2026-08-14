@@ -187,8 +187,13 @@ export function traderState(id) {
  * and a restore, and save()/load() call these by key.
  */
 const SAVE_SECTIONS = {};
-export function registerSaveSection(key, { dump, restore }) {
-  SAVE_SECTIONS[key] = { dump, restore };
+/**
+ * `roots` is an optional list of Grids the section owns. reseedUids() walks
+ * them too — items stranded on the trading table across a reload used to be
+ * invisible to it, which is exactly how a uid collision gets minted.
+ */
+export function registerSaveSection(key, { dump, restore, roots = null }) {
+  SAVE_SECTIONS[key] = { dump, restore, roots };
 }
 
 export function save() {
@@ -257,6 +262,11 @@ function reseedUids() {
   };
   for (const it of game.stash.items()) { track(it); for (const d of it.descendants()) track(d); }
   for (const it of game.equipment.everything()) track(it);
+  for (const sec of Object.values(SAVE_SECTIONS)) {
+    for (const g of sec.roots?.() || []) {
+      for (const it of g.items()) { track(it); for (const d of it.descendants()) track(d); }
+    }
+  }
   seedUidCounter(maxN);
 }
 

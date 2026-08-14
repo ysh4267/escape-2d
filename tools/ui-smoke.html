@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>ui-smoke</title>
+<style>body{margin:0;background:#05090b;color:#f4f4f9;font:13px/1.5 Consolas,monospace;padding:12px}
+.ok{color:#7fb39a}.bad{color:#c2604f}.hd{color:#b8dbd9;margin:12px 0 3px}
+iframe{position:fixed;left:-3000px;top:0;width:1600px;height:700px;border:0}</style>
+</head><body>
+<div id="sum">running...</div><div id="out"></div>
+<iframe id="fr"></iframe>
+<script type="module">
+const out = document.getElementById('out');
+let pass = 0, fail = 0;
+const log = (c, m) => { const d = document.createElement('div'); d.className = c; d.textContent = m; out.append(d); };
+const head = (t) => log('hd', '== ' + t);
+const check = (n, c, extra = '') => {
+  if (c) { pass++; log('ok', '  PASS  ' + n); }
+  else { fail++; log('bad', '  FAIL  ' + n + (extra ? '  -> ' + extra : '')); }
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function until(fn, ms = 8000) {
+  const t0 = performance.now();
+  while (performance.now() - t0 < ms) { const v = fn(); if (v) return v; await sleep(40); }
+  return null;
+}
+
+// events that look like a real pointer to the app's listeners
+function fire(node, type, opts = {}) {
+  const doc = node.ownerDocument || node;
+  const r = node.getBoundingClientRect ? node.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
+  const base = {
+    bubbles: true, cancelable: true, composed: true, view: doc.defaultView,
+    clientX: opts.x ?? (r.left + r.width / 2), clientY: opts.y ?? (r.top + r.height / 2),
+    button: opts.button ?? 0, buttons: opts.buttons ?? 1, pointerId: 1, isPrimary: true,
+    ctrlKey: !!opts.ctrl, altKey: !!opts.alt, detail: opts.detail ?? 1,
+  };
+  const Ctor = type.startsWith('pointer') ? doc.defaultView.PointerEvent : doc.defaultView.MouseEvent;
+  node.dispatchEvent(new Ctor(type, base));
+}
+const click = (n, o = {}) => { fire(n, 'pointerdown', o); fire(n, 'pointerup', { ...o, buttons: 0 }); fire(n, 'click', o); };
+
+try {
+  localStorage.clear();
+  const fr = document.getElementById('fr');
+  fr.src = '../index.html?dev=traders';
+  await new Promise((r) => { fr.onload = r; });
+  const W = fr.contentWindow, D = fr.contentDocument;
+  const $ = (s) => D.querySelector(s);
+  const $$ = (s) => Array.from(D.querySelectorAll(s));
+
+  await until(() => $('#trader-tabs')?.children.length);
+  await sleep(250);
+
+  head('boot');
+  const err = $('#errbox');
+  check('no runtime errors on boot', err.style.display === 'none', err.textContent.slice(0, 400));
+  check('traders pane is up', $('#pane-traders').classList.contains('is-active'));
+
+  const tabByName = (n) => $$('#trader-tabs .ttab').find((b) => b.querySelector('.ttab__name')?.textContent === n);
+
+  head('fence REFRESH STORE must not leak onto other traders');
+  check('prapor showcase toolbar is empty', $('#assort-tools').children.length === 0,
+        $('#assort-tools').innerHTML);
+  click(tabByName('FENCE'));
+  await sleep(120);
+  check('fence gets a REFRESH STORE button', /REFRESH STORE/.test($('#assort-tools').textContent));
+  click(tabByName('PRAPOR'));
+  await sleep(120);
+  check('button is gone again on prapor', $('#assort-tools').children.length === 0,
+        $('#assort-tools').textContent);
+
+  head('showcase must not eat a dragged stack (merge gate)');
+  const game = W.ESCAPE2D.game;
+  const ammoBefore = game.stash.items().filter((i) => i.tplId === 'am_545ps')
+    .reduce((n, i) => n + i.stack, 0);
+  const ammo = game.stash.items().find((i) => i.tplId === 'am_545ps');
+  const shelfTile = $$('#trader-content .item').find((n) => n._item?.tplId === 'am_545ps');
+  check('prapor stocks 5.45 PS and the stash has some', !!ammo && !!shelfTile && ammoBefore > 0,
+        `stash=${ammoBefore} tile=${!!shelfTile}`);
+  if (ammo && shelfTile) {
+    const stashTile = $$('#trade-stash-host .item').find((n) => n._item === ammo);
+    const to = shelfTile.getBoundingClientRect();
+    fire(stashTile, 'pointerdown');
+    fire(D, 'pointermove', { x: to.left + 10, y: to.top + 10 });
+    fire(D, 'pointermove', { x: to.left + to.width / 2, y: to.top + to.height / 2 });
+    fire(D, 'pointerup', { x: to.left + to.width / 2, y: to.top + to.height / 2, buttons: 0 });
+    await sleep(150);
+    const after = game.stash.items().filter((i) => i.tplId === 'am_545ps')
+      .reduce((n, i) => n + i.stack, 0);
+    check('the ammo stack survives the drop on the shelf', after === ammoBefore,
+          `${ammoBefore} -> ${after}`);
+  }
+
+  head('buy panel: quantity edit must not swallow the next click');
+  const offer = $$('#trader-content .item.toffer--buyable')[0];
+  click(offer);
+  await sleep(140);
+  const qty = $('.deal-row__qty');
+  check('an offer is staged with a quantity box', !!qty);
+  check('quantity box is a typed field, not a spinner', qty && qty.type === 'text', qty && qty.type);
+  qty.focus();
+  qty.value = '2';
+  qty.dispatchEvent(new W.Event('input', { bubbles: true }));
+  await sleep(60);
+  const sumAfterType = $('.deal-bar__sum').textContent;
+  check('the total follows the typed quantity without a rebuild',
+        !!$('.deal-row__qty') && $('.deal-row__qty') === qty, 'input node was replaced');
+  const fill = Array.from(D.querySelectorAll('.deal-foot .btn')).find((b) => /Fill items/.test(b.textContent));
+  qty.blur();
+  click(fill);
+  await sleep(120);
+  check('one click on Fill items is enough after typing', $('.deal-slot')?.classList.contains('is-filled'),
+        'deal slot not filled; sum=' + sumAfterType);
+  const dealBtn = $('.deal-bar');
+  check('DEAL! is enabled once filled', dealBtn && !dealBtn.disabled);
+
+  head('SPACE closes the deal');
+  const rubBefore = W.ESCAPE2D.game.stash.items().filter((i) => i.tplId === 'rub').reduce((n, i) => n + i.stack, 0);
+  D.dispatchEvent(new W.KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+  await sleep(200);
+  const rubAfter = W.ESCAPE2D.game.stash.items().filter((i) => i.tplId === 'rub').reduce((n, i) => n + i.stack, 0);
+  check('SPACE actually bought something', rubAfter < rubBefore, `${rubBefore} -> ${rubAfter}`);
+
+  head('the showcase keeps its scroll position (it is rebuilt as a new element)');
+  click(tabByName('THERAPIST'));
+  await sleep(200);
+  const shelf = $('.assort-scroll');
+  shelf.scrollTop = 260;
+  const shelfKeep = shelf.scrollTop;
+  check('the showcase scrolls (guard against a vacuous test)', shelfKeep > 0,
+        `sh=${shelf.scrollHeight} ch=${shelf.clientHeight}`);
+  const buyable = $$('#trader-content .item.toffer--buyable')[0];
+  click(buyable);
+  await sleep(180);
+  check('showcase scrollTop survives staging an offer', $('.assort-scroll').scrollTop === shelfKeep,
+        `${shelfKeep} -> ${$('.assort-scroll').scrollTop}`);
+  const drop0 = $('.deal-row__drop'); if (drop0) { click(drop0); await sleep(120); }
+  click(tabByName('PRAPOR'));
+  await sleep(180);
+
+  head('docked stash keeps its scroll position');
+  const host = $('#trade-stash-host');
+  const grid = host.querySelector('.grid');
+  // the docked column is narrow, so the grid overflows sideways and the box is
+  // scrolled horizontally; use whichever axis this layout actually offers
+  const axis = host.scrollHeight > host.clientHeight + 4 ? 'scrollTop' : 'scrollLeft';
+  host[axis] = 90;
+  const keep = host[axis];
+  check(`the docked stash scrolls on ${axis} (guard against a vacuous test)`, keep > 0,
+        `sh=${host.scrollHeight}/ch=${host.clientHeight} sw=${host.scrollWidth}/cw=${host.clientWidth} grid=${grid?.style.height}`);
+  click($$('#trader-content .item.toffer--buyable')[0]);
+  await sleep(140);
+  check('scroll offset survives a re-render', host[axis] === keep, `${keep} -> ${host[axis]}`);
+
+  head('sell side refuses what the trader does not buy');
+  click(tabByName('FENCE'));
+  await sleep(140);
+  click($('#pane-traders .seg[data-mode="sell"]'));
+  await sleep(200);
+  check('sell mode is up', !!$('.table-grid'));
+
+  // put an empty case on the table through the UI, which also hands us a live
+  // reference to the trading table grid
+  const bagTile = $$('#trade-stash-host .item').find((n) => n._item?.isContainer && n._item.isEmptyContainer);
+  check('the stash has an empty case to sell', !!bagTile);
+  fire(bagTile, 'contextmenu', { button: 2 });
+  await sleep(80);
+  const place = Array.from(D.querySelectorAll('#context-menu .ctx__item'))
+    .find((b) => /PLACE ON TABLE/.test(b.textContent));
+  check('the case can be placed on the table', !!place);
+  click(place);
+  await sleep(180);
+  const bag = bagTile._item;
+  const table = bag.holder?.grid;
+  check('the case is on the trading table', table && table.tag === 'tradeTable');
+
+  head('a case refilled on the table must not be sold with its contents inside');
+  const tableTile = $$('.table-grid .item').find((n) => n._item === bag);
+  fire(tableTile, 'contextmenu', { button: 2 });
+  await sleep(80);
+  const menuText = $('#context-menu').textContent;
+  check('the table case offers no OPEN action', !/OPEN/.test(menuText), menuText.replace(/\s+/g, ' '));
+  D.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+  // force loot into it anyway, the way an already-open container window could
+  const loot = game.stash.items().find((i) => !i.isContainer && i.tplId !== 'rub');
+  const lootTpl = loot.tplId, lootStack = loot.stack;
+  loot.holder.grid.remove(loot);
+  bag.grids[0].place(loot, 0, 0);
+  check('the case now holds an item', bag.grids[0].count === 1);
+  const dealSell = $('.deal-bar');
+  click(dealSell);
+  await sleep(220);
+  const survived = game.stash.items().some((i) => i.tplId === lootTpl && i.stack === lootStack)
+    || bag.grids[0].count === 1;
+  check('the item inside was not destroyed by DEAL!', survived,
+        `stash has no ${lootTpl}, case count=${bag.grids[0].count}`);
+
+  head('a trader is not paid for goods he does not deal in');
+  // the table still holds the case; strand something Fence's neighbour refuses
+  const strand = game.stash.items().find((i) => i.cat === 'food' || i.cat === 'drink');
+  if (strand && bag.holder?.grid) {
+    const tt = bag.holder.grid;
+    strand.holder.grid.remove(strand);
+    const spot = tt.findSpot(strand) || { x: 0, y: 0, rot: 0 };
+    tt.place(strand, spot.x, spot.y, spot.rot);
+    click(tabByName('PEACEKEEPER'));
+    await sleep(200);
+    click($('#pane-traders .seg[data-mode="sell"]'));
+    await sleep(200);
+    const stillThere = tt.items().includes(strand);
+    if (stillThere) {
+      const before = W.ESCAPE2D.game.stash.items()
+        .filter((i) => i.tplId === 'usd').reduce((n, i) => n + i.stack, 0);
+      click($('.deal-bar'));
+      await sleep(200);
+      const after = W.ESCAPE2D.game.stash.items()
+        .filter((i) => i.tplId === 'usd').reduce((n, i) => n + i.stack, 0);
+      check('peacekeeper did not buy the food off the table', after === before && tt.items().includes(strand),
+            `usd ${before} -> ${after}, still on table: ${tt.items().includes(strand)}`);
+    } else {
+      log('hd', '  (skipped: the stash took the item back on the trader switch)');
+    }
+  }
+
+  check('no errors through the sell flow', $('#errbox').style.display === 'none',
+        $('#errbox').textContent.slice(0, 300));
+
+  head('double-clicking an offer stages two, not three');
+  click(tabByName('PRAPOR'));
+  await sleep(140);
+  click($('#pane-traders .seg[data-mode="buy"]'));
+  await sleep(160);
+  const pickKey = $$('#trader-content .item.toffer--buyable')
+    .find((n) => n._item?.offer?.stock >= 4)?._item.offer.key;
+  const tileFor = (k) => $$('#trader-content .item.toffer--buyable').find((n) => n._item?.offer?.key === k);
+  check('found a well-stocked offer to double-click', !!pickKey);
+  click(tileFor(pickKey), { detail: 1 });
+  await sleep(80);
+  const afterOne = $('.deal-row__qty')?.value;
+  click(tileFor(pickKey), { detail: 2 });
+  fire(tileFor(pickKey) || D.body, 'dblclick', { detail: 2 });
+  await sleep(140);
+  check('quantity is 2 after a double-click, not 3', $('.deal-row__qty')?.value === '2',
+        `after 1 click=${afterOne}, after dbl=${$('.deal-row__qty')?.value}`);
+  const drop = $('.deal-row__drop');
+  if (drop) { click(drop); await sleep(120); }
+
+  head('context menu does not outlive a pane switch');
+  await sleep(60);
+  const anyStash = $$('#trade-stash-host .item')[0];
+  fire(anyStash, 'contextmenu', { button: 2 });
+  await sleep(80);
+  check('a context menu opened', !$('#context-menu').hidden);
+  D.dispatchEvent(new W.KeyboardEvent('keydown', { key: '1', bubbles: true }));
+  await sleep(160);
+  check('menu closed when the pane changed', $('#context-menu').hidden);
+  check('the pane did change', $('#pane-stash').classList.contains('is-active'));
+
+  head('the stash panel keeps its vertical scroll across a re-render');
+  const sh = $('#stash-host');
+  sh.scrollTop = 400;
+  const shKeep = sh.scrollTop;
+  check('the stash panel scrolls vertically (guard against a vacuous test)', shKeep > 0,
+        `sh=${sh.scrollHeight} ch=${sh.clientHeight}`);
+  $('#btn-sort-stash').click();
+  await sleep(200);
+  check('stash scrollTop survives SORT', sh.scrollTop === shKeep, `${shKeep} -> ${sh.scrollTop}`);
+  const someTile = $$('#stash-host .item')[0];
+  click(someTile, { ctrl: true });
+  await sleep(200);
+  check('stash scrollTop survives a quick transfer', sh.scrollTop === shKeep,
+        `${shKeep} -> ${sh.scrollTop}`);
+
+  head('stash filter dims instead of deleting');
+  const total = W.ESCAPE2D.game.stash.count;
+  const search = $('#stash-search');
+  search.value = 'zzzzz';
+  search.dispatchEvent(new W.Event('input', { bubbles: true }));
+  await sleep(300);
+  const tiles = $$('#stash-host .item');
+  check('every item is still rendered while filtered', tiles.length === total,
+        `${tiles.length} tiles for ${total} items`);
+  check('non-matching items are marked', tiles.every((t) => t.classList.contains('is-filtered')));
+  search.value = '';
+  search.dispatchEvent(new W.Event('input', { bubbles: true }));
+  await sleep(300);
+
+  head('modals do not stack');
+  const openTwo = () => { $('#btn-settings').click(); $('#btn-settings').click(); };
+  openTwo();
+  await sleep(500);
+  check('only one modal box exists', D.querySelectorAll('#modal-root .modal').length === 1,
+        String(D.querySelectorAll('#modal-root .modal').length));
+  D.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(120);
+  check('escape closes it', $('#modal-root').hidden);
+
+  head('pane hotkeys are blocked while a modal is open');
+  $('#btn-settings').click();
+  await sleep(400);
+  const paneBefore = $$('.pane').find((p) => p.classList.contains('is-active')).id;
+  D.dispatchEvent(new W.KeyboardEvent('keydown', { key: '2', bubbles: true }));
+  await sleep(160);
+  check('pane did not move under the modal',
+        $$('.pane').find((p) => p.classList.contains('is-active')).id === paneBefore);
+  D.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(120);
+
+  head('final');
+  check('still no runtime errors', $('#errbox').style.display === 'none',
+        $('#errbox').textContent.slice(0, 600));
+} catch (e) {
+  fail++;
+  log('bad', 'HARNESS THREW: ' + (e && e.stack || e));
+}
+document.getElementById('sum').textContent = `RESULT ${pass} passed, ${fail} failed`;
+document.getElementById('sum').className = fail ? 'bad' : 'ok';
+document.title = fail ? 'FAIL' : 'PASS';
+</script></body></html>
