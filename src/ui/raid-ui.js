@@ -5,7 +5,10 @@
 import { $, el, icon, clamp, fmtClock, fmtNum, fmtWeight } from '../core/util.js';
 import { Raid, RAID_STATUS } from '../raid/raid.js';
 import { Renderer } from '../raid/renderer.js';
-import { NavGrid } from '../raid/nav.js';
+import {
+  attachRaid, openFloorplan, closeFloorplan, toggleFloorplan,
+  floorplanOpen, floorplanFollow, drawFloorplan,
+} from './floorplan.js';
 import { game, saveSoon, registerSaveSection } from '../core/state.js';
 import { renderGrid, renderItem } from '../inventory/view.js';
 import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
@@ -21,7 +24,6 @@ import { emit, on, EV } from '../core/events.js';
 
 let raid = null;
 let renderer = null;
-let nav = null;
 let rafId = 0;
 let lastT = 0;
 let overlayOpen = false;
@@ -29,15 +31,21 @@ let holdingF = false;
 let firing = false;
 let aim = null;
 let wasMoving = false;
+let hoverDoor = null;
+let hoverStair = null;
 let onFinishCb = () => {};
 
 // ---------------------------------------------------------
 export function startRaid({ mapDef, geo, onFinish }) {
   onFinishCb = onFinish || (() => {});
-  nav = new NavGrid(geo, mapDef.level);
-  raid = new Raid({ mapDef, geo, nav });
+  raid = new Raid({ mapDef, geo });
   const canvas = $('#raid-canvas');
-  renderer = new Renderer(canvas, geo, mapDef.level);
+  if (!renderer || renderer.geo !== geo) {
+    renderer = new Renderer(canvas, geo, raid.level);
+  } else {
+    renderer.setLevel(raid.level);
+    renderer.resetFog();
+  }
   renderer.cam.x = raid.player.x;
   renderer.cam.y = raid.player.y;
 
@@ -46,16 +54,34 @@ export function startRaid({ mapDef, geo, onFinish }) {
   bindRaidInput(canvas);
   activateRaidContext();
   closeOverlay();
+  closeFloorplan();
+  attachRaid(raid);
+  buildFloorStrip();
   closeAllContainerWindows();
   startAmbient();
   $('#btn-hud-sprint').classList.remove('is-on');
   raidToast(`Inserted — ${raid.player.spawnName}`, 'ok', 3400);
-  raidToast(`${raid.containers.length} containers on this map`, 'info', 3400);
+  raidToast(`${raid.containers.length} containers across ${raid.map.levels.length} floors`, 'info', 3400);
 
   lastT = performance.now();
   cancelAnimationFrame(rafId);
   rafId = requestAnimationFrame(loop);
   return raid;
+}
+
+/** the TUN / 1F / 2F / 3F strip in the HUD */
+function buildFloorStrip() {
+  const wrap = $('#hud-floors');
+  if (!wrap || !raid) return;
+  wrap.replaceChildren();
+  for (const lvl of [...raid.map.levels].reverse()) {
+    wrap.append(el('button', {
+      class: `floor-pip${raid.level === lvl.key ? ' is-on' : ''}`
+        + `${raid.visited.has(lvl.key) ? ' is-seen' : ''}`,
+      title: `${lvl.name} — open the plan`,
+      onclick: () => openFloorplan(),
+    }, lvl.short));
+  }
 }
 
 export function currentRaid() { return raid; }
@@ -85,15 +111,26 @@ function loop(now) {
     if (wasMoving && !raid.player.moving && !overlayOpen) sfx.halt(surface);
     wasMoving = raid.player.moving;
   }
+  renderer.setLevel(raid.level);
   renderer.followCamera(raid.player.x, raid.player.y, dt);
   renderer.draw({
     player: raid.player,
-    nav,
-    containers: raid.containers,
+    nav: raid.nav,
+    containers: raid.containersHere(),
     // all of them, scav lanes included — the renderer marks those SCAVS ONLY
-    extracts: raid.map.extracts,
+    extracts: raid.extractsHere,
+    transits: raid.transitsHere,
+    doors: raid.doorsOn(raid.level)
+      .filter((d) => raid.seen.has(d.id))
+      .map((d) => ({ ...d, canOpen: raid.canOpen(d) })),
+    stairs: raid.stairsOn(raid.level)
+      .filter((s) => raid.seen.has(s.id))
+      .map((s) => ({ ...s, label: stairLabel(s) })),
     keyed: new Set(raid.extracts.filter((e) => e.req && raid.hasKey(e.req))),
     hover: raid.hover,
+    hoverDoor,
+    hoverStair,
+    nearStairs: raid.nearStairs,
     path: raid.path,
     seen: raid.seen,
     scavs: raid.scavs,
@@ -105,6 +142,14 @@ function loop(now) {
     nearExtract: raid.nearExtract,
   });
   drawHud();
+  if (floorplanOpen()) drawFloorplan();
+}
+
+function stairLabel(stair) {
+  const exits = raid.stairExits(stair);
+  return exits
+    .map((e) => `${e.dir === 'up' ? '↑' : '↓'} ${raid.levelInfo(e.level).short}`)
+    .join('  ') || 'STAIRS';
 }
 
 function stopLoop() {
@@ -152,9 +197,15 @@ function drawHud() {
   // instead narrates the walk toward a container that was clicked from afar
   const ip = $('#interact-prompt');
   const pi = raid.pendingInteract;
-  if (pi && raid.path.length) {
+  if (raid.breaching) {
     ip.hidden = false;
-    $('#interact-label').textContent = `MOVING TO ${pi.def.name.toUpperCase()}`;
+    $('#interact-label').textContent = `FORCING ${raid.breaching.door.name.toUpperCase()}`;
+    $('#interact-fill').style.width =
+      `${Math.round((raid.breaching.t / raid.map.breachTime) * 100)}%`;
+  } else if (pi && raid.path.length) {
+    ip.hidden = false;
+    $('#interact-label').textContent =
+      `MOVING TO ${(pi.def?.name || pi.name || 'TARGET').toUpperCase()}`;
     $('#interact-fill').style.width = '0%';
   } else {
     ip.hidden = true;
@@ -167,12 +218,48 @@ function drawHud() {
     const locked = raid.nearExtract.req && !raid.hasKey(raid.nearExtract.req);
     ep.classList.toggle('is-locked', !!locked);
     $('#extract-name').textContent = locked
-      ? `${raid.nearExtract.name} — LOCKED`
+      ? `${raid.nearExtract.name} — NEEDS ${(raid.nearExtract.reqName || 'AN ITEM').toUpperCase()}`
       : raid.nearExtract.name.toUpperCase();
     $('#extract-fill').style.width = `${(raid.extractHold / 6) * 100}%`;
   } else {
     ep.hidden = true;
     holdingF = false;
+  }
+
+  drawStairsPrompt();
+}
+
+/**
+ * Standing on a staircase offers the floors it reaches. The prompt is rebuilt
+ * only when the staircase under the player changes, so the buttons do not
+ * flicker out from under a click.
+ */
+let stairPromptFor = null;
+function drawStairsPrompt() {
+  const sp = $('#stairs-prompt');
+  const s = raid.nearStairs;
+  if (!s || raid.status !== RAID_STATUS.RUNNING) {
+    sp.hidden = true;
+    stairPromptFor = null;
+    return;
+  }
+  sp.hidden = false;
+  if (stairPromptFor === s) return;
+  stairPromptFor = s;
+  $('#stairs-label').textContent = 'STAIRWELL';
+  const host = $('#stairs-btns');
+  host.replaceChildren();
+  for (const exit of raid.stairExits(s)) {
+    const info = raid.levelInfo(exit.level);
+    host.append(el('button', {
+      class: `stairbtn stairbtn--${exit.dir}`,
+      onclick: () => {
+        if (raid.useStairs(s, exit.level)) {
+          stairPromptFor = null;
+          buildFloorStrip();
+        }
+      },
+    }, exit.dir === 'up' ? '▲' : '▼', el('span', {}, info.name)));
   }
 }
 
@@ -197,9 +284,12 @@ function bindRaidInput(canvas) {
     // clicking into the fog must not reveal what is out there
     const container = raid.containerAt(wx, wy, 1.8);
     const reachable = container && raid.seen.has(container.id) ? container : null;
+    const door = reachable ? null : seenOnly(raid.doorAt(wx, wy, 1.5));
+    const stair = reachable || door ? null : seenOnly(raid.stairAt(wx, wy, 1.8));
 
     if (e.button === 2) {
       if (reachable) raid.interactWith(reachable);
+      else if (door) raid.interactWith(door);
       else raid.cancelSearch();
       return;
     }
@@ -210,6 +300,12 @@ function bindRaidInput(canvas) {
       raid.playerFire(enemy.x, enemy.y);
     } else if (reachable) {
       raid.interactWith(reachable);
+    } else if (door) {
+      raid.cancelSearch();
+      raid.interactWith(door);
+    } else if (stair) {
+      raid.cancelSearch();
+      raid.interactWith(stair);
     } else {
       raid.cancelSearch();
       raid.moveTo(wx, wy);
@@ -227,7 +323,10 @@ function bindRaidInput(canvas) {
     const c = enemy ? null : raid.containerAt(wx, wy, 1.6);
     raid.hover = c && raid.seen.has(c.id) ? c : null;
     raid.hoverEnemy = enemy || null;
-    canvas.style.cursor = enemy ? 'crosshair' : raid.hover ? 'pointer' : 'default';
+    hoverDoor = enemy || raid.hover ? null : seenOnly(raid.doorAt(wx, wy, 1.4));
+    hoverStair = enemy || raid.hover || hoverDoor ? null : seenOnly(raid.stairAt(wx, wy, 1.6));
+    canvas.style.cursor = enemy ? 'crosshair'
+      : (raid.hover || hoverDoor || hoverStair) ? 'pointer' : 'default';
   });
 
   canvas.addEventListener('wheel', (e) => {
@@ -249,6 +348,10 @@ function bindRaidInput(canvas) {
   $('#btn-hud-inventory').addEventListener('click', () => {
     overlayOpen ? closeOverlay() : openOverlay();
   });
+  $('#btn-hud-map').addEventListener('click', () => {
+    if (overlayOpen) closeOverlay();
+    toggleFloorplan();
+  });
   const sprintBtn = $('#btn-hud-sprint');
   sprintBtn.addEventListener('click', () => {
     if (!raid) return;
@@ -266,9 +369,20 @@ function bindRaidInput(canvas) {
   ep.addEventListener('pointerleave', endHold);
   ep.addEventListener('pointercancel', endHold);
 
-  on(EV.LOOT_OPENED, () => openOverlay());
+  on(EV.LOOT_OPENED, () => { closeFloorplan(); openOverlay(); });
   on(EV.LOOT_FOUND, () => { if (overlayOpen) renderOverlay(); });
   on(EV.LOOT_CLOSED, () => { if (overlayOpen) renderOverlay(); });
+  on(EV.RAID_LEVEL, ({ level, name }) => {
+    renderer.setLevel(level);
+    floorplanFollow(level);
+    buildFloorStrip();
+    raidToast(name, 'info', 2200);
+  });
+}
+
+/** clicking into the dark must not operate a door you have never seen */
+function seenOnly(thing) {
+  return thing && raid.seen.has(thing.id) ? thing : null;
 }
 
 function pointerWorld(e) {
@@ -285,13 +399,18 @@ function onKeyDown(e) {
 
   if (e.key === 'Tab') {
     e.preventDefault();
+    closeFloorplan();
     overlayOpen ? closeOverlay() : openOverlay();
+  } else if (e.key === 'm' || e.key === 'M' || e.key === 'ㅡ') {
+    if (overlayOpen) closeOverlay();
+    toggleFloorplan();
   } else if (e.key === 'Shift') {
     raid.player.sprint = true;
   } else if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') {
     holdingF = true;
   } else if (e.key === 'Escape') {
-    if (overlayOpen) closeOverlay();
+    if (floorplanOpen()) closeFloorplan();
+    else if (overlayOpen) closeOverlay();
     else abandonRaid();
   }
 }
@@ -474,6 +593,7 @@ on(EV.RAID_END, (result) => {
   holdingF = false;
   firing = false;
   cancelExamine();               // whatever was being inspected is moot now
+  closeFloorplan();
   closeOverlay();
   closeAllContainerWindows();
   stopAmbient();
@@ -518,6 +638,7 @@ function showResult(result) {
     el('div', { class: 'result-stat__k' }, k), el('div', { class: 'result-stat__v' }, v));
   stats.append(
     stat('TIME', fmtClock(result.duration)),
+    stat('FLOORS', String(result.floors ?? 1)),
     stat('CONTAINERS', String(result.searched)),
     stat('KILLS', String(result.kills ?? 0)),
     stat('ITEMS OUT', String(result.kept.length)),

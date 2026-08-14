@@ -4,7 +4,9 @@
 
 import { Grid, Item, autoPlace, detach } from '../inventory/model.js';
 import { CONTAINERS, poolsFor, EMPTY_CHANCE, POOLS } from '../data/loot.js';
-import { TPL } from '../data/items.js';
+import { TPL, BY_ID } from '../data/items.js';
+import { areaAt, levelInfo } from '../data/maps.js';
+import { NavGrid } from './nav.js';
 import { Scav } from './ai.js';
 import { makeRng } from '../core/rng.js';
 import { clamp, dist, uid } from '../core/util.js';
@@ -22,16 +24,18 @@ export const RAID_STATUS = {
 
 const EXTRACT_HOLD = 6.0;      // seconds to hold F
 const INTERACT_RANGE = 2.2;    // svg units
+const STAIR_RANGE = 2.6;       // how close counts as "on the stairs"
+const DOOR_REACH = 1.5;        // how far ahead a shut door is opened from
 const BASE_SPEED = 6.4;        // units/sec walking
 const SPRINT_MULT = 1.72;
 const OVERWEIGHT_AT = 35;      // kg, speed starts dropping
 const CRITICAL_AT = 65;        // kg, heavily slowed
+const LOOSE_SPAWN_CHANCE = 0.45;   // how often a loose-loot spot is occupied
 
 export class Raid {
-  constructor({ mapDef, geo, nav, seed }) {
+  constructor({ mapDef, geo, seed }) {
     this.map = mapDef;
     this.geo = geo;
-    this.nav = nav;
     this.rng = makeRng(seed ?? (Math.random() * 0xffffffff) >>> 0);
     this.status = RAID_STATUS.RUNNING;
     this.time = 0;
@@ -41,6 +45,7 @@ export class Raid {
     this.path = [];
     this.hover = null;
     this.nearExtract = null;
+    this.nearStairs = null;
     this.extractHold = 0;
     this.searching = null;
     this.searchProgress = 0;
@@ -49,10 +54,19 @@ export class Raid {
     this.scavs = [];
     this.shots = [];
     this.playerCooldown = 0;
-    this.stats = { searched: 0, found: 0, distance: 0, kills: 0, shots: 0 };
+    this.stats = { searched: 0, found: 0, distance: 0, kills: 0, shots: 0, floors: 1 };
 
-    const spawn = this.rng.pick(mapDef.spawns);
-    const p = nav.snap(spawn.x, spawn.y) || [spawn.x, spawn.y];
+    this.level = mapDef.startLevel;
+    this.navs = new Map();
+    this.visited = new Set([this.level]);
+    this.buildDoors();
+    this.buildStairs();
+    this.buildExtracts();
+
+    const spawn = this.pickSpawn();
+    const p = this.navFor(spawn.level).snap(spawn.x, spawn.y) || [spawn.x, spawn.y];
+    this.level = spawn.level;
+    this.visited.add(this.level);
     this.player = {
       x: p[0], y: p[1],
       facing: -Math.PI / 2,
@@ -61,27 +75,304 @@ export class Raid {
       moving: false,
       sprint: false,
       viewRange: 32,
-      spawnName: spawn.name,
+      spawnName: this.placeName(spawn.level, p[0], p[1]),
     };
 
     this.placeLoot();
-    this.placeBodies();
+    this.refreshDoorAccess();
     this.spawnScavs();
     this.markRaidStart();
   }
 
-  /** a raid or two went badly before you arrived: dead PMCs with real gear */
-  placeBodies() {
-    const def = CONTAINERS.pmcbody;
-    if (!def) return;
-    const n = this.rng.int(1, 2);
-    for (let i = 0; i < n; i++) {
-      const region = this.rng.pick(this.map.regions);
-      const [x0, y0, x1, y1] = region.rect;
-      const pos = this.findSpot(x0, y0, x1, y1);
-      if (!pos) continue;
-      this.containers.push(this.makeContainer('pmcbody', def, pos[0], pos[1], { name: 'Fallen PMC' }));
+  // ---------------------------------------------------------
+  // floors
+  // ---------------------------------------------------------
+  /** the nav grid for a floor, built the first time it is needed */
+  navFor(level) {
+    let n = this.navs.get(level);
+    if (!n) {
+      const doors = this.doorsOn(level);
+      n = new NavGrid(this.geo, level, doors);
+      this.navs.set(level, n);
+      // the grid hands each door its index, which is how a flag flip finds it
+      doors.forEach((d, i) => { d.nav = n; d.navIndex = i; n.setDoorOpen(i, d.open); });
+      this.applyAccess(n, level);
+      this.settleLoot(level, n);
     }
+    return n;
+  }
+
+  get nav() { return this.navFor(this.level); }
+
+  levelInfo(level = this.level) { return levelInfo(this.map, level); }
+
+  /** name a spot the way the loot panel and the HUD want to read it */
+  placeName(level, x, y) {
+    const a = areaAt(this.map, level, x, y);
+    const lvl = this.levelInfo(level);
+    return a ? `${a.name} · ${lvl.short}` : lvl.name;
+  }
+
+  pickSpawn() {
+    const all = this.geo.markers.spawns.filter((s) => this.geo.levels[s.level]);
+    const ground = all.filter((s) => s.level === this.map.startLevel);
+    return this.rng.pick(ground.length ? ground : all);
+  }
+
+  // ---------------------------------------------------------
+  // doors
+  // ---------------------------------------------------------
+  /**
+   * Every opening the geometry search found becomes either a door or an empty
+   * gap. Narrow ones get a leaf that starts shut, which is how Factory's doors
+   * are found at the start of a raid; anything wider is a gateway or a hall
+   * mouth with nothing in it to open. The four that the dataset records a lock
+   * for keep that lock and the key that answers it.
+   */
+  buildDoors() {
+    this.doors = [];
+    for (const lvl of this.map.levels) {
+      const L = this.geo.levels[lvl.key];
+      if (!L) continue;
+      for (const p of L.passages || []) {
+        const over = this.map.doorOverrides[p.id] || null;
+        const keyed = p.key ? BY_ID[p.key] : null;
+        if (!p.key && !over && p.w > this.map.doorMaxWidth) continue;
+        this.doors.push({
+          id: p.id,
+          level: lvl.key,
+          x: p.x, y: p.y, a: p.a, w: p.w,
+          state: over?.state || (p.key ? 'key' : 'free'),
+          keyId: p.key || null,
+          keyName: keyed ? keyed.name : (p.key ? 'a key that is not in this build' : null),
+          note: over?.note || '',
+          name: over?.name || this.map.doorNames[p.id]
+            || `${this.placeName(lvl.key, p.x, p.y).split(' · ')[0]} door`,
+          open: false,
+          nav: null,
+          navIndex: -1,
+        });
+      }
+    }
+  }
+
+  doorsOn(level) { return this.doors.filter((d) => d.level === level); }
+
+  /**
+   * Can the player get through this door at all? A breach door has no key
+   * anywhere in the game, but it can be forced, so for routing it counts as
+   * passable — it just costs time and noise when you get there.
+   */
+  canOpen(door) {
+    if (door.state === 'free' || door.state === 'breach') return true;
+    if (!door.keyId) return false;
+    for (const it of game.equipment.everything()) {
+      if (it.tpl.id === door.keyId) return true;
+    }
+    return false;
+  }
+
+  applyAccess(nav, level) {
+    for (const d of this.doorsOn(level)) {
+      if (d.navIndex >= 0) nav.setDoorPassable(d.navIndex, this.canOpen(d));
+    }
+  }
+
+  /** picking a key up mid-raid has to make the doors it opens routable */
+  refreshDoorAccess() {
+    for (const [level, nav] of this.navs) this.applyAccess(nav, level);
+  }
+
+  openDoor(door, silent = false) {
+    if (door.open) return true;
+    if (door.state === 'breach') { this.beginBreach(door); return false; }
+    if (!this.canOpen(door)) {
+      if (!silent) {
+        emit(EV.RAID_TOAST, {
+          kind: 'warn',
+          text: `${door.name} is locked — ${door.keyName || 'no key'}`,
+        });
+        sfx.ui('back');
+      }
+      return false;
+    }
+    door.open = true;
+    if (door.nav && door.navIndex >= 0) door.nav.setDoorOpen(door.navIndex, true);
+    if (!silent) {
+      sfx.openContainer('crate');
+      if (door.state === 'key') {
+        emit(EV.RAID_TOAST, { kind: 'ok', text: `Unlocked ${door.name}` });
+        this.useKey(door.keyId);
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Forcing a door. It takes a moment, it is loud, and once it is through the
+   * door stays open for the rest of the raid — there is no re-locking it. The
+   * walk that ran into it picks up again on the far side.
+   */
+  beginBreach(door) {
+    if (this.breaching?.door === door) return;
+    if (dist(this.player.x, this.player.y, door.x, door.y) > INTERACT_RANGE + 1.4) return;
+    this.breaching = { door, t: 0, resume: this.path.length ? this.path[this.path.length - 1] : null };
+    this.path = [];
+    this.pendingInteract = null;
+    sfx.impact('metal');
+    emit(EV.RAID_TOAST, { kind: 'warn', text: `Forcing the ${door.name.toLowerCase()}` });
+  }
+
+  cancelBreach() { this.breaching = null; }
+
+  updateBreach(dt) {
+    const b = this.breaching;
+    if (!b) return;
+    if (dist(this.player.x, this.player.y, b.door.x, b.door.y) > INTERACT_RANGE + 1.6) {
+      this.breaching = null;
+      return;
+    }
+    b.t += dt;
+    if (b.t < this.map.breachTime) {
+      // one shoulder into it per beat, which is what makes it carry
+      if (Math.floor(b.t / 0.6) !== Math.floor((b.t - dt) / 0.6)) sfx.impact('metal');
+      return;
+    }
+    b.door.open = true;
+    if (b.door.nav && b.door.navIndex >= 0) b.door.nav.setDoorOpen(b.door.navIndex, true);
+    sfx.openContainer('crate');
+    emit(EV.RAID_TOAST, { kind: 'ok', text: `${b.door.name} forced` });
+    addExp(20);
+    const resume = b.resume;
+    this.breaching = null;
+    if (resume) this.moveTo(resume[0], resume[1]);
+  }
+
+  /** a keyed door costs the key one use, and the key breaks when it runs dry */
+  useKey(keyId) {
+    for (const it of game.equipment.everything()) {
+      if (it.tpl.id !== keyId) continue;
+      if (!it.tpl.uses) return;
+      it.res = (it.res ?? it.tpl.uses) - 1;
+      if (it.res <= 0) {
+        detach(it);
+        emit(EV.RAID_TOAST, { kind: 'warn', text: `${it.tpl.name} broke` });
+        this.refreshDoorAccess();
+      }
+      return;
+    }
+  }
+
+  doorAt(x, y, radius = 1.6) {
+    let best = null, bestD = radius;
+    for (const d of this.doorsOn(this.level)) {
+      const k = dist(d.x, d.y, x, y);
+      if (k < bestD) { bestD = k; best = d; }
+    }
+    return best;
+  }
+
+  /** the shut door the player is about to walk into, if any */
+  doorAhead() {
+    const p = this.player;
+    if (!this.path.length) return null;
+    const t = this.path[0];
+    const d = Math.hypot(t[0] - p.x, t[1] - p.y);
+    const steps = Math.max(1, Math.ceil(Math.min(d, DOOR_REACH) / 0.3));
+    for (let i = 0; i <= steps; i++) {
+      const f = (i / steps) * Math.min(1, DOOR_REACH / Math.max(d, 1e-6));
+      const idx = this.nav.doorIndexAt(p.x + (t[0] - p.x) * f, p.y + (t[1] - p.y) * f);
+      if (idx < 0) continue;
+      const door = this.doorsOn(this.level)[idx];
+      if (door && !door.open) return door;
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------
+  // stairs
+  // ---------------------------------------------------------
+  buildStairs() {
+    const keys = new Set(this.map.levels.map((l) => l.key));
+    this.stairs = (this.geo.stairwells || [])
+      .map((s) => ({ ...s, name: 'Stairwell', levels: s.levels.filter((l) => keys.has(l)) }))
+      .filter((s) => s.levels.length > 1);
+  }
+
+  stairsOn(level) { return this.stairs.filter((s) => s.levels.includes(level)); }
+
+  stairAt(x, y, radius = 2.4) {
+    let best = null, bestD = radius;
+    for (const s of this.stairsOn(this.level)) {
+      const cx = clamp(x, s.rect[0], s.rect[2]);
+      const cy = clamp(y, s.rect[1], s.rect[3]);
+      const d = Math.hypot(x - cx, y - cy);
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    return best;
+  }
+
+  /** the floors this staircase reaches from where the player is standing */
+  stairExits(stair) {
+    const here = stair.levels.indexOf(this.level);
+    if (here < 0) return [];
+    const out = [];
+    if (here > 0) out.push({ level: stair.levels[here - 1], dir: 'down' });
+    if (here < stair.levels.length - 1) out.push({ level: stair.levels[here + 1], dir: 'up' });
+    return out;
+  }
+
+  useStairs(stair, level) {
+    if (!stair.levels.includes(level) || level === this.level) return false;
+    const nav = this.navFor(level);
+    const spot = nav.snap(stair.x, stair.y, 40);
+    if (!spot) {
+      emit(EV.RAID_TOAST, { kind: 'warn', text: 'That way is blocked' });
+      return false;
+    }
+    this.cancelSearch();
+    this.closeLoot();
+    this.path = [];
+    this.pendingInteract = null;
+    this.level = level;
+    this.player.x = spot[0];
+    this.player.y = spot[1];
+    if (!this.visited.has(level)) {
+      this.visited.add(level);
+      this.stats.floors = this.visited.size;
+    }
+    sfx.footstep(false, true, 'metal');
+    emit(EV.RAID_LEVEL, { level, name: this.levelInfo(level).name });
+    return true;
+  }
+
+  // ---------------------------------------------------------
+  buildExtracts() {
+    const out = [];
+    for (const e of this.geo.markers.extracts) {
+      // A shared exit is two overlapping trigger volumes, one per faction.
+      // Gate 3 is the one that matters here: drawing it twice would stack two
+      // rings and two labels on the same gate, so fold them into one that
+      // says it is open to both.
+      const twin = out.find((o) => o.name === e.name && o.level === e.level
+        && dist(o.x, o.y, e.x, e.y) < 8);
+      if (twin) {
+        if (twin.faction !== e.faction) twin.faction = 'both';
+        if (e.faction === 'pmc') { twin.x = e.x; twin.y = e.y; twin.r = e.r; }
+        continue;
+      }
+      out.push({
+        ...e,
+        note: this.map.extractNotes[e.name] || '',
+        // the exits themselves carry no key requirement on Factory; what
+        // stands in the way is a locked door in front of them, and that is
+        // modelled as a door. Only the smugglers' route wants an item.
+        req: e.item || null,
+        reqName: e.item ? 'Note with code word Ark' : null,
+      });
+    }
+    this.allExtracts = out;
+    this.transits = this.geo.markers.transits.map((t) => ({ ...t }));
   }
 
   // ---------------------------------------------------------
@@ -93,15 +384,16 @@ export class Raid {
    */
   spawnScavs(count = 0) {
     const rng = this.rng;
+    const spots = this.geo.markers.spawns.filter((s) => s.level === this.level);
     for (let i = 0; i < count; i++) {
       let pos = null;
       for (let tries = 0; tries < 80 && !pos; tries++) {
-        const region = rng.pick(this.map.regions);
-        const [x0, y0, x1, y1] = region.rect;
-        const x = rng.float(x0, x1), y = rng.float(y0, y1);
-        if (!this.nav.walkable(x, y)) continue;
-        if (dist(x, y, this.player.x, this.player.y) < 34) continue;
-        pos = [x, y];
+        const s = rng.pick(spots);
+        if (!s) break;
+        const p = this.nav.snap(s.x, s.y, 12);
+        if (!p) continue;
+        if (dist(p[0], p[1], this.player.x, this.player.y) < 34) continue;
+        pos = p;
       }
       if (!pos) continue;
       this.scavs.push(new Scav({ x: pos[0], y: pos[1], rng, tier: rng.int(0, 2) }));
@@ -120,44 +412,64 @@ export class Raid {
   }
 
   // ---------------------------------------------------------
+  /**
+   * Loot goes where the game puts it.
+   *
+   * Every static container Factory has — 167 of them across the four floors —
+   * is listed in the dataset with its type and its exact spot, so there is no
+   * scattering to do: place each one where it belongs and roll its contents.
+   * Loose loot is the same list of 144 spots with the item that spawns there;
+   * those are occupied only some of the time, the way they are in a raid.
+   */
   placeLoot() {
-    const rng = this.rng;
-    for (const region of this.map.regions) {
-      const [x0, y0, x1, y1] = region.rect;
-      for (const [type, count] of region.spawn) {
-        const def = CONTAINERS[type];
-        if (!def) continue;
-        const n = Math.max(0, Math.round(count * rng.float(0.65, 1.2)));
-        for (let i = 0; i < n; i++) {
-          const pos = this.findSpot(x0, y0, x1, y1);
-          if (!pos) continue;
-          this.containers.push(this.makeContainer(type, def, pos[0], pos[1], region));
-        }
-      }
+    const mk = this.geo.markers;
+    for (const c of mk.containers) {
+      const def = CONTAINERS[c.t];
+      if (!def || !this.geo.levels[c.level]) continue;
+      this.containers.push(this.makeContainer(c.t, def, c.x, c.y, c.level));
     }
+    const loose = CONTAINERS.looseloot;
+    for (const l of mk.loose) {
+      if (!loose || !this.geo.levels[l.level]) continue;
+      if (!this.rng.chance(LOOSE_SPAWN_CHANCE)) continue;
+      this.containers.push(this.makeContainer('looseloot', loose, l.x, l.y, l.level, l.items));
+    }
+    this.settleLoot(this.level, this.nav);
   }
 
-  findSpot(x0, y0, x1, y1) {
-    for (let tries = 0; tries < 60; tries++) {
-      const x = this.rng.float(x0, x1);
-      const y = this.rng.float(y0, y1);
-      if (!this.nav.walkable(x, y)) continue;
-      let tooClose = false;
-      for (const c of this.containers) {
-        if (dist(c.x, c.y, x, y) < 2.0) { tooClose = true; break; }
+  /**
+   * Nudge this floor's recorded spots onto ground the player can actually
+   * reach. The vector map does not draw every catwalk and shelf the real one
+   * has, so a handful of spots land just off it; a short snap keeps them in
+   * the room they belong to instead of dropping them, and anything that is
+   * still nowhere near floor is dropped.
+   *
+   * This runs the first time a floor's nav grid is built, which is the first
+   * time the player sets foot on it — so a raid only ever pays for the storey
+   * it starts on.
+   */
+  settleLoot(level, nav) {
+    const keep = [];
+    for (const c of this.containers) {
+      if (c.level !== level || c.settled) { keep.push(c); continue; }
+      c.settled = true;
+      if (nav.walkable(c.x, c.y)) { keep.push(c); continue; }
+      const p = nav.snapPathable(c.x, c.y, 8);
+      if (p && dist(p[0], p[1], c.x, c.y) <= 2.8) {
+        c.x = p[0];
+        c.y = p[1];
+        keep.push(c);
       }
-      if (tooClose) continue;
-      return [x, y];
     }
-    return null;
+    this.containers = keep;
   }
 
-  makeContainer(type, def, x, y, region) {
+  makeContainer(type, def, x, y, level, items = null) {
     const grid = new Grid(def.w, def.h, { tag: 'loot', label: def.name });
     const c = {
-      id: uid('c'), type, def, x, y,
+      id: uid('c'), type, def, x, y, level,
       rot: this.rng.float(-0.35, 0.35),
-      region: region.name,
+      region: this.placeName(level, x, y),
       searched: false,
       /** uids uncovered so far; contents stay hidden until found */
       found: new Set(),
@@ -165,9 +477,28 @@ export class Raid {
       order: [],
       grid,
     };
-    this.rollLoot(c);
+    if (items && items.length) this.placeKnownItems(c, items);
+    else this.rollLoot(c);
     this.finalizeContainer(c);
     return c;
+  }
+
+  /** a loose-loot spot spawns the item the game says spawns there */
+  placeKnownItems(c, ids) {
+    let placed = 0;
+    for (const id of ids) {
+      const tpl = BY_ID[id];
+      if (!tpl) continue;
+      const item = new Item(tpl.key, { stack: tpl.stack > 1 ? this.rng.int(1, Math.min(tpl.stack, 3)) : 1 });
+      item.raidLoot = true;
+      if (tpl.dura != null) item.dura = Math.round(tpl.dura * this.rng.float(0.3, 1));
+      if (tpl.res) item.res = Math.round(tpl.res.max * this.rng.float(0.35, 1));
+      const spot = c.grid.findSpot(item);
+      if (spot) { c.grid.place(item, spot.x, spot.y, spot.rot); placed++; }
+    }
+    // the recorded item is not in this build's 195 templates: fall back to a
+    // roll so the spot is not simply empty
+    if (!placed) this.rollLoot(c);
   }
 
   /**
@@ -242,20 +573,36 @@ export class Raid {
   }
 
   // ---------------------------------------------------------
+  /** everything on this floor the player may leave through */
   get extracts() {
-    return this.map.extracts.filter((e) => e.side !== 'scav');
+    return this.allExtracts.filter((e) => e.level === this.level && e.faction !== 'scav');
   }
 
-  hasKey(reqKey) {
-    if (!reqKey) return true;
+  /** every marker on this floor, scav lanes included, for drawing */
+  get extractsHere() {
+    return this.allExtracts.filter((e) => e.level === this.level);
+  }
+
+  get transitsHere() {
+    return this.transits.filter((t) => t.level === this.level);
+  }
+
+  hasKey(reqId) {
+    if (!reqId) return true;
     for (const it of game.equipment.everything()) {
-      if (it.tpl.key === reqKey) return true;
+      if (it.tpl.id === reqId || it.tpl.key === reqId) return true;
     }
     return false;
   }
 
+  containersHere() {
+    return this.containers.filter((c) => c.level === this.level);
+  }
+
   // ---------------------------------------------------------
   moveTo(x, y) {
+    this.cancelBreach();
+    this.refreshDoorAccess();
     const path = this.nav.findPath(this.player.x, this.player.y, x, y);
     if (!path || !path.length) {
       emit(EV.RAID_TOAST, { kind: 'warn', text: 'No route there' });
@@ -266,19 +613,27 @@ export class Raid {
     return true;
   }
 
-  interactWith(container) {
-    if (dist(this.player.x, this.player.y, container.x, container.y) <= INTERACT_RANGE) {
-      this.beginSearch(container);
+  interactWith(target) {
+    if (dist(this.player.x, this.player.y, target.x, target.y) <= INTERACT_RANGE) {
+      this.reach(target);
       return true;
     }
-    const path = this.nav.findPath(this.player.x, this.player.y, container.x, container.y);
+    this.refreshDoorAccess();
+    const path = this.nav.findPath(this.player.x, this.player.y, target.x, target.y);
     if (!path || !path.length) {
       emit(EV.RAID_TOAST, { kind: 'warn', text: 'Cannot reach that' });
       return false;
     }
     this.path = path;
-    this.pendingInteract = container;
+    this.pendingInteract = target;
     return true;
+  }
+
+  /** what arriving at a clicked thing means */
+  reach(target) {
+    if (target.grid) this.beginSearch(target);
+    else if (target.levels) this.nearStairs = target;
+    else if (target.state) this.openDoor(target);
   }
 
   beginSearch(container) {
@@ -313,7 +668,7 @@ export class Raid {
   scavAt(x, y, radius = 1.8) {
     let best = null, bestD = radius;
     for (const s of this.scavs) {
-      if (!s.alive) continue;
+      if (!s.alive || (s.level && s.level !== this.level)) continue;
       const d = dist(s.x, s.y, x, y);
       if (d >= bestD) continue;
       const seen = dist(s.x, s.y, this.player.x, this.player.y) <= this.player.viewRange
@@ -339,6 +694,7 @@ export class Raid {
   containerAt(x, y, radius = 1.6) {
     let best = null, bestD = radius;
     for (const c of this.containers) {
+      if (c.level !== this.level) continue;
       const d = dist(c.x, c.y, x, y);
       if (d < bestD) { bestD = d; best = c; }
     }
@@ -370,6 +726,8 @@ export class Raid {
 
     const p = this.player;
 
+    this.updateBreach(dt);
+
     // uncover the container one item at a time
     if (this.searching) {
       const c = this.searching;
@@ -400,8 +758,17 @@ export class Raid {
       }
     }
 
-    // movement
+    // movement. A shut door on the way is opened as the player reaches it
+    // rather than stopping them: that is what walking through Factory feels
+    // like, and it keeps a click on the far side of a door from dead-ending.
     if (this.path.length && !this.openContainerRef) {
+      const blocking = this.doorAhead();
+      if (blocking && !this.openDoor(blocking)) {
+        this.path = [];
+        this.pendingInteract = null;
+        p.moving = false;
+        return;
+      }
       const target = this.path[0];
       const dx = target[0] - p.x;
       const dy = target[1] - p.y;
@@ -415,7 +782,7 @@ export class Raid {
         if (!this.path.length && this.pendingInteract) {
           const c = this.pendingInteract;
           this.pendingInteract = null;
-          if (dist(p.x, p.y, c.x, c.y) <= INTERACT_RANGE + 1.2) this.beginSearch(c);
+          if (dist(p.x, p.y, c.x, c.y) <= INTERACT_RANGE + 1.2) this.reach(c);
         }
       } else {
         this.stats.distance += step;
@@ -432,11 +799,31 @@ export class Raid {
     else p.stamina = clamp(p.stamina + 15 * dt, 0, 100);
     if (p.stamina <= 0) p.sprint = false;
 
-    // visibility bookkeeping
+    // visibility bookkeeping. Doors and stairwells are remembered the same way
+    // containers are: architecture you have not laid eyes on yet has no
+    // business showing through the dark.
     for (const c of this.containers) {
-      if (this.seen.has(c.id)) continue;
+      if (c.level !== this.level || this.seen.has(c.id)) continue;
       if (dist(p.x, p.y, c.x, c.y) <= p.viewRange && this.nav.lineClear(p.x, p.y, c.x, c.y)) {
         this.seen.add(c.id);
+      }
+    }
+    for (const d of this.doorsOn(this.level)) {
+      if (this.seen.has(d.id)) continue;
+      // a shut door is its own sight blocker, so aim at its edge rather than
+      // its middle or it can never be spotted
+      if (dist(p.x, p.y, d.x, d.y) > p.viewRange) continue;
+      const nx = Math.cos(d.a) * (d.w / 2 + 0.4);
+      const ny = Math.sin(d.a) * (d.w / 2 + 0.4);
+      if (this.nav.lineClear(p.x, p.y, d.x + nx, d.y + ny)
+          || this.nav.lineClear(p.x, p.y, d.x - nx, d.y - ny)) {
+        this.seen.add(d.id);
+      }
+    }
+    for (const s of this.stairsOn(this.level)) {
+      if (this.seen.has(s.id)) continue;
+      if (dist(p.x, p.y, s.x, s.y) <= p.viewRange && this.nav.lineClear(p.x, p.y, s.x, s.y)) {
+        this.seen.add(s.id);
       }
     }
 
@@ -454,6 +841,13 @@ export class Raid {
       if (dist(p.x, p.y, ex.x, ex.y) <= ex.r) { this.nearExtract = ex; break; }
     }
     if (!this.nearExtract) this.extractHold = 0;
+
+    // stairs under the player, which is what offers the floor change
+    this.nearStairs = this.stairAt(p.x, p.y, STAIR_RANGE);
+
+    // a key picked up out of a crate has to start opening doors right away
+    this.accessTick = (this.accessTick || 0) + dt;
+    if (this.accessTick > 0.5) { this.accessTick = 0; this.refreshDoorAccess(); }
   }
 
   // ---------------------------------------------------------
@@ -474,22 +868,13 @@ export class Raid {
 
   /**
    * What the floor is made of at a point, which decides the footstep set.
-   *
-   * Region rectangles overlap - the silo pit sits inside the processing hall -
-   * so the smallest one covering the point wins, which is the more specific
-   * description of that spot. Outside every region (corridors, the gaps
-   * between blocks) the plant is concrete.
+   * Outside every named area (corridors, the gaps between blocks) the plant is
+   * concrete, except up in the rafters where everything underfoot is grating.
    */
   surfaceAt(x, y) {
-    let best = null, bestArea = Infinity;
-    for (const r of this.map.regions) {
-      if (!r.surface) continue;
-      const [x0, y0, x1, y1] = r.rect;
-      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-      const area = (x1 - x0) * (y1 - y0);
-      if (area < bestArea) { bestArea = area; best = r.surface; }
-    }
-    return best || 'concrete';
+    const a = areaAt(this.map, this.level, x, y);
+    if (a && a.surface) return a.surface;
+    return this.level === 'third' ? 'metal' : 'concrete';
   }
 
   /**
@@ -590,7 +975,7 @@ export class Raid {
     const def = CONTAINERS.deadscav;
     const body = {
       id: uid('c'), type: 'deadscav', def,
-      x: scav.x, y: scav.y, rot: this.rng.float(-0.4, 0.4),
+      x: scav.x, y: scav.y, level: this.level, rot: this.rng.float(-0.4, 0.4),
       region: 'Body', searched: false,
       found: new Set(), order: [],
       grid: new Grid(def.w, def.h, { tag: 'loot', label: def.name }),
@@ -648,7 +1033,7 @@ export class Raid {
     const ex = this.nearExtract;
     if (!ex) return;
     if (ex.req && !this.hasKey(ex.req)) {
-      emit(EV.RAID_TOAST, { kind: 'warn', text: `${ex.name} is locked` });
+      emit(EV.RAID_TOAST, { kind: 'warn', text: `${ex.name} — needs ${ex.reqName}` });
       this.extractHold = 0;
       return;
     }
@@ -676,6 +1061,7 @@ export class Raid {
       searched: this.stats.searched,
       kills: this.stats.kills,
       shots: this.stats.shots,
+      floors: this.visited.size,
       kept: [],
       lost: [],
       value: 0,
@@ -687,17 +1073,11 @@ export class Raid {
       for (const it of eq.everything()) {
         if (it.raidLoot) { it.fir = true; delete it.raidLoot; }
       }
-      // a keyed exfil consumes one use of the key, and the key breaks dry
+      // an exit that wants an item handed over takes it on the way through
       if (viaExtract?.req) {
         for (const it of eq.everything()) {
-          if (it.tpl.key !== viaExtract.req) continue;
-          if (it.tpl.uses) {
-            it.res = (it.res ?? it.tpl.uses) - 1;
-            if (it.res <= 0) {
-              detach(it);
-              emit(EV.RAID_TOAST, { kind: 'warn', text: `${it.tpl.name} broke` });
-            }
-          }
+          if (it.tpl.id !== viaExtract.req && it.tpl.key !== viaExtract.req) continue;
+          detach(it);
           break;
         }
       }

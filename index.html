@@ -132,10 +132,10 @@
             <div class="trade__col trade__col--table">
               <div class="col-head">
                 <div class="trade__modes">
-                  <button class="seg is-active" data-mode="buy">BUY</button>
-                  <button class="seg" data-mode="sell">SELL</button>
+                  <button class="seg is-active" data-mode="buy" data-sfx="own">BUY</button>
+                  <button class="seg" data-mode="sell" data-sfx="own">SELL</button>
                 </div>
-                <button class="btn btn--icon col-head__clear" id="btn-trade-clear" title="Clear the table">
+                <button class="btn btn--icon col-head__clear" id="btn-trade-clear" data-sfx="own" title="Clear the table">
                   <svg class="ico"><use href="#i-discard"/></svg>
                 </button>
               </div>
@@ -186,9 +186,12 @@
       </div>
       <div class="hud-center">
         <div class="hud-clock"><svg class="ico"><use href="#i-timer"/></svg><span id="raid-timer">40:00</span></div>
+        <div class="hud-floors" id="hud-floors"></div>
       </div>
       <div class="hud-right">
         <div class="hud-actions">
+          <button class="hudbtn" id="btn-hud-map" title="Floor plan (M)">
+            <svg class="ico"><use href="#i-map"/></svg><span>MAP</span></button>
           <button class="hudbtn" id="btn-hud-inventory" title="Inventory">
             <svg class="ico"><use href="#i-stash"/></svg><span>INVENTORY</span></button>
           <button class="hudbtn" id="btn-hud-sprint" title="Toggle sprint">
@@ -197,8 +200,8 @@
             <svg class="ico"><use href="#i-back"/></svg><span>LEAVE</span></button>
         </div>
         <div class="hud-keys">
-          <span><b>LMB</b> move &nbsp; on a container: search &nbsp; on an enemy: fire</span>
-          <span>drag an item, <b>RMB</b> to rotate</span>
+          <span><b>LMB</b> move &nbsp; on a container: search &nbsp; on a door: open</span>
+          <span><b>M</b> floor plan &nbsp; <b>TAB</b> inventory &nbsp; <b>F</b> extract</span>
         </div>
       </div>
     </div>
@@ -218,6 +221,37 @@
         <div class="extract-prompt__hint">hold this button</div>
       </div>
     </button>
+
+    <!-- standing on a staircase: pick a floor -->
+    <div class="stairs-prompt" id="stairs-prompt" hidden>
+      <div class="stairs-prompt__label" id="stairs-label">STAIRS</div>
+      <div class="stairs-prompt__btns" id="stairs-btns"></div>
+    </div>
+
+    <!-- per-floor plan of the plant -->
+    <div class="floorplan" id="floorplan" hidden>
+      <div class="floorplan__panel">
+        <div class="floorplan__head">
+          <h2 id="floorplan-title">GROUND FLOOR</h2>
+          <div class="floorplan__levels" id="floorplan-levels"></div>
+          <button class="btn btn--ghost btn--sm" id="btn-close-map">
+            <svg class="ico"><use href="#i-close"/></svg> CLOSE
+          </button>
+        </div>
+        <div class="floorplan__body"><canvas id="floorplan-canvas"></canvas></div>
+        <div class="floorplan__foot">
+          <div class="plan-note" id="floorplan-note"></div>
+          <div class="plan-legend">
+            <span><i class="sw sw--free"></i>door</span>
+            <span><i class="sw sw--key"></i>key in hand</span>
+            <span><i class="sw sw--locked"></i>locked</span>
+            <span><i class="sw sw--stairs"></i>stairs</span>
+            <span><i class="sw sw--pmc"></i>exit</span>
+            <span><i class="sw sw--scav"></i>scav lane</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- in-raid inventory overlay -->
     <div class="overlay" id="raid-inventory" hidden>

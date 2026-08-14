@@ -379,6 +379,19 @@
 .hud-clock { display: flex; align-items: center; gap: 8px; color: var(--tx-1); font-size: 17px; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
 .hud-clock.is-low { color: var(--warn); }
 .hud-clock.is-crit { color: var(--danger); }
+/* which storey you are on, top to bottom like a section through the plant */
+.hud-floors { display: flex; gap: 3px; justify-content: center; margin-top: 7px; pointer-events: auto; }
+.floor-pip {
+  min-width: 34px; padding: 3px 6px;
+  background: rgba(10,16,19,.85);
+  border: 1px solid var(--line-1);
+  color: var(--tx-dim); font-size: 10px; letter-spacing: .12em; font-weight: 600;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.floor-pip.is-seen { color: var(--tx-3); border-color: var(--line-2); }
+.floor-pip.is-on { color: var(--warn); border-color: var(--warn-soft); background: rgba(217,164,65,.12); }
+.floor-pip:hover { color: var(--pale); border-color: var(--pale); }
+
 .hud-keys { display: flex; flex-direction: column; gap: 3px; text-align: right; color: var(--tx-dim); font-size: 10.5px; letter-spacing: .06em; }
 .hud-keys b { color: var(--tx-2); font-family: var(--font-mono); font-weight: 600; }
 
@@ -446,6 +459,90 @@
 .extract-prompt__hint { color: var(--tx-dim); font-size: 10px; letter-spacing: .14em; margin-top: 5px; }
 .extract-prompt__hint b { color: var(--tx-1); font-family: var(--font-mono); }
 
+/* ---------- stairwell under the player ---------- */
+.stairs-prompt {
+  /* sits above the extract prompt, which shares the bottom of the screen */
+  position: absolute; left: 50%; bottom: 212px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  background: rgba(6,10,12,.9);
+  border: 1px solid var(--warn-soft);
+  box-shadow: 0 0 26px rgba(217,164,65,.14);
+  pointer-events: auto;
+}
+.stairs-prompt__label { color: var(--warn); font-size: 11px; letter-spacing: .2em; }
+.stairs-prompt__btns { display: flex; gap: 8px; }
+.stairbtn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  background: rgba(14,21,25,.9);
+  border: 1px solid var(--line-2);
+  color: var(--tx-1); font-size: 12px; letter-spacing: .1em;
+  transition: border-color .12s, color .12s, background .12s;
+}
+.stairbtn:hover { border-color: var(--warn); color: var(--white); background: rgba(217,164,65,.14); }
+.stairbtn span { letter-spacing: .12em; }
+
+/* ---------- floor plan ---------- */
+.floorplan {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(2,5,7,.82);
+  backdrop-filter: blur(2px);
+  pointer-events: auto;
+  z-index: 6;
+}
+.floorplan__panel {
+  display: flex; flex-direction: column;
+  width: min(1180px, 94vw); height: min(880px, 92vh);
+  background: var(--panel-solid);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 24px 80px rgba(0,0,0,.7);
+}
+.floorplan__head {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-1);
+}
+.floorplan__head h2 {
+  flex: 1; margin: 0;
+  color: var(--tx-0); font-size: 13px; letter-spacing: .2em; font-weight: 600;
+}
+.floorplan__levels { display: flex; gap: 4px; }
+.plan-tab {
+  min-width: 44px; padding: 6px 10px;
+  background: rgba(10,16,19,.9);
+  border: 1px solid var(--line-1);
+  color: var(--tx-3); font-size: 11px; letter-spacing: .14em; font-weight: 600;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.plan-tab:hover { color: var(--pale); border-color: var(--line-3); }
+.plan-tab.is-on { color: var(--tx-0); border-color: var(--pale); background: rgba(184,219,217,.1); }
+.plan-tab.is-here::after {
+  content: ''; display: block; height: 2px; margin-top: 4px; background: var(--warn);
+}
+.floorplan__body { flex: 1; min-height: 0; padding: 10px; }
+.floorplan__body canvas { display: block; width: 100%; height: 100%; }
+.floorplan__foot {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line-1);
+}
+.plan-note { display: flex; flex-direction: column; gap: 2px; min-width: 220px; }
+.plan-note__here { color: var(--tx-0); font-size: 12px; letter-spacing: .16em; }
+.plan-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-left: auto; }
+.plan-legend span {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--tx-3); font-size: 10.5px; letter-spacing: .1em;
+}
+.plan-legend .sw { width: 14px; height: 3px; display: block; }
+.sw--free { background: #c98f4a; }
+.sw--key { background: #7fb39a; }
+.sw--locked { background: #c2604f; }
+.sw--stairs { background: #d9a441; }
+.sw--pmc { background: #7fb39a; height: 8px; width: 8px; border-radius: 50%; }
+.sw--scav { background: #d9a441; height: 8px; width: 8px; border-radius: 50%; }
+
 /* in-raid overlay */
 .overlay {
   position: absolute; inset: 0; z-index: 20;
@@ -508,15 +605,26 @@
 /* raid toasts must clear the fullscreen inventory overlay (z 20) */
 .raid-toast { z-index: 30; }
 
-/* ---------------- responsive ---------------- */
+/* ---------------- responsive ----------------
+   Both of these grids have THREE children. Dropping them to two columns left
+   the third (the stash, in each case) on an implicit second row inside a
+   fixed-height box, where it was clipped with no way to scroll to it — so the
+   columns only get narrower here, and only collapse to one at the width where
+   a single column is genuinely all that fits. */
 @media (max-width: 1360px) {
   :root { --cell: 54px; }
-  .pane-grid--stash { grid-template-columns: minmax(320px, 350px) 1fr; }
-  .trade__body { grid-template-columns: 1fr minmax(300px, 340px); }
+  .pane-grid--stash { grid-template-columns: minmax(240px, 280px) minmax(240px, 300px) 1fr; }
+  .trade__body { grid-template-columns: 34fr 26fr 34fr; }
 }
 @media (max-width: 1100px) {
   :root { --cell: 48px; }
   .deploy { grid-template-columns: 1fr; }
+  /* one column now really is one column: let the pane scroll instead of
+     clipping whatever lands below the fold */
+  .pane { overflow: auto; }
+  .pane-grid, .trade { height: auto; min-height: 100%; }
+  .pane-grid--stash { grid-template-columns: 1fr; }
   .trade__body { grid-template-columns: 1fr; }
+  .trade__col, .pane-grid--stash > .panel { min-height: 340px; }
   .tbar__rep { display: none; }
 }

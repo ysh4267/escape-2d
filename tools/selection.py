@@ -131,7 +131,12 @@ SELECTION = [
     ('Factory plan map',     'factorymap', 'info', 0.20, 1, {}),
 
     # ---------------- keys ----------------
+    # The first two are the only keys with a real lock on Factory: the
+    # emergency exit key opens three doors (the med tent gate, the cellars
+    # entrance and the locked office on the third floor) and the keycard opens
+    # the TerraGroup storage room next to the camera bunker door.
     ('Factory emergency exit key',    'k_factexit', 'key', 0.02, 1, {'uses': 10}),
+    ('66acd6702b17692df20144c0',      'k_terragroup', 'key', 0.02, 1, {'uses': 10}),
     ('Abandoned factory marked key',  'k_marked',   'key', 0.02, 1, {'uses': 10}),
     ('Pumping station back door key', 'k_pump',     'key', 0.02, 1, {'uses': 10}),
     ('Portable bunkhouse key',        'k_bunk',     'key', 0.02, 1, {'uses': 10}),

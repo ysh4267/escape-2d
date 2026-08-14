@@ -15,6 +15,8 @@ const PAL = {
   floorLit: '#33474f',
   ledge: '#3c525c',
   stairs: '#46626b',
+  stairsEdge: 'rgba(217,164,65,.55)',
+  under: '#0d151a',              // the storey below, drawn as a faint ghost
   obstacle: '#16232b',
   obstacleEdge: '#41565f',
   building: '#101b22',
@@ -22,6 +24,10 @@ const PAL = {
   wall: '#7f9aa3',
   outline: '#0b1114',
   grid: 'rgba(184,219,217,.045)',
+  doorShut: '#c98f4a',
+  doorOpen: 'rgba(201,143,74,.35)',
+  doorLocked: '#c2604f',
+  doorKeyed: '#7fb39a',
 };
 
 export class Renderer {
@@ -29,13 +35,44 @@ export class Renderer {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.geo = geo;
-    this.L = geo.levels[level];
     this.ppu = 13;                 // pixels per svg unit
     this.cam = { x: 65, y: 70 };
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.mapScale = 12;
-    this.buildStatic();
+    /** one baked map image and one fog layer per storey, kept between visits */
+    this.cache = new Map();
+    this.setLevel(level);
     this.resize();
+  }
+
+  /**
+   * Switch storeys. The baked image and the explored fog are per floor and are
+   * kept, so coming back down to a floor finds it exactly as it was left.
+   */
+  setLevel(level) {
+    if (this.level === level) return;
+    this.level = level;
+    this.L = this.geo.levels[level];
+    let c = this.cache.get(level);
+    if (!c) {
+      c = this.buildStatic(level);
+      this.cache.set(level, c);
+    }
+    this.mapCanvas = c.map;
+    this.fog = c.fog;
+    this.fogScale = c.fogScale;
+    this.resetVisibility();
+  }
+
+  /** wipe every floor's fog, for a fresh raid */
+  resetFog() {
+    for (const c of this.cache.values()) {
+      const fg = c.fog.getContext('2d');
+      fg.globalCompositeOperation = 'source-over';
+      fg.fillStyle = '#000';
+      fg.fillRect(0, 0, c.fog.width, c.fog.height);
+    }
+    this.resetVisibility();
   }
 
   resize() {
@@ -48,14 +85,28 @@ export class Renderer {
   }
 
   // ---------------------------------------------------------
-  buildStatic() {
+  buildStatic(level) {
     const [, , vw, vh] = this.geo.viewBox;
     const s = this.mapScale;
     const cv = document.createElement('canvas');
     cv.width = Math.ceil(vw * s);
     cv.height = Math.ceil(vh * s);
     const g = cv.getContext('2d');
-    const L = this.L;
+    const L = this.geo.levels[level];
+
+    // an upper storey is catwalks and offices over open air, so the ground
+    // floor is drawn underneath at a whisper: it says what you are above
+    const order = this.geo.order || ['basement', 'ground', 'second', 'third'];
+    if (order.indexOf(level) > order.indexOf('ground')) {
+      const B = this.geo.levels.ground;
+      g.beginPath();
+      for (const poly of B.floor) {
+        poly.forEach((p, i) => (i ? g.lineTo(p[0] * s, p[1] * s) : g.moveTo(p[0] * s, p[1] * s)));
+        g.closePath();
+      }
+      g.fillStyle = PAL.under;
+      g.fill('evenodd');
+    }
 
     const trace = (poly) => {
       g.beginPath();
@@ -92,7 +143,7 @@ export class Renderer {
     for (const poly of L.stairs || []) {
       trace(poly);
       g.fillStyle = PAL.stairs; g.fill();
-      g.strokeStyle = 'rgba(184,219,217,.25)'; g.lineWidth = 1; g.stroke();
+      g.strokeStyle = PAL.stairsEdge; g.lineWidth = 1.6; g.stroke();
     }
     for (const poly of L.obstacles || []) {
       trace(poly);
@@ -115,8 +166,6 @@ export class Renderer {
       g.stroke();
     }
 
-    this.mapCanvas = cv;
-
     // persistent fog: black everywhere, punched out as the player sees places
     const fs = 3;
     const fog = document.createElement('canvas');
@@ -125,10 +174,7 @@ export class Renderer {
     const fg = fog.getContext('2d');
     fg.fillStyle = '#000';
     fg.fillRect(0, 0, fog.width, fog.height);
-    this.fog = fog;
-    this.fogScale = fs;
-    // a fresh map means the eased silhouette has nothing to ease from
-    this.resetVisibility();
+    return { map: cv, fog, fogScale: fs };
   }
 
   /** carve the current view out of the fog so explored ground stays legible */
@@ -271,7 +317,10 @@ export class Renderer {
     g.fillRect(0, 0, this.vw, this.vh);
     g.restore();
 
+    this.drawStairs(state.stairs || [], state.nearStairs, state.hoverStair);
     this.drawExtracts(extracts, state);
+    this.drawTransits(state.transits || []);
+    this.drawDoors(state.doors || [], state.hoverDoor);
     this.drawContainers(containers, vis, seen, hover);
     if (path && path.length) this.drawPath(player, path);
     this.drawScavs(state.scavs || [], nav, player, state.hoverEnemy);
@@ -410,7 +459,7 @@ export class Renderer {
       const [sx, sy] = this.worldToScreen(ex.x, ex.y);
       const r = ex.r * this.ppu;
       if (sx < -r - 60 || sy < -r - 60 || sx > this.vw + r + 60 || sy > this.vh + r + 60) continue;
-      const usable = ex.side !== 'scav';
+      const usable = ex.faction !== 'scav';
       const active = state.nearExtract === ex;
       g.save();
       g.strokeStyle = active ? '#7fb39a' : usable ? 'rgba(127,179,154,.55)' : 'rgba(217,164,65,.45)';
@@ -432,8 +481,107 @@ export class Renderer {
         // the label answers the question the player actually has: can I use it
         const carried = state.keyed && state.keyed.has(ex);
         g.fillStyle = carried ? 'rgba(127,179,154,.9)' : 'rgba(217,164,65,.85)';
-        g.fillText(carried ? 'KEY CARRIED' : 'LOCKED', sx, sy + r + 14);
+        g.fillText(carried ? 'READY' : `NEEDS ${(ex.reqName || 'AN ITEM').toUpperCase()}`,
+                   sx, sy + r + 14);
       }
+      g.restore();
+    }
+  }
+
+  /**
+   * A door is drawn as the leaf itself: a bar across the opening when it is
+   * shut, swung back against the jamb when it is open. Colour carries the one
+   * thing the player needs at a glance — amber for a door that just opens,
+   * red for one that wants a key you are not carrying, green once you are.
+   */
+  drawDoors(doors, hoverDoor) {
+    const g = this.ctx;
+    for (const d of doors) {
+      const [sx, sy] = this.worldToScreen(d.x, d.y);
+      const half = (d.w / 2 + 0.22) * this.ppu;
+      if (sx < -60 || sy < -60 || sx > this.vw + 60 || sy > this.vh + 60) continue;
+      const breach = d.state === 'breach';
+      const locked = breach || (d.state === 'key' && !d.canOpen);
+      const keyed = d.state === 'key' || breach;
+      const col = d.open ? PAL.doorOpen : locked ? PAL.doorLocked : keyed ? PAL.doorKeyed : PAL.doorShut;
+      g.save();
+      g.translate(sx, sy);
+      // an open leaf is folded back a quarter turn against its own hinge
+      g.rotate(d.a + (d.open ? Math.PI / 2 : 0));
+      g.strokeStyle = col;
+      g.lineWidth = d === hoverDoor ? 5 : 3.4;
+      g.lineCap = 'butt';
+      g.beginPath();
+      g.moveTo(d.open ? 0 : -half, 0);
+      g.lineTo(d.open ? half : half, 0);
+      g.stroke();
+      // the jambs, so a doorway still reads once the leaf has swung away
+      g.strokeStyle = 'rgba(11,17,20,.9)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(-half, -2); g.lineTo(-half, 2);
+      g.moveTo(half, -2); g.lineTo(half, 2);
+      g.stroke();
+      g.restore();
+
+      if (keyed && !d.open) {
+        g.save();
+        g.fillStyle = locked ? 'rgba(194,96,79,.9)' : 'rgba(127,179,154,.9)';
+        g.font = '600 10px Bahnschrift, system-ui, sans-serif';
+        g.textAlign = 'center';
+        g.fillText(breach ? 'FORCE' : locked ? 'LOCKED' : 'KEY', sx, sy - half - 6);
+        g.restore();
+      }
+      if (d === hoverDoor) {
+        g.save();
+        g.fillStyle = '#e8f4f3';
+        g.font = '600 11px Bahnschrift, system-ui, sans-serif';
+        g.textAlign = 'center';
+        g.fillText(d.name.toUpperCase(), sx, sy + half + 14);
+        g.restore();
+      }
+    }
+  }
+
+  /** the stairwells that reach this floor, and which way they go */
+  drawStairs(stairs, nearStairs, hoverStair) {
+    const g = this.ctx;
+    for (const s of stairs) {
+      const [ax, ay] = this.worldToScreen(s.rect[0], s.rect[1]);
+      const [bx, by] = this.worldToScreen(s.rect[2], s.rect[3]);
+      if (bx < -40 || by < -40 || ax > this.vw + 40 || ay > this.vh + 40) continue;
+      const active = s === nearStairs;
+      g.save();
+      g.strokeStyle = active ? '#e8c46a' : s === hoverStair ? '#d9a441' : 'rgba(217,164,65,.5)';
+      g.lineWidth = active ? 2.6 : 1.6;
+      g.setLineDash(active ? [] : [4, 4]);
+      g.strokeRect(ax, ay, bx - ax, by - ay);
+      g.setLineDash([]);
+      g.fillStyle = active ? '#e8c46a' : 'rgba(217,164,65,.75)';
+      g.font = '600 10px Bahnschrift, system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.fillText(s.label || 'STAIRS', (ax + bx) / 2, ay - 4);
+      g.restore();
+    }
+  }
+
+  drawTransits(transits) {
+    const g = this.ctx;
+    for (const t of transits) {
+      const [sx, sy] = this.worldToScreen(t.x, t.y);
+      const r = t.r * this.ppu;
+      if (sx < -r - 60 || sy < -r - 60 || sx > this.vw + r + 60 || sy > this.vh + r + 60) continue;
+      g.save();
+      g.strokeStyle = 'rgba(150,130,200,.55)';
+      g.fillStyle = 'rgba(150,130,200,.06)';
+      g.lineWidth = 1.5;
+      g.setLineDash([3, 4]);
+      g.beginPath(); g.arc(sx, sy, r, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = 'rgba(178,160,220,.75)';
+      g.font = '10px Bahnschrift, system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.fillText(t.name.toUpperCase(), sx, sy - r - 6);
       g.restore();
     }
   }

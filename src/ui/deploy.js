@@ -2,7 +2,7 @@
 // deploy pane: pick a map, read the brief, go
 // =========================================================
 
-import { $, el, icon, fmtWeight } from '../core/util.js';
+import { $, el, icon, fmtWeight, debounce } from '../core/util.js';
 import { MAPS, DEFAULT_MAP } from '../data/maps.js';
 import { game } from '../core/state.js';
 
@@ -13,6 +13,12 @@ let geoCache = null;
 export function initDeploy(geo, deployFn) {
   geoCache = geo;
   onDeploy = deployFn;
+  // the thumbnails are drawn into a device-pixel buffer sized to the card, so
+  // a window resize stretches yesterday's buffer into today's box until some
+  // unrelated navigation happens to redraw it
+  window.addEventListener('resize', debounce(() => {
+    if ($('#pane-raid')?.classList.contains('is-active')) renderDeploy();
+  }, 160));
   renderDeploy();
 }
 
@@ -45,11 +51,18 @@ export function renderDeploy() {
   const weight = game.equipment.weight();
   const hasGear = !!(game.equipment.item('rig') || game.equipment.item('backpack') || game.equipment.pockets.some((g) => g.count));
 
-  brief.append(block('EXFILTRATION', m.extracts.filter((e) => e.side !== 'scav').map((e) =>
+  brief.append(block('EXFILTRATION', exitsOf().filter((e) => e.faction !== 'scav').map((e) =>
     el('div', { class: 'brief-row' },
       icon('extract'),
       el('b', {}, e.name),
-      el('span', { class: 'muted' }, e.req ? 'LOCKED' : 'OPEN')))));
+      el('span', { class: 'muted' },
+         `${levelName(m, e.level)}${e.item ? ' · needs intel' : ''}`)))));
+
+  brief.append(block('FLOORS', m.levels.slice().reverse().map((l) => {
+    const n = (geoCache?.markers.containers || []).filter((c) => c.level === l.key).length;
+    return el('div', { class: 'brief-row' },
+      icon('map'), el('b', {}, l.name), el('span', { class: 'muted' }, `${n} containers`));
+  })));
 
   brief.append(block('LOADOUT', [
     row('weight', 'Carried weight', `${fmtWeight(weight)} kg`),
@@ -60,6 +73,8 @@ export function renderDeploy() {
   ]));
 
   brief.append(block('RULES OF ENGAGEMENT', [
+    note('Four floors: the tunnels, the plant floor, the locker level and the rafters. Stairs are marked in amber; press M for the plan of the floor you are on.'),
+    note('Doors start shut. Most open on their own as you walk into them; four on Factory need a key.'),
     note('Left-click the ground to move, or click a container to search it.'),
     note('Loot found in raid keeps its status when you extract; gear you brought does not.'),
     note('Extract and everything stays packed as you left it — unload in the stash when you want to.'),
@@ -88,10 +103,18 @@ function note(text) {
   return el('div', { class: 'brief-row' }, icon('info'), el('span', {}, text));
 }
 
+/** the exits come out of the geometry file, not out of the map definition */
+function exitsOf() {
+  return geoCache?.markers?.extracts || [];
+}
+function levelName(m, key) {
+  return m.levels.find((l) => l.key === key)?.name || key;
+}
+
 // ---------------------------------------------------------
 function drawThumb(cv, m) {
   if (!geoCache) return;
-  const L = geoCache.levels[m.level];
+  const L = geoCache.levels[m.startLevel];
   if (!L || !L.floor?.length) return;
 
   // Match the canvas to the box it is actually displayed in, at device
@@ -162,8 +185,9 @@ function drawThumb(cv, m) {
     g.stroke();
   }
 
-  for (const e of m.extracts) {
-    g.fillStyle = e.side === 'scav' ? 'rgba(217,164,65,.9)' : 'rgba(127,179,154,.95)';
+  for (const e of exitsOf()) {
+    if (e.level !== m.startLevel) continue;
+    g.fillStyle = e.faction === 'scav' ? 'rgba(217,164,65,.9)' : 'rgba(127,179,154,.95)';
     g.beginPath();
     g.arc(ox + e.x * s, oy + e.y * s, 3.4, 0, Math.PI * 2);
     g.fill();

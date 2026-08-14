@@ -10,8 +10,13 @@ import { NavGrid, loadGeometry, CELL } from '../src/raid/nav.js';
 import { MAPS } from '../src/data/maps.js';
 
 const geo = await loadGeometry(MAPS.factory.geometry);
-const nav = new NavGrid(geo, 'ground');
 const m = MAPS.factory;
+// ?level=basement|ground|second|third — the plant is four storeys now
+const level = new URLSearchParams(location.search).get('level') || m.startLevel;
+const doors = (geo.levels[level].passages || [])
+  .filter((p) => p.key || p.w <= m.doorMaxWidth)
+  .map((p) => ({ ...p, state: p.key ? 'key' : 'free', open: false }));
+const nav = new NavGrid(geo, level, doors);
 
 // connected components over the walkable mask
 const comp = new Int32Array(nav.walk.length).fill(-1);
@@ -55,7 +60,7 @@ for (let cy = 0; cy < nav.h; cy++) {
 }
 // walls on top
 g.strokeStyle = 'rgba(244,244,249,.35)'; g.lineWidth = 1;
-for (const line of geo.levels.ground.walls) {
+for (const line of geo.levels[level].walls) {
   g.beginPath(); line.forEach((p, i) => (i ? g.lineTo(p[0]*s, p[1]*s) : g.moveTo(p[0]*s, p[1]*s))); g.stroke();
 }
 
@@ -69,12 +74,30 @@ function mark(x, y, label, color) {
   const c = sn ? comp[nav.idx(...nav.toCell(sn[0], sn[1]))] : -1;
   return c === -1 ? '?' : rank.get(c);
 }
+lines.unshift(`level: ${level}`);
 lines.push('EXTRACTS');
-for (const e of m.extracts) lines.push(`  ${e.id.padEnd(10)} comp #${mark(e.x, e.y, e.id, '#f4f4f9')}`);
+for (const e of geo.markers.extracts.filter((e) => e.level === level)) {
+  lines.push(`  ${e.name.padEnd(20)} comp #${mark(e.x, e.y, e.name, '#f4f4f9')}`);
+}
 lines.push('SPAWNS');
-m.spawns.forEach((sp, i) => lines.push(`  spawn${i} ${sp.name.padEnd(24)} comp #${mark(sp.x, sp.y, 's'+i, '#b8dbd9')}`));
-lines.push('REGIONS');
-for (const r of m.regions) {
+geo.markers.spawns.filter((sp) => sp.level === level)
+  .forEach((sp, i) => lines.push(`  spawn${i} comp #${mark(sp.x, sp.y, 's'+i, '#b8dbd9')}`));
+lines.push('DOORS');
+for (const d of doors) {
+  const col = d.key ? '#c2604f' : '#c98f4a';
+  lines.push(`  ${d.id.padEnd(10)} w=${d.w.toFixed(2)} ${d.key ? 'KEY ' + d.key : ''}`);
+  const nx = Math.cos(d.a) * (d.w / 2 + 0.22), ny = Math.sin(d.a) * (d.w / 2 + 0.22);
+  g.strokeStyle = col; g.lineWidth = 3;
+  g.beginPath(); g.moveTo((d.x-nx)*s, (d.y-ny)*s); g.lineTo((d.x+nx)*s, (d.y+ny)*s); g.stroke();
+}
+lines.push('STAIRWELLS');
+for (const st of geo.stairwells.filter((st) => st.levels.includes(level))) {
+  g.strokeStyle = '#d9a441'; g.lineWidth = 1.5;
+  g.strokeRect(st.rect[0]*s, st.rect[1]*s, (st.rect[2]-st.rect[0])*s, (st.rect[3]-st.rect[1])*s);
+  lines.push(`  ${st.id.padEnd(12)} ${st.levels.join('-')}`);
+}
+lines.push('AREAS');
+for (const r of m.areas.filter((a) => a.level === level)) {
   const [x0,y0,x1,y1] = r.rect;
   g.strokeStyle = 'rgba(184,219,217,.25)'; g.setLineDash([4,4]); g.lineWidth = 1;
   g.strokeRect(x0*s, y0*s, (x1-x0)*s, (y1-y0)*s); g.setLineDash([]);
@@ -83,7 +106,7 @@ for (const r of m.regions) {
     const x = x0 + Math.random()*(x1-x0), y = y0 + Math.random()*(y1-y0);
     if (nav.walkable(x, y)) ok++;
   }
-  lines.push(`  ${r.id.padEnd(16)} walkable ${Math.round(ok/2)}%`);
+  lines.push(`  ${r.name.padEnd(24)} walkable ${Math.round(ok/2)}%`);
 }
 document.getElementById('hud').textContent = lines.join('\n');
 document.title = 'ready';

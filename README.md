@@ -9,14 +9,14 @@ hold the button to take it home. Mouse only — the keyboard is optional.
 
 No build step, no dependencies — plain ES modules, canvas and DOM.
 
-![stash](docs/stash.png)
-
 | | |
 |---|---|
 | ![raid](docs/raid.png) | ![loot](docs/loot.png) |
 | in raid — fog of war over the real Factory geometry | searching a dead scav; unexamined loot shows as `?` |
-| ![traders](docs/traders.png) | ![deploy](docs/deploy.png) |
-| eight traders, loyalty-gated stock, three currencies | pre-raid brief |
+| ![floor plan](docs/floorplan.png) | ![deploy](docs/deploy.png) |
+| the plan of the storey you are on — press `M`, or walk up a staircase and it follows | pre-raid brief |
+| ![traders](docs/traders.png) | ![stash](docs/stash.png) |
+| eight traders, loyalty-gated stock, three currencies | the stash |
 
 ---
 
@@ -29,12 +29,17 @@ Everything is playable with the mouse alone.
 | **left click** the ground | move there (A\* pathfinding around the real Factory walls) |
 | **left click** a container | walk to it and search it |
 | **left click** a hostile | open fire; hold to keep shooting |
+| **left click** a door | open it, unlock it if you have the key, or force it |
+| **left click** a staircase | walk to it; the prompt offers the floors it reaches |
 | **wheel** | zoom |
-| **INVENTORY / SPRINT / LEAVE** buttons | bottom-right of the raid HUD |
+| **MAP / INVENTORY / SPRINT / LEAVE** buttons | bottom-right of the raid HUD |
 | hold the **exfil panel** | channel the extraction |
 
-Optional keyboard shortcuts still work: `TAB` inventory, `SHIFT` sprint,
-`F` extract, `ESC` leave, `1/2/3` for the hideout tabs.
+Optional keyboard shortcuts still work: `TAB` inventory, `M` floor plan,
+`SHIFT` sprint, `F` extract, `ESC` leave, `1/2/3` for the hideout tabs.
+
+Doors mostly look after themselves — walk into a shut one and you open it on
+the way through. Four on Factory want a key, and one wants a shoulder.
 
 ### Inventory
 
@@ -73,8 +78,47 @@ rig, backpack, secure container, on-sling, on-back, holster and sheath, plus
 **four independent 1×1 pockets** — the real base-PMC layout, so nothing larger
 than a single cell fits in a pocket and items never span two of them.
 
-**Raids.** Loot containers scatter across fourteen named Factory regions with
-per-container-type loot tables and real search times.
+**The plant, all four storeys of it.** Tunnels, ground floor, the locker level
+and the rafters, each with its own walls, walkable surface, machinery and
+staircases, lifted out of the four floor groups in tarkov.dev's vector map.
+Thirty-three stairwells link them; a run that shows up on two floor groups is
+one staircase seen from both ends, which is how the links are derived rather
+than placed. A staircase that passes a floor without a landing does not offer
+to stop there.
+
+**Doors, and which of them open.** Nothing hand-places these. The build tool
+rasterises each floor exactly as the nav grid does, measures how far every
+point is from the nearest solid, then floods the surface widest-first: the
+first cell to join two rooms that have both already grown is the narrowest
+point of the passage between them. That finds 81 openings across the four
+floors, doorways and gateways alike. Anything under 1.6 units of clear width
+gets a leaf that starts shut, the way Factory's do.
+
+Which of them are locked is not guesswork either. Factory has exactly four
+locked doors, and tarkov.dev's dataset records each one's position and the key
+that answers it. Converted into map units, all four land within a metre of an
+opening the passage search had already found on its own, knowing nothing about
+them — the emergency exit door out to the Med Tent Gate, the cellars door in
+the tunnels, the third-floor locked office (all three: **Factory emergency exit
+key**) and the TerraGroup storage room beside the camera bunker door
+(**TerraGroup storage room keycard**). A key loses a use per door it opens and
+breaks when it runs dry.
+
+The fifth special door is the third floor's **breach room**: locked, with no
+key anywhere in the game. It is forced, loudly, over a couple of seconds — the
+same way it is in the real thing, and the reason the room is called that.
+
+**Floor plan.** `M` opens the plan of the storey you are standing on, drawn
+from the same geometry: rooms, named areas, doors coloured by whether they will
+open for you, stairwells with the floors they reach, the exits, and every
+container you have actually laid eyes on. Walk up a staircase and the plan
+follows you; the strip along the top reads any other floor without leaving the
+one you are on.
+
+**Raids.** Loot is not scattered. All 167 static containers Factory has are
+placed where the game places them, with the type the game gives them, and the
+144 loose-loot spots spawn the item recorded for them, some of the time. PMC
+insertion uses the map's own 85 player spawn points.
 
 **Searching and examining.** Opening a container does not show you what is in
 it. The container is searched, and it gives up its contents **one item at a
@@ -82,7 +126,7 @@ time** — matching the real game, where the Attention skill is raised per item
 uncovered and its elite perk is a chance to find an item instantly. Nothing you
 have not uncovered can be picked up, and walking away cancels the search.
 
-Uncovering an item is not the same as identifying it. 27 of the 194 templates —
+Uncovering an item is not the same as identifying it. 27 of the 195 templates —
 keys, rare electronics, high-value gear — are not `ExaminedByDefault`, so they
 come out as a hatched **Unknown item** plate. Examining runs on its own timer,
 one at a time, and is learned per profile: examine one LEDX and every LEDX you
@@ -166,12 +210,12 @@ python -m http.server 8777
 |---|---|
 | `tools/build_items.py` | builds `src/data/items-db.json` and downloads item artwork |
 | `tools/selection.py` | the curated item list the builder resolves |
-| `tools/build_map.py` | extracts Factory wall / floor / obstacle geometry into `src/data/map-factory.json` |
+| `tools/build_map.py` | extracts all four Factory storeys, finds every opening in them, derives the stairwell links, and folds in tarkov.dev's exits / locks / spawns / loot spots — all into `src/data/map-factory.json` |
 | `tools/pack_sfx.py` | compresses and seals the sound pack (and `--unpack` reverses it) |
 | `tools/sfx_picks.py` | which clip backs which cue |
 | `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |
-| `tools/preview_map.html` | renders the raw extracted geometry |
-| `tools/preview_nav.html` | renders navmesh connected components, spawn/extract reachability and per-region walkability |
+| `tools/preview_map.html` | `?level=…` renders the raw extracted geometry for one storey |
+| `tools/preview_nav.html` | `?level=basement\|ground\|second\|third` — navmesh components, spawn/extract reachability, doors, stairwells and per-area walkability |
 | `tools/sfx_test.html` | checks the shipped effects are served and that the audio surface is what the game calls |
 
 Regenerate everything:
@@ -196,14 +240,19 @@ This is a non-commercial fan project. Escape From Tarkov is a trademark of
 Battlestate Games; this project is not affiliated with or endorsed by them.
 
 - **Map geometry** — [the-hideout/tarkov-dev-svg-maps](https://github.com/the-hideout/tarkov-dev-svg-maps),
-  licensed **CC BY-NC-SA 4.0**. The Factory walls, floors, obstacles and the
-  reactor units in this game are derived from that vector map.
-- **Item artwork** — `assets.tarkov.dev`, from the community
-  [tarkov.dev](https://tarkov.dev) project.
+  licensed **CC BY-NC-SA 4.0**. All four of Factory's storeys — walls, floors,
+  obstacles, reactor units and staircases — are derived from that vector map,
+  and so are the openings between them.
+- **Raid contents** — `json.tarkov.dev/regular/maps`, the dataset the
+  [tarkov.dev](https://tarkov.dev) map page reads. It supplies the exits and
+  their factions, the transits, the four locked doors and the key each one
+  wants, the 85 player spawn points, the 167 static container spots and the
+  144 loose-loot spots, all in the game's own coordinates.
+- **Item artwork** — `assets.tarkov.dev`, from the same project.
 - **Item templates, names and handbook prices** — the public
   [SPT](https://github.com/sp-tarkov/server) database dumps.
-- **Extract names, spawn locations and container behaviour** — the Escape From
-  Tarkov wiki.
+- **What the places are called, and door behaviour** — the Escape From Tarkov
+  wiki.
 - **Sound effects** — third-party audio whose rights stay with their owner. It
   ships sealed.
 

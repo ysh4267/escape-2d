@@ -9,7 +9,7 @@
 /** @type {Record<string, any>} keyed by slug */
 export const TPL = {};
 /** @type {Record<string, any>} keyed by the 24-hex tarkov item id */
-const BY_ID = {};
+export const BY_ID = {};
 
 export const ITEM_ASSET_DIR = 'assets/items/';
 

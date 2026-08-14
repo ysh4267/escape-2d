@@ -30,6 +30,10 @@ export const CONTAINERS = {
   techcrate:   { name: 'Technical supply crate', w: 5, h: 5, search: 5.0, rolls: [2, 4], icon: 'box' },
   deadscav:    { name: 'Dead Scav',           w: 4, h: 4, search: 4.5,  rolls: [2, 4], icon: 'body' },
   pmcbody:     { name: 'Dead PMC',            w: 5, h: 5, search: 4.5,  rolls: [3, 5], icon: 'body' },
+  // not a container at all: a thing lying on the floor where the game says one
+  // lies. It is handled through the same panel so picking it up reads the same
+  // as everything else, but it gives up what it holds almost instantly.
+  looseloot:   { name: 'Loose loot',          w: 3, h: 2, search: 1.2,  rolls: [1, 1], icon: 'box' },
 };
 
 // ---------------------------------------------------------
@@ -89,6 +93,9 @@ const P = {
   keys: [
     ['k_bunk', 8], ['k_machine', 8], ['k_pump', 6], ['k_gasstore', 5], ['k_gasoffice', 5],
     ['k_gassafe', 5], ['k_factexit', 3], ['k_marked', 1],
+    // no trader sells the keycard: on Factory it comes off cultists, so in
+    // here it is a rare find and nothing else
+    ['k_terragroup', 1],
   ],
   info: [['flashdrive', 5], ['intel', 4], ['diary', 4], ['factorymap', 6]],
   money: [['rub', 14, [2000, 30000]], ['usd', 4, [50, 400]], ['eur', 3, [40, 300]]],
@@ -124,6 +131,8 @@ export const LOOT_TABLES = {
   drawer:      [[P.keys, 26], [P.money, 24], [P.info, 16], [P.junk, 22], [P.meds_low, 12]],
   filecab:     [[P.info, 34], [P.keys, 26], [P.money, 22], [P.junk, 18]],
   techcrate:   [[P.electronics, 54], [P.tools, 32], [P.junk, 14]],
+  looseloot:   [[P.junk, 34], [P.electronics, 14], [P.food, 12], [P.meds_low, 12],
+                [P.ammo, 10], [P.money, 8], [P.tools, 6], [P.valuables, 4]],
   deadscav:    [[P.junk, 22], [P.ammo, 16], [P.meds_low, 16], [P.food, 12], [P.mags, 12], [P.money, 10], [P.gear_misc, 6], [P.valuables, 6]],
   // a dead PMC is the only place full gear drops: armor, helmets, rigs,
   // backpacks and blades all funnel through this table
@@ -135,6 +144,7 @@ export const LOOT_TABLES = {
 /** rarity of an item spawning at all, per container roll */
 export const EMPTY_CHANCE = {
   jacket: 0.28, drawer: 0.35, cashreg: 0.2, crate: 0.15, safe: 0.1, filecab: 0.3,
+  looseloot: 0,
 };
 
 export function poolsFor(type) { return LOOT_TABLES[type] || LOOT_TABLES.crate; }

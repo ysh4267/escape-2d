@@ -39,5 +39,6 @@ export const EV = {
   LOOT_CLOSED: 'loot:closed',
   TOAST: 'ui:toast',
   RAID_TOAST: 'raid:toast',
+  RAID_LEVEL: 'raid:level',
   LEVEL_UP: 'profile:levelup',
 };

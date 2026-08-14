@@ -252,26 +252,37 @@ try {
   check('nav grid has walkable space', walkables > 3000, String(walkables));
 
   const mapDef = MAPS.factory;
-  let spawnOk = 0;
-  for (const s of mapDef.spawns) if (nav.snap(s.x, s.y)) spawnOk++;
-  check('every spawn snaps to walkable floor', spawnOk === mapDef.spawns.length, `${spawnOk}/${mapDef.spawns.length}`);
-  let exOk = 0;
-  for (const e of mapDef.extracts) if (nav.snap(e.x, e.y)) exOk++;
-  check('every extract snaps to walkable floor', exOk === mapDef.extracts.length, `${exOk}/${mapDef.extracts.length}`);
+  for (const lvl of mapDef.levels) {
+    check(`geometry has a ${lvl.key} floor`, !!geo.levels[lvl.key]?.floor?.length);
+  }
+  check('every floor found its openings',
+        mapDef.levels.every(l => (geo.levels[l.key].passages || []).length > 0),
+        mapDef.levels.map(l => `${l.short}:${geo.levels[l.key].passages.length}`).join(' '));
+  const locked = mapDef.levels.flatMap(l => geo.levels[l.key].passages.filter(p => p.key));
+  check('the four recorded locks landed on openings', locked.length === 4, String(locked.length));
 
-  const s0 = nav.snap(mapDef.spawns[0].x, mapDef.spawns[0].y);
+  const spawns = geo.markers.spawns.filter(s => s.level === 'ground');
+  const exits = geo.markers.extracts.filter(e => e.level === 'ground');
+  let spawnOk = 0;
+  for (const s of spawns) if (nav.snap(s.x, s.y)) spawnOk++;
+  check('every spawn snaps to walkable floor', spawnOk === spawns.length, `${spawnOk}/${spawns.length}`);
+  let exOk = 0;
+  for (const e of exits) if (nav.snap(e.x, e.y)) exOk++;
+  check('every extract snaps to walkable floor', exOk === exits.length, `${exOk}/${exits.length}`);
+
+  const s0 = nav.snap(spawns[0].x, spawns[0].y);
   let routed = 0;
   const routeLog = [];
-  for (const e of mapDef.extracts) {
+  for (const e of exits) {
     const tgt = nav.snap(e.x, e.y);
     const p = nav.findPath(s0[0], s0[1], tgt[0], tgt[1]);
-    if (p && p.length) routed++; else routeLog.push(e.id);
+    if (p && p.length) routed++; else routeLog.push(e.name);
   }
-  check('a route exists from spawn 1 to every extract', routed === mapDef.extracts.length, 'unreachable: ' + routeLog.join(','));
+  check('a route exists from spawn 1 to every extract', routed === exits.length, 'unreachable: ' + routeLog.join(','));
 
   let pairOk = 0, pairTotal = 0;
-  for (const a2 of mapDef.spawns) {
-    for (const e of mapDef.extracts) {
+  for (const a2 of spawns) {
+    for (const e of exits) {
       pairTotal++;
       const sa = nav.snap(a2.x, a2.y), sb = nav.snap(e.x, e.y);
       if (sa && sb && nav.findPath(sa[0], sa[1], sb[0], sb[1])) pairOk++;
@@ -282,9 +293,35 @@ try {
   head('raid session');
   const { Raid } = await import('../src/raid/raid.js');
   state.initState();
-  const raid = new Raid({ mapDef, geo, nav, seed: 12345 });
+  const raid = new Raid({ mapDef, geo, seed: 12345 });
   check('containers placed', raid.containers.length > 40, String(raid.containers.length));
-  check('containers sit on walkable floor', raid.containers.every(c => nav.walkable(c.x, c.y)));
+  // loot on a floor is settled onto the mesh the first time that floor is
+  // walked, so visit them all before asking where anything is
+  for (const l of mapDef.levels) raid.navFor(l.key);
+  check('containers sit on walkable floor',
+        raid.containers.every(c => raid.navFor(c.level).walkable(c.x, c.y)),
+        raid.containers.filter(c => !raid.navFor(c.level).walkable(c.x, c.y)).length + ' off-mesh');
+  check('loot is spread over all four floors',
+        mapDef.levels.every(l => raid.containers.some(c => c.level === l.key)),
+        mapDef.levels.map(l => `${l.short}:${raid.containers.filter(c => c.level === l.key).length}`).join(' '));
+  check('four doors want a key and one wants forcing',
+        raid.doors.filter(d => d.state === 'key').length === 4
+        && raid.doors.filter(d => d.state === 'breach').length === 1,
+        raid.doors.filter(d => d.state !== 'free').map(d => `${d.id}:${d.state}`).join(' '));
+  check('every floor is reachable by stairs from the insertion floor', (() => {
+    const seen = new Set([raid.level]);
+    for (let i = 0; i < 4; i++) {
+      for (const s of raid.stairs) if (s.levels.some(l => seen.has(l))) s.levels.forEach(l => seen.add(l));
+    }
+    return seen.size === mapDef.levels.length;
+  })());
+  check('a shut door blocks and an open one does not', (() => {
+    const d = raid.doorsOn(raid.level).find(x => x.state === 'free');
+    if (!d) return false;
+    const blocked = !raid.navFor(d.level).walkable(d.x, d.y);
+    raid.openDoor(d, true);
+    return blocked && raid.navFor(d.level).walkable(d.x, d.y);
+  })());
   const totalLoot = raid.containers.reduce((n, c) => n + c.grid.count, 0);
   check('containers contain loot', totalLoot > 60, String(totalLoot));
   const lootValue = raid.containers.reduce((n, c) => n + c.grid.items().reduce((m, i) => m + i.value, 0), 0);
@@ -348,7 +385,7 @@ try {
   moveToSlot(new Item('rig_blackrock'), eq2.get('rig'));
   moveToSlot(new Item('bp_pilgrim'), eq2.get('backpack'));
   moveToSlot(new Item('sc_alpha'), eq2.get('secure'));
-  const raid2 = new Raid({ mapDef, geo, nav, seed: 999 });
+  const raid2 = new Raid({ mapDef, geo, seed: 999 });
 
   let taken = 0;
   for (const c of raid2.containers) {
@@ -364,7 +401,7 @@ try {
   check('loot is flagged as raid loot', carried.some(i => i.raidLoot));
   check('nothing is found-in-raid yet', carried.every(i => !i.fir));
 
-  const exit = mapDef.extracts.find(e => !e.req);
+  const exit = raid2.extracts.find(e => !e.req);
   const ep = nav.snap(exit.x, exit.y);
   raid2.player.x = ep[0]; raid2.player.y = ep[1];
   raid2.update(0.016);
@@ -395,7 +432,7 @@ try {
   moveToSlot(new Item('rig_blackrock'), eq4.get('rig'));
   moveToSlot(new Item('w_ak74n'), eq4.get('primary'));
   autoPlace(new Item('am_545ps', { stack: 60 }), eq4.carryGrids());
-  const raid4 = new Raid({ mapDef, geo, nav, seed: 4242 });
+  const raid4 = new Raid({ mapDef, geo, seed: 4242 });
   // raids place no hostiles while the farming loop is being built, so combat
   // coverage asks for them explicitly rather than relying on the raid default
   check('raids start with no hostiles', raid4.scavs.length === 0, String(raid4.scavs.length));
@@ -443,7 +480,7 @@ try {
 
   head('scavs run without throwing');
   state.initState();
-  const raid5 = new Raid({ mapDef, geo, nav, seed: 5150 });
+  const raid5 = new Raid({ mapDef, geo, seed: 5150 });
   raid5.spawnScavs(7);
   for (let i = 0; i < 900; i++) raid5.update(1 / 30);
   check('30 simulated seconds are stable', raid5.status === 'running', raid5.status);
@@ -456,7 +493,7 @@ try {
   const eq3 = state.game.equipment;
   moveToSlot(new Item('rig_blackrock'), eq3.get('rig'));
   moveToSlot(new Item('sc_alpha'), eq3.get('secure'));
-  const raid3 = new Raid({ mapDef, geo, nav, seed: 77 });
+  const raid3 = new Raid({ mapDef, geo, seed: 77 });
   autoPlace(new Item('ledx'), eq3.item('secure').grids);
   autoPlace(new Item('gpu'), eq3.carryGrids());
   const res3 = raid3.finish('kia');

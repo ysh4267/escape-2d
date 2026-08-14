@@ -7,9 +7,9 @@ import { on, emit, EV } from './core/events.js';
 import { loadItems, TPL } from './data/items.js';
 import { MAPS } from './data/maps.js';
 import { loadGeometry } from './raid/nav.js';
-import { game, initState, load, save, saveSoon, addMoney, netWorthRub } from './core/state.js';
+import { game, initState, load, save, saveSoon, addMoney, netWorthRub, wipe } from './core/state.js';
 import { Item, autoPlace, moveToSlot } from './inventory/model.js';
-import { initDnd } from './inventory/dnd.js';
+import { initDnd, isDragging } from './inventory/dnd.js';
 import { initTooltip } from './inventory/tooltip.js';
 import { initContextMenu, confirmDialog } from './inventory/dialogs.js';
 import { initAudio, audioState, setEnabled, setVolume } from './core/audio.js';
@@ -18,6 +18,7 @@ import { initStash, renderStash, activateStashContext } from './ui/stash.js';
 import { initDeploy, renderDeploy } from './ui/deploy.js';
 import { initTrade, renderTrade, activateTradeContext, rerollFence } from './ui/trade.js';
 import { startRaid, consumePendingMIA } from './ui/raid-ui.js';
+import { initFloorplan } from './ui/floorplan.js';
 
 let geo = null;
 
@@ -82,11 +83,21 @@ async function boot() {
   initStash();
   initTrade();
   initDeploy(geo, deploy);
+  initFloorplan();
 
   on(EV.SCREEN_CHANGED, (id) => {
     if (id === 'hideout:stash') { activateStashContext(); renderStash(); }
     if (id === 'hideout:traders') { activateTradeContext(); renderTrade(); }
-    if (id === 'hideout:raid') { renderDeploy(); }
+    // the deploy pane has no grids of its own, but a floating container window
+    // survives the pane switch — without its own context, an item ctrl+clicked
+    // in that window on the RAID pane still flew to the trader's sell table
+    if (id === 'hideout:raid') { activateStashContext(); renderDeploy(); }
+  });
+
+  // the brief is what the player reads to decide whether to go; a container
+  // window emptied over the deploy pane must not leave its numbers lying
+  on(EV.INVENTORY_CHANGED, () => {
+    if ($('#pane-raid')?.classList.contains('is-active')) renderDeploy();
   });
 
   wireGlobalKeys();
@@ -102,7 +113,9 @@ async function boot() {
     runDevHooks();
   }, 260);
 
-  window.addEventListener('beforeunload', save);
+  // a wipe reloads the page, and an unconditional save here wrote the profile
+  // straight back over the key that had just been removed
+  window.addEventListener('beforeunload', () => { if (!wiping) save(); });
   window.ESCAPE2D = { game, TPL, save, wipe: hardReset };
 }
 
@@ -158,6 +171,8 @@ function seedNewProfile() {
   save();
 }
 
+let wiping = false;
+
 async function hardReset() {
   const ok = await confirmDialog({
     title: 'WIPE PROFILE',
@@ -165,21 +180,29 @@ async function hardReset() {
     confirmLabel: 'WIPE', danger: true,
   });
   if (!ok) return;
-  localStorage.removeItem('escape2d.save.v1');
+  // shut the autosave down before the key goes: a debounced save still in
+  // flight, or the beforeunload save, would put the old profile right back
+  wiping = true;
+  game.settings.autoSave = false;
+  // wipe() knows the live SAVE_KEY; the hardcoded one silently missed it
+  wipe();
   location.reload();
 }
 
 // ---------------------------------------------------------
 // dev entry points, used by the headless verification pass:
 //   ?dev=traders | ?dev=deploy | ?dev=raid | ?dev=loot
+//   ?dev=map[:level] opens the floor plan, optionally on a named storey
+//   ?dev=floor:level drops the player onto that storey in the raid view
 // ---------------------------------------------------------
 function runDevHooks() {
-  const mode = new URLSearchParams(location.search).get('dev');
-  if (!mode) return;
+  const raw = new URLSearchParams(location.search).get('dev');
+  if (!raw) return;
+  const [mode, arg] = raw.split(':');
   if (mode === 'traders') { showPane('traders'); return; }
-  if (mode === 'trade-sell' || mode === 'trade-dialog') {
+  if (raw === 'trade-sell' || raw === 'trade-dialog') {
     showPane('traders');
-    import('./ui/trade.js').then((m) => m.devTrade(mode.slice(6)));
+    import('./ui/trade.js').then((m) => m.devTrade(raw.slice(6)));
     return;
   }
   if (mode === 'deploy') { showPane('raid'); return; }
@@ -206,19 +229,48 @@ function runDevHooks() {
     if (bag) import('./inventory/window.js').then((m) => m.openContainerWindow(bag));
     return;
   }
-  if (mode !== 'raid' && mode !== 'loot') return;
+  if (mode === 'selftest') { runSelfTest(); return; }
+  if (mode !== 'raid' && mode !== 'loot' && mode !== 'map' && mode !== 'floor') return;
 
   deploy('factory');
   import('./ui/raid-ui.js').then(({ currentRaid, openOverlay }) => {
     const raid = currentRaid();
     if (!raid) return;
     if (mode === 'raid') {
-      // walk toward the middle of the plant so the capture shows real ground
-      raid.moveTo(64, 68);
+      // Tour the processing area instead of whichever corner the random
+      // insertion picked, so the capture shows real ground with real fog
+      // behind it. Each leg starts when the last one runs out.
+      const legs = [[88, 44], [96, 62], [66, 82], [46, 66], [62, 40]];
+      const p = raid.nav.snap(52, 46, 40);
+      if (p) { raid.player.x = p[0]; raid.player.y = p[1]; }
+      let leg = 0;
+      const tour = setInterval(() => {
+        if (raid.path.length) return;
+        if (leg >= legs.length) return clearInterval(tour);
+        raid.moveTo(legs[leg][0], legs[leg][1]);
+        leg++;
+      }, 120);
+    }
+    if (mode === 'floor' || (mode === 'map' && arg)) {
+      // stand on a staircase that reaches the wanted storey and take it, so
+      // the capture shows a floor the player could really have got to
+      const want = arg || 'ground';
+      const stair = raid.stairs.find((s) => s.levels.includes(want)
+        && s.levels.includes(raid.level));
+      if (stair) {
+        raid.player.x = stair.x;
+        raid.player.y = stair.y;
+        raid.useStairs(stair, want);
+      }
+    }
+    if (mode === 'map' || mode === 'floor') {
+      // reveal the floor so the plan is not an empty sheet
+      for (const c of raid.containers) if (c.level === raid.level) raid.seen.add(c.id);
+      if (mode === 'map') import('./ui/floorplan.js').then((m) => m.openFloorplan());
     }
     if (mode === 'loot') {
       const p = raid.player;
-      const near = raid.containers
+      const near = raid.containersHere()
         .slice()
         .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
       if (near) {
@@ -231,6 +283,132 @@ function runDevHooks() {
       }
     }
   });
+}
+
+/**
+ * ?dev=selftest — walk the whole map and write the findings into the page as
+ * JSON, so the headless pass can assert on them instead of on a screenshot.
+ * It answers the questions that actually matter after the four-storey rework:
+ * does every floor build, does every locked door hold, and can the player
+ * still get from a spawn to every way out.
+ */
+function runSelfTest() {
+  const t0 = performance.now();
+  deploy('factory');
+  const startMs = Math.round(performance.now() - t0);
+  import('./ui/raid-ui.js').then(({ currentRaid }) => {
+    const raid = currentRaid();
+    const out = { ok: true, errors: [], startMs, levels: {}, doors: {}, reach: {}, stairs: {} };
+    if (!raid) {
+      out.ok = false;
+      out.errors.push('no raid');
+      return dump(out);
+    }
+    try {
+      for (const lvl of raid.map.levels) {
+        const nav = raid.navFor(lvl.key);
+        let walk = 0;
+        for (let i = 0; i < nav.walk.length; i++) walk += nav.walk[i];
+        const cs = raid.containers.filter((c) => c.level === lvl.key);
+        out.levels[lvl.key] = {
+          walkCells: walk,
+          containers: cs.length,
+          offFloor: cs.filter((c) => !nav.walkable(c.x, c.y)).length,
+          doors: raid.doorsOn(lvl.key).length,
+          stairs: raid.stairsOn(lvl.key).length,
+          extracts: raid.allExtracts.filter((e) => e.level === lvl.key).map((e) => e.name),
+        };
+      }
+      for (const d of raid.doors) {
+        if (d.state === 'free') continue;
+        out.doors[d.id] = { level: d.level, state: d.state, key: d.keyId, name: d.name };
+      }
+      // every floor has to be reachable from the one the player starts on
+      const seen = new Set([raid.map.startLevel]);
+      for (let pass = 0; pass < 4; pass++) {
+        for (const s of raid.stairs) {
+          if (s.levels.some((l) => seen.has(l))) for (const l of s.levels) seen.add(l);
+        }
+      }
+      out.stairs.reachableLevels = [...seen];
+
+      // and, with the right key in hand, every exit has to be walkable to
+      for (const lvl of raid.map.levels) {
+        const nav = raid.navFor(lvl.key);
+        for (const d of raid.doorsOn(lvl.key)) nav.setDoorPassable(d.navIndex, true);
+        // start where a player would actually arrive on this floor: an
+        // insertion point if the floor has any, otherwise off a staircase
+        const from = raid.geo.markers.spawns.find((s) => s.level === lvl.key)
+          || raid.stairsOn(lvl.key)[0];
+        if (!from) continue;
+        for (const e of raid.allExtracts.filter((x) => x.level === lvl.key)) {
+          const p = nav.findPath(from.x, from.y, e.x, e.y);
+          out.reach[`${lvl.key}/${e.name}`] = !!(p && p.length);
+        }
+      }
+      raid.refreshDoorAccess();
+      out.behaviour = doorBehaviour(raid);
+    } catch (err) {
+      out.ok = false;
+      out.errors.push(String(err && err.stack || err));
+    }
+    dump(out);
+  });
+
+  /** drive the three door behaviours the way a player would */
+  function doorBehaviour(raid) {
+    const r = {};
+    const step = (n, dt = 1 / 30) => { for (let i = 0; i < n; i++) raid.update(dt); };
+    const stand = (level, x, y) => {
+      raid.level = level;
+      const p = raid.navFor(level).snap(x, y, 30) || [x, y];
+      raid.player.x = p[0];
+      raid.player.y = p[1];
+      raid.path = [];
+    };
+
+    // 1. a plain door opens on its own as you walk into it
+    const free = raid.doorsOn('ground').find((d) => d.state === 'free');
+    if (free) {
+      const nx = Math.sin(free.a), ny = -Math.cos(free.a);   // across the leaf
+      stand('ground', free.x + nx * 2.6, free.y + ny * 2.6);
+      raid.moveTo(free.x - nx * 2.6, free.y - ny * 2.6);
+      step(240);
+      r.freeDoorOpensOnApproach = { id: free.id, open: free.open };
+    }
+
+    // 2. a keyed door refuses, then gives once the key is in hand
+    const keyed = raid.doorsOn('ground').find((d) => d.state === 'key');
+    if (keyed) {
+      stand('ground', keyed.x, keyed.y);
+      const before = raid.openDoor(keyed, true);
+      const key = new Item(Object.values(TPL).find((t) => t.id === keyed.keyId).key);
+      autoPlace(key, game.equipment.carryGrids());
+      raid.refreshDoorAccess();
+      const after = raid.openDoor(keyed);
+      r.keyedDoor = { id: keyed.id, withoutKey: before, withKey: after, usesLeft: key.res };
+    }
+
+    // 3. the breach door has no key anywhere; it has to be forced
+    const breach = raid.doors.find((d) => d.state === 'breach');
+    if (breach) {
+      stand(breach.level, breach.x, breach.y);
+      raid.openDoor(breach);
+      const started = !!raid.breaching;
+      step(Math.ceil((raid.map.breachTime + 0.4) * 30));
+      r.breachDoor = { id: breach.id, started, open: breach.open };
+    }
+    return r;
+  }
+
+  function dump(out) {
+    const pre = document.createElement('pre');
+    pre.id = 'selftest';
+    pre.textContent = JSON.stringify(out);
+    pre.style.cssText = 'position:fixed;inset:0;z-index:99;background:#000;color:#0f0;'
+      + 'font:11px monospace;white-space:pre-wrap;overflow:auto;padding:12px';
+    document.body.append(pre);
+  }
 }
 
 function deploy(mapId) {
@@ -269,7 +447,10 @@ function wireGlobalKeys() {
   paintSound();
 
   document.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT') return;
+    const tag = e.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+    // a dialog owns the keyboard, and switching panes mid-drag drops the item
+    if (!$('#modal-root').hidden || isDragging()) return;
     const hideout = $('#screen-hideout').classList.contains('is-active');
     if (!hideout) return;
     if (e.key === '1') showPane('stash');

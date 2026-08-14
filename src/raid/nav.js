@@ -13,9 +13,10 @@ const WALL_HALF = 0.22;           // half thickness stamped for wall centrelines
 const AGENT_PAD = 0.34;           // how far the player's centre stays off geometry
 
 export class NavGrid {
-  constructor(geo, levelKey = 'ground') {
+  constructor(geo, levelKey = 'ground', doors = []) {
     const L = geo.levels[levelKey];
     this.level = L;
+    this.levelKey = levelKey;
     const [, , vw, vh] = geo.viewBox;
     this.ox = 0;
     this.oy = 0;
@@ -33,6 +34,62 @@ export class NavGrid {
     this.erode(AGENT_PAD);
     this.bridges = this.bridgeComponents();
     this.buildCost();
+    this.installDoors(doors);
+  }
+
+  /**
+   * Doors sit on top of the static grid rather than inside it.
+   *
+   * A door owns the handful of cells that fill its own opening. While it is
+   * shut those cells are not walkable, which blocks movement and, because the
+   * visibility sweep marches the same mask, blocks sight through it as well.
+   * Opening one is a flag flip, no rebuild — the eroded grid, the bridges and
+   * the movement costs underneath never change.
+   */
+  installDoors(doors) {
+    this.doors = doors || [];
+    this.doorAt = new Int16Array(this.w * this.h).fill(-1);
+    this.doorOpen = new Uint8Array(this.doors.length);
+    this.doorPassable = new Uint8Array(this.doors.length);
+    this.doorCells = this.doors.map(() => []);
+
+    this.doors.forEach((d, i) => {
+      // the leaf spans the opening; pad it out to the wall faces on both sides
+      // so a shut door actually seals rather than leaving a sliver to slip past
+      const half = d.w / 2 + WALL_HALF + AGENT_PAD;
+      const nx = Math.cos(d.a), ny = Math.sin(d.a);
+      const [cx0, cy0] = this.toCell(d.x - nx * half, d.y - ny * half);
+      const [cx1, cy1] = this.toCell(d.x + nx * half, d.y + ny * half);
+      const r = Math.ceil((WALL_HALF + AGENT_PAD) / CELL) + 1;
+      const lo = [Math.min(cx0, cx1) - r, Math.min(cy0, cy1) - r];
+      const hi = [Math.max(cx0, cx1) + r, Math.max(cy0, cy1) + r];
+      for (let cy = lo[1]; cy <= hi[1]; cy++) {
+        for (let cx = lo[0]; cx <= hi[0]; cx++) {
+          if (!this.inBounds(cx, cy)) continue;
+          const idx = this.idx(cx, cy);
+          if (!this.walk[idx] || this.doorAt[idx] !== -1) continue;
+          const [wx, wy] = this.toWorld(cx, cy);
+          if (distToSegment(wx, wy, d.x - nx * half, d.y - ny * half,
+                            d.x + nx * half, d.y + ny * half) > CELL * 0.9) continue;
+          this.doorAt[idx] = i;
+          this.doorCells[i].push(idx);
+        }
+      }
+      this.doorOpen[i] = d.open ? 1 : 0;
+      this.doorPassable[i] = d.state === 'locked' ? 0 : 1;
+    });
+  }
+
+  setDoorOpen(i, open) { if (this.doorOpen) this.doorOpen[i] = open ? 1 : 0; }
+
+  /** can the player get through this door at all right now (key in hand, say) */
+  setDoorPassable(i, ok) { if (this.doorPassable) this.doorPassable[i] = ok ? 1 : 0; }
+
+  /** the door owning a world point, or -1 */
+  doorIndexAt(x, y) {
+    const [cx, cy] = this.toCell(x, y);
+    if (!this.inBounds(cx, cy)) return -1;
+    return this.doorAt ? this.doorAt[this.idx(cx, cy)] : -1;
   }
 
   /**
@@ -203,25 +260,54 @@ export class NavGrid {
 
   walkable(x, y) {
     const [cx, cy] = this.toCell(x, y);
-    return this.inBounds(cx, cy) && this.walk[this.idx(cx, cy)] === 1;
+    return this.cellWalkable(cx, cy);
   }
 
   cellWalkable(cx, cy) {
-    return this.inBounds(cx, cy) && this.walk[this.idx(cx, cy)] === 1;
+    if (!this.inBounds(cx, cy)) return false;
+    const i = this.idx(cx, cy);
+    if (this.walk[i] !== 1) return false;
+    const d = this.doorAt ? this.doorAt[i] : -1;
+    return d === -1 || this.doorOpen[d] === 1;
+  }
+
+  /**
+   * Route planning is allowed to count on a door the player could open on the
+   * way — otherwise every shut door would read as a wall and half the plant
+   * would look unreachable. A door with no key in the player's hands, or one
+   * that never opens at all, stays a wall here too.
+   */
+  cellPathable(i) {
+    if (this.walk[i] !== 1) return false;
+    const d = this.doorAt ? this.doorAt[i] : -1;
+    return d === -1 || this.doorOpen[d] === 1 || this.doorPassable[d] === 1;
   }
 
   /** nearest walkable cell centre to an arbitrary point, searched in rings */
-  snap(x, y, maxRings = 60) {
+  snap(x, y, maxRings = 60) { return this.snapWith(x, y, maxRings, false); }
+
+  /**
+   * The same search, but a shut-yet-openable door still counts as floor.
+   * Snapping a destination with the strict test would drag a click made in the
+   * room behind a door back through the doorway to this side of it, and the
+   * player would walk up to the door and stop.
+   */
+  snapPathable(x, y, maxRings = 60) { return this.snapWith(x, y, maxRings, true); }
+
+  snapWith(x, y, maxRings, loose) {
+    const ok = (cx, cy) => (loose
+      ? this.inBounds(cx, cy) && this.cellPathable(this.idx(cx, cy))
+      : this.cellWalkable(cx, cy));
     let [cx, cy] = this.toCell(x, y);
     cx = Math.max(0, Math.min(this.w - 1, cx));
     cy = Math.max(0, Math.min(this.h - 1, cy));
-    if (this.cellWalkable(cx, cy)) return this.toWorld(cx, cy);
+    if (ok(cx, cy)) return this.toWorld(cx, cy);
     for (let r = 1; r <= maxRings; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
           const nx = cx + dx, ny = cy + dy;
-          if (this.cellWalkable(nx, ny)) return this.toWorld(nx, ny);
+          if (ok(nx, ny)) return this.toWorld(nx, ny);
         }
       }
     }
@@ -240,15 +326,16 @@ export class NavGrid {
 
   /** A* -> array of world-space waypoints (excluding the start), or null */
   findPath(sx, sy, tx, ty) {
-    const s = this.snap(sx, sy);
-    const t = this.snap(tx, ty);
+    const s = this.snapPathable(sx, sy);
+    const t = this.snapPathable(tx, ty);
     if (!s || !t) return null;
     const [scx, scy] = this.toCell(s[0], s[1]);
     const [tcx, tcy] = this.toCell(t[0], t[1]);
     if (scx === tcx && scy === tcy) return [[t[0], t[1]]];
     if (this.lineClear(sx, sy, t[0], t[1])) return [[t[0], t[1]]];
 
-    const { w, h, walk, cost } = this;
+    const { w, h, cost } = this;
+    const pass = (i) => this.cellPathable(i);
     const n = w * h;
     const startI = scy * w + scx;
     const goalI = tcy * w + tcx;
@@ -284,9 +371,9 @@ export class NavGrid {
         const nx = cx + dx, ny = cy + dy;
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
         const ni = ny * w + nx;
-        if (!walk[ni] || closed[ni]) continue;
+        if (closed[ni] || !pass(ni)) continue;
         // no cutting diagonal corners through geometry
-        if (dx && dy && (!walk[cy * w + nx] || !walk[ny * w + cx])) continue;
+        if (dx && dy && (!pass(cy * w + nx) || !pass(ny * w + cx))) continue;
         const step = base * cost[ni];
         const ng = g[cur] + step;
         if (ng < g[ni]) {
@@ -306,10 +393,19 @@ export class NavGrid {
     while (cur !== -1) { cells.push(cur); cur = from[cur]; }
     cells.reverse();
     const pts = cells.map((i) => this.toWorld(i % this.w, (i / this.w) | 0));
-    const snapped = this.snap(tx, ty);
+    const snapped = this.snapPathable(tx, ty);
     if (snapped) pts.push(snapped);
     return smooth(this, pts);
   }
+}
+
+// ---------------------------------------------------------
+function distToSegment(px, py, x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 0 ? ((px - x0) * dx + (py - y0) * dy) / len2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.hypot(px - (x0 + dx * t), py - (y0 + dy * t));
 }
 
 // ---------------------------------------------------------
