@@ -34,8 +34,9 @@ export function refreshTopbar() {
 const ICON_FOR = { ok: 'check', warn: 'warn', bad: 'warn', info: 'info' };
 
 export function toast(text, kind = 'info', ttl = 2600) {
-  // only the refusals get a cue; a chime on every confirmation would nag
-  if (kind === 'warn' || kind === 'bad') sfx.ui('error');
+  // No cue. Every one of these is an ordinary refusal — the stash is full, the
+  // trader is out of stock, that slot is taken — and the toast already says so.
+  // Keep `ui_error` for something that has actually gone wrong.
   const host = $('#toasts');
   const node = el('div', { class: `toast toast--${kind}` }, icon(ICON_FOR[kind] || 'info'), el('span', {}, text));
   host.append(node);

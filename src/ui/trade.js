@@ -715,7 +715,7 @@ function renderBuyTable(t, host) {
 /** commit every offer on the table as one transaction, the way DEAL! does */
 function doBuyStaged(t) {
   closeContext();
-  if (dealBlocker(t)) { sfx.ui('error'); return; }
+  if (dealBlocker(t)) return;        // the button already says why it will not go through
   const cur = stagedCurrency(t);
   // charge for what is actually handed over: if the shelf ran short between
   // staging and DEAL!, the staged total would have billed for the difference
