@@ -105,12 +105,12 @@ covering footsteps by gait, per-material container rummaging, item handling
 keyed to what the item *is*, interface and trader clicks, weapon reports,
 extraction and death.
 
-Two packs can back them. The main one is third-party audio, so it ships sealed:
-a build step deflates the 93 clips into a single AES-256-GCM container, and only
-that container is tracked — 94 files and 1164 KiB become one request of 870 KiB.
-The deploy supplies the key from a repository secret and the browser unseals it
-at boot; with no key the game falls back to the CC0 pack, and any cue with no
-sample is a silent no-op.
+The audio is third-party, so it ships sealed: a build step deflates the 93 clips
+into a single AES-256-GCM container, and only that container is tracked — 94
+files and 1164 KiB become one request of 870 KiB. The page unseals it on load.
+The seal is nominal, not protection: a static site has to carry the key, so it
+is right there in the source. What it buys is that the pack is not a folder of
+ready-to-play files. Any cue with no sample behind it is a silent no-op.
 
 The mapping follows the game's own taxonomy rather than one invented here:
 footsteps are `<gait>_<surface>` layered with a `gear_stereo` webbing rustle,
@@ -153,8 +153,7 @@ python -m http.server 8777
 | `tools/build_items.py` | builds `src/data/items-db.json` and downloads item artwork |
 | `tools/selection.py` | the curated item list the builder resolves |
 | `tools/build_map.py` | extracts Factory wall / floor / obstacle geometry into `src/data/map-factory.json` |
-| `tools/build_sounds.py` | downloads the CC0 sound packs and transcodes the effects into `assets/sfx/` |
-| `tools/pack_sfx.py` | compresses and seals the main sound pack (and `--unpack` reverses it) |
+| `tools/pack_sfx.py` | compresses and seals the sound pack (and `--unpack` reverses it) |
 | `tools/sfx_picks.py` | which clip backs which cue |
 | `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |
 | `tools/preview_map.html` | renders the raw extracted geometry |
@@ -167,7 +166,6 @@ Regenerate everything:
 cd tools
 python build_items.py --report
 python build_map.py
-python build_sounds.py     # needs ffmpeg and py7zr
 ```
 
 The item builder joins three public data sets: grid footprints, weights, stack
@@ -192,11 +190,8 @@ Battlestate Games; this project is not affiliated with or endorsed by them.
   [SPT](https://github.com/sp-tarkov/server) database dumps.
 - **Extract names, spawn locations and container behaviour** — the Escape From
   Tarkov wiki.
-- **Sound effects** — the CC0 fallback pack is
-  [Thimras](https://opengameart.org/content/metal-footsteps-on-concrete),
-  "Metal footsteps on concrete". The main pack is third-party audio whose
-  rights stay with their owner; it ships sealed, with the key held outside
-  this repository.
+- **Sound effects** — third-party audio whose rights stay with their owner. It
+  ships sealed.
 
 Because the map geometry is CC BY-NC-SA, this project inherits the same terms:
 share alike, non-commercial, with attribution.
@@ -205,9 +200,10 @@ share alike, non-commercial, with attribution.
 
 That licence covers only what the authors made, not the third-party material
 above. The sealed pack is encrypted because its contents are not ours to hand
-out, and unsealing it is a deliberate act nothing here permits. **Reuse or
-redistribute any of this, in any form, and you do so at your own risk** —
-clearing the rights is yours to do, and the authors carry no liability for what
-follows. Provided as is, without warranty.
+out; the key is in the source only because the page needs it, and that is not
+permission to use it. **Unseal the pack for anything but playing this game, or
+reuse and redistribute any of this in any form, and you do so at your own
+risk** — clearing the rights is yours to do, and the authors carry no liability
+for what follows. Provided as is, without warranty.
 
 Full text in [LICENSE](LICENSE).

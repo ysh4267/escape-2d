@@ -21,15 +21,15 @@ blob. That is deflate-raw'd, then AES-256-GCM'd into:
     magic "E2SFX1" | salt (16) | iv (12) | ciphertext || tag (16)
 
 The key is PBKDF2-HMAC-SHA256 over a passphrase, 200k iterations. Both ends of
-that are native: `cryptography` here, WebCrypto in src/core/audio.js. The
-passphrase is never written to the repo - it lives in the SFX_PACK_KEY
-environment variable locally and in a repository secret for the deploy.
+that are native: `cryptography` here, WebCrypto in src/core/audio.js. Pass the
+passphrase with --key or in SFX_PACK_KEY; it must match SEALED_KEY in
+src/core/audio.js, which is where the page reads it from.
 
-Note what this is and is not. The deployed site has to hand the key to the
-browser to play anything, so anyone determined enough can recover it. This
-keeps Battlestate Games' audio from sitting in a public tree as ready-to-use
-ogg files; it is not, and cannot be, real protection against someone who sets
-out to break it.
+Note what this is and is not. The passphrase is in the page source, because a
+static site has to hold it to play anything - the seal is nominal and anyone
+who wants the audio can have it. What it does buy: the pack is not a folder of
+ready-to-play ogg files, so taking the audio back out is a deliberate step
+someone chooses to take. LICENSE puts the consequences of that on them.
 
     python -m pip install cryptography
 """

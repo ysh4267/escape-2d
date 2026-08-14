@@ -1,38 +1,33 @@
 // =========================================================
 // sound
 //
-// Three sources can back the game, tried in this order at boot:
+// Two sources can back the game, tried in this order at boot:
 //
 //   assets/sfx-eft/*.ogg    loose clips, there only if someone has run
 //                           tools/extract_tarkov_sfx.py against their own
 //                           Escape From Tarkov install. Gitignored.
 //   assets/sfx-eft/pack.bin the same clips deflated into one container and
 //                           sealed with AES-256-GCM (tools/pack_sfx.py).
-//                           This is what the repository ships. The deploy
-//                           drops the passphrase beside it as key.json, out
-//                           of a repository secret, so the key is never in
-//                           the tree; without it this is opaque bytes.
-//   assets/sfx/             the CC0 fallback.
+//                           This is what the repository ships, and the
+//                           passphrase is the constant right below.
 //
 // Whichever answers first wins; every call site talks to the same cue names
 // either way, and a cue with no file behind it is a silent no-op.
 //
-// The audio in the sealed pack is Battlestate Games' copyright. Sealing it
-// keeps it out of a public tree as ready-to-play files - it is deliberately
-// not a protection scheme, since the browser has to be handed the key to
-// play anything at all.
+// The key sits in this file on purpose. A static page has to hold it to play
+// anything, so hiding it would buy nothing real - the seal is nominal. What
+// it does buy is that the pack is not a folder of ready-to-play files: taking
+// the audio back out is a deliberate step someone has to choose to take, and
+// LICENSE puts the consequences of that on them.
 //
 // Three buses hang off the master gain — world foley, interface, ambience —
 // so the interface can sit under the raid without a separate mixer.
 // =========================================================
 
-const PACKS = [
-  { dir: 'assets/sfx-eft/', manifest: 'assets/sfx-eft/manifest.json' },
-  { dir: 'assets/sfx/', manifest: 'assets/sfx/manifest.json' },
-];
-
-/** the sealed pack, and where the deploy leaves the key for it */
-const SEALED = { blob: 'assets/sfx-eft/pack.bin', key: 'assets/sfx-eft/key.json' };
+const LOOSE = { dir: 'assets/sfx-eft/', manifest: 'assets/sfx-eft/manifest.json' };
+const SEALED_BLOB = 'assets/sfx-eft/pack.bin';
+/** passphrase for the sealed pack; see the note at the top of this file */
+export const SEALED_KEY = 'aAzve0EY1zPMn9Z28Z-1rzq3hX_bh36z';
 /** header of tools/pack_sfx.py: magic(6) | salt(16) | iv(12) | ciphertext+tag */
 const SEALED_MAGIC = 'E2SFX1';
 const SEALED_SALT = 16;
@@ -120,7 +115,7 @@ let lastFootstep = 0;
 
 /** cue -> [file base names] */
 let manifest = {};
-let packDir = PACKS[1].dir;
+let packDir = LOOSE.dir;
 let packReady = false;
 
 /** file base name -> AudioBuffer | 'pending' | 'failed' */
@@ -168,22 +163,18 @@ function packLoaded() {
 
 /** pick whichever source is actually deployed */
 async function loadManifest() {
-  if (await tryLoose(PACKS[0])) return;    // local extraction, if there is one
-  if (await trySealed()) return;           // what the repository ships
-  if (await tryLoose(PACKS[1])) return;    // CC0
+  if (await tryLoose()) return;   // a local extraction, if there is one
+  if (await trySealed()) return;  // what the repository ships
   packReady = true;   // nothing to play; every cue becomes a no-op
 }
 
-/** a directory of loose ogg files next to its manifest */
-async function tryLoose(pack) {
+/** the loose clips, next to their manifest */
+async function tryLoose() {
   try {
-    const res = await fetch(asset(pack.manifest));
+    const res = await fetch(asset(LOOSE.manifest));
     if (!res.ok) return false;
-    const data = await res.json();
-    // the CC0 pack ships a bare array of footstep names; the extracted pack
-    // ships the full cue map
-    manifest = Array.isArray(data) ? { step_walk: data, step_run: data, step_sprint: data } : data;
-    packDir = pack.dir;
+    manifest = await res.json();
+    packDir = LOOSE.dir;
     packLoaded();
     return true;
   } catch {
@@ -192,22 +183,16 @@ async function tryLoose(pack) {
 }
 
 /**
- * One request for the sealed container, then unseal it in the background:
- * PBKDF2 the deploy's key into an AES-256-GCM key, decrypt, inflate, and cut
- * the result into one ogg per clip. Any missing piece - no key.json on a
- * local checkout, an engine without DecompressionStream - just falls through
- * to the next source.
+ * One request for the sealed container, then unseal it as the page loads:
+ * PBKDF2 the passphrase into an AES-256-GCM key, decrypt, inflate, and cut the
+ * result into one ogg per clip. Any missing piece - no pack.bin, an engine
+ * without DecompressionStream - just falls through to the next source.
  */
 async function trySealed() {
   if (!window.crypto?.subtle || typeof DecompressionStream !== 'function') return false;
   try {
-    const [keyRes, packRes] = await Promise.all([
-      fetch(asset(SEALED.key)),
-      fetch(asset(SEALED.blob)),
-    ]);
-    if (!keyRes.ok || !packRes.ok) return false;
-    const passphrase = (await keyRes.json()).key;
-    if (!passphrase) return false;
+    const packRes = await fetch(asset(SEALED_BLOB));
+    if (!packRes.ok) return false;
 
     const bytes = new Uint8Array(await packRes.arrayBuffer());
     if (new TextDecoder().decode(bytes.subarray(0, SEALED_MAGIC.length)) !== SEALED_MAGIC) return false;
@@ -217,7 +202,7 @@ async function trySealed() {
     const iv = bytes.subarray(at, (at += SEALED_IV));
 
     const material = await crypto.subtle.importKey(
-      'raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey'],
+      'raw', new TextEncoder().encode(SEALED_KEY), 'PBKDF2', false, ['deriveKey'],
     );
     const key = await crypto.subtle.deriveKey(
       { name: 'PBKDF2', salt, iterations: PBKDF2_ROUNDS, hash: 'SHA-256' },
@@ -236,7 +221,7 @@ async function trySealed() {
     for (const f of header.files) packBlobs.set(f.name, body.slice(f.off, f.off + f.len));
 
     manifest = header.manifest;
-    packDir = PACKS[0].dir;
+    packDir = LOOSE.dir;
     packLoaded();
     return true;
   } catch {
@@ -362,7 +347,7 @@ export const sfx = {
     const now = performance.now();
     if (now - lastFootstep < mix.gap) return;
     lastFootstep = now;
-    // the walk set doubles for every gait in the CC0 fallback
+    // a pack without the faster gaits falls back to the walk set
     const cue = hasCue(mix.cue) ? mix.cue : 'step_walk';
     play(cue, { gain: mix.gain, rate: mix.rate, limit: 0 });
   },

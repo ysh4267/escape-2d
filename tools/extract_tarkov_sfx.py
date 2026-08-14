@@ -5,12 +5,12 @@ and transcode them into the small ogg set this project plays.
 
     python extract_tarkov_sfx.py --index          # catalogue every AudioClip
     python extract_tarkov_sfx.py --search foot    # find clips by name
-    python extract_tarkov_sfx.py --extract        # write assets/sfx/*.ogg
+    python extract_tarkov_sfx.py --extract        # write assets/sfx-eft/*.ogg
 
 The audio in an EFT install is Battlestate Games' copyrighted material. It is
 fine to use it locally from a copy you own; it is NOT ours to redistribute, so
-everything this script writes lands in a gitignored directory and the public
-build falls back to the CC0 set in assets/sfx.
+everything this script writes lands in a gitignored directory. Only the sealed
+container tools/pack_sfx.py builds from it is tracked.
 
 Bundles are plain UnityFS (Unity 2022.3), so UnityPy reads them directly:
     python -m pip install UnityPy

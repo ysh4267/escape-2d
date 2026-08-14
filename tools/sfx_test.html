@@ -21,27 +21,24 @@ const note = (t) => line('  ..    ' + t, 'dim');
 
 // ---------------------------------------------------------
 // Which source is deployed? Same order as src/core/audio.js: the loose
-// extracted clips, then the sealed container, then CC0. Both of the first two
-// are the EFT set, so either one enables the coverage checks; a checkout with
-// no key.json only has the fallback and they are skipped.
+// extracted clips, then the sealed container. The repository ships the sealed
+// one, so a clean checkout still gets the full coverage checks below.
 head('sound pack');
 let pack = null, manifest = null, source = null;
 /** base name -> Uint8Array, only when the sealed container is what answered */
 let blobs = null;
 
 /** mirror of tools/pack_sfx.py: magic | salt(16) | iv(12) | ciphertext+tag */
+const { SEALED_KEY } = await import('../src/core/audio.js');
 async function unseal() {
   if (!window.crypto?.subtle || typeof DecompressionStream !== 'function') return false;
-  const [keyRes, packRes] = await Promise.all([
-    fetch('../assets/sfx-eft/key.json'), fetch('../assets/sfx-eft/pack.bin'),
-  ]);
-  if (!keyRes.ok || !packRes.ok) return false;
-  const passphrase = (await keyRes.json()).key;
+  const packRes = await fetch('../assets/sfx-eft/pack.bin');
+  if (!packRes.ok) return false;
   const bytes = new Uint8Array(await packRes.arrayBuffer());
   if (new TextDecoder().decode(bytes.subarray(0, 6)) !== 'E2SFX1') return false;
 
   const material = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+    'raw', new TextEncoder().encode(SEALED_KEY), 'PBKDF2', false, ['deriveKey']);
   const key = await crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt: bytes.subarray(6, 22), iterations: 200000, hash: 'SHA-256' },
     material, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
@@ -59,13 +56,13 @@ async function unseal() {
   return true;
 }
 
-async function tryLoose(dir, label) {
+async function tryLoose() {
   try {
-    const res = await fetch(dir + 'manifest.json');
+    const res = await fetch('../assets/sfx-eft/manifest.json');
     if (!res.ok) return false;
     manifest = await res.json();
-    pack = dir;
-    source = label;
+    pack = '../assets/sfx-eft/';
+    source = 'loose clips from a local EFT install';
     return true;
   } catch { return false; }
 }
@@ -77,23 +74,15 @@ async function trySealed() {
     return false;
   }
   pack = '../assets/sfx-eft/';
-  source = 'sealed pack.bin, unsealed with key.json';
+  source = 'sealed pack.bin, unsealed in the page';
   return true;
 }
 
-await tryLoose('../assets/sfx-eft/', 'loose clips from a local EFT install')
-  || await trySealed()
-  || await tryLoose('../assets/sfx/', 'CC0 fallback');
+await tryLoose() || await trySealed();
 check('a sound pack is present', !!pack, 'none found');
-const extracted = pack === '../assets/sfx-eft/';
 note(`pack: ${pack}  (${source})`);
 
-if (Array.isArray(manifest)) {
-  // the CC0 pack is a bare list of footstep files
-  check('fallback manifest lists footsteps', manifest.length >= 4 && manifest.every((n) => /^step_\d$/.test(n)),
-    manifest.join(','));
-  manifest = { step_walk: manifest, step_run: manifest, step_sprint: manifest };
-} else {
+{
   check('cue manifest is an object of arrays',
     !!manifest && Object.values(manifest).every((v) => Array.isArray(v) && v.length));
 }
@@ -167,7 +156,7 @@ for (const f of SRC) {
   for (const m of txt.matchAll(/sfx\.trade\(\s*'([a-z0-9_]+)'/g)) wanted.add('trade_' + m[1]);
 }
 note(`source asks for ${wanted.size} cues by name`);
-if (extracted) {
+if (pack) {
   const absent = [...wanted].filter((c) => !manifest[c]);
   check('every cue named in source exists in the pack', absent.length === 0, absent.join(','));
 
@@ -183,7 +172,7 @@ if (extracted) {
     check(`cue present: ${cue}`, !!manifest[cue]);
   }
 } else {
-  note('CC0 fallback deployed — cue coverage is only checked against the extracted pack');
+  note('no pack answered — cue coverage cannot be checked');
 }
 
 // ---------------------------------------------------------
