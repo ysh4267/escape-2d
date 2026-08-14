@@ -169,6 +169,10 @@ function beginDrag(e) {
     lastX: e.clientX,
     lastY: e.clientY,
     ghost: null,
+    // where it was picked up from, so a drop that does not fit can tell
+    // shuffling things about inside one store from failing to get something
+    // into it from elsewhere
+    from: item.holder?.kind === 'grid' ? item.holder.grid : null,
   };
   pending = null;
 
@@ -268,8 +272,20 @@ function clearHighlights() {
   }
 }
 
+/**
+ * Two grids are the same store when they are the same grid, or two grids of
+ * one container — the seven pouches of a rig are one inventory to the player,
+ * not seven. Shuffling things about inside a store and finding the new spot
+ * does not fit is not a refusal worth a noise; failing to get something into a
+ * store from somewhere else is.
+ */
+function sameStore(a, b) {
+  if (!a || !b) return false;
+  return a === b || (!!a.owner && a.owner === b.owner);
+}
+
 function commitDrag(e) {
-  const { item, target } = drag;
+  const { item, target, from } = drag;
   const rot = drag.rot;
   const ctrl = drag.ctrl || (e && (e.ctrlKey || e.metaKey));
   let changed = false;
@@ -295,7 +311,7 @@ function commitDrag(e) {
       const res = moveToGrid(item, target.grid, target.x, target.y, rot);
       changed = res.ok;
       if (res.ok) sfx.item(item.tpl, 'drop');
-      else emit(EV.TOAST, { kind: 'warn', text: 'No room there' });
+      else if (!sameStore(from, target.grid)) emit(EV.TOAST, { kind: 'warn', text: 'No room there' });
     } else if (target.kind === 'slot') {
       const res = moveToSlot(item, target.slot);
       changed = res.ok;
@@ -303,7 +319,8 @@ function commitDrag(e) {
       else emit(EV.TOAST, { kind: 'warn', text: 'Slot is not empty' });
     }
   } else if (target && !target.ok) {
-    emit(EV.TOAST, { kind: 'warn', text: target.kind === 'slot' ? 'Wrong slot' : 'Blocked' });
+    if (target.kind === 'slot') emit(EV.TOAST, { kind: 'warn', text: 'Wrong slot' });
+    else if (!sameStore(from, target.grid)) emit(EV.TOAST, { kind: 'warn', text: 'Blocked' });
   }
 
   endDrag();

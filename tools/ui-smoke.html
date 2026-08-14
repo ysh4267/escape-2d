@@ -576,6 +576,90 @@ try {
     }
   }
 
+  head('a drop that does not fit only complains when it came from elsewhere');
+  {
+    const toasts = $('#toasts');
+    const stashHost = $('#stash-host');
+    const gridEl = () => $('#stash-host .grid');
+    const gr = gridEl().getBoundingClientRect();
+    const cw = (gr.width - 2) / game.stash.w, ch = (gr.height - 2) / game.stash.h;
+
+    const dragTo = async (tile, cx, cy) => {
+      fire(tile, 'pointerdown');
+      fire(D, 'pointermove', { x: cx - 40, y: cy - 40 });
+      fire(D, 'pointermove', { x: cx, y: cy });
+      fire(D, 'pointerup', { x: cx, y: cy, buttons: 0 });
+      await sleep(160);
+    };
+
+    // a cell coordinate in the stash, scrolled into view first
+    const dropOnCell = async (item, tx, ty) => {
+      stashHost.scrollTop = Math.max(0, Math.min(ty, game.stash.posOf(item).y) * ch - 140);
+      await sleep(60);
+      const tile = $$('#stash-host .item').find((n) => n._item === item);
+      if (!tile) return false;
+      const gb = gridEl().getBoundingClientRect();
+      await dragTo(tile, gb.left + 1 + tx * cw + cw / 2, gb.top + 1 + ty * ch + ch / 2);
+      return true;
+    };
+
+    const ones = game.stash.items().filter((i) => i.w === 1 && i.h === 1 && !i.isContainer);
+    const mover = ones[0];
+    const blocker = ones.find((i) => i !== mover && !i.canStackWith(mover));
+    check('the stash holds two items that will not stack', !!mover && !!blocker,
+          `${ones.length} single-cell items`);
+    if (mover && blocker) {
+      // control first: a drag that DOES fit must move the item, or the two
+      // silence checks below would pass simply because nothing happened
+      let free = null;
+      for (let y = 0; y < game.stash.h && !free; y++) {
+        for (let x = 0; x < game.stash.w; x++) {
+          if (game.stash.canPlace(mover, x, y, 0, { ignore: mover })) { free = { x, y }; break; }
+        }
+      }
+      toasts.replaceChildren();
+      const ran = free && await dropOnCell(mover, free.x, free.y);
+      const now = game.stash.posOf(mover);
+      check('a drag that fits still lands (guard against a vacuous test)',
+            ran && now && now.x === free.x && now.y === free.y,
+            `${JSON.stringify(now)} wanted ${JSON.stringify(free)}`);
+
+      const bp = game.stash.posOf(blocker), mp = game.stash.posOf(mover);
+      toasts.replaceChildren();
+      await dropOnCell(mover, bp.x, bp.y);
+      check('rearranging inside the stash onto a taken cell says nothing',
+            toasts.children.length === 0, toasts.textContent);
+      check('and the move was simply cancelled',
+            game.stash.posOf(mover)?.x === mp.x && game.stash.posOf(mover)?.y === mp.y,
+            JSON.stringify(game.stash.posOf(mover)) + ' was ' + JSON.stringify(mp));
+    }
+
+    // from the stash into a pocket that is far too small: a different store
+    const pocket = $$('#equipment-host .pockets .grid')[0];
+    const big = game.stash.items().find((i) => i.w * i.h > 1 && !i.isContainer);
+    check('there is a pocket and something too big for it', !!pocket && !!big,
+          `pocket=${!!pocket} big=${big ? big.w + 'x' + big.h : 'none'}`);
+    if (pocket && big) {
+      pocket.scrollIntoView({ block: 'center' });
+      stashHost.scrollTop = Math.max(0, game.stash.posOf(big).y * ch - 140);
+      await sleep(80);
+      const tile = $$('#stash-host .item').find((n) => n._item === big);
+      const pr = pocket.getBoundingClientRect();
+      const onScreen = pr.top > 0 && pr.bottom < W.innerHeight && pr.left > 0 && pr.right < W.innerWidth;
+      check('the pocket is actually under the cursor (guard against a vacuous test)',
+            !!tile && onScreen, `tile=${!!tile} rect=${JSON.stringify(pr.toJSON())}`);
+      const before = game.stash.posOf(big);
+      toasts.replaceChildren();
+      if (tile && onScreen) await dragTo(tile, pr.left + pr.width / 2, pr.top + pr.height / 2);
+      check('but failing to get it into a pocket still warns',
+            toasts.children.length === 1 && /warn/.test(toasts.firstElementChild.className),
+            `${toasts.children.length} toasts: ${toasts.textContent}`);
+      check('and it stayed where it was', JSON.stringify(game.stash.posOf(big)) === JSON.stringify(before));
+      toasts.replaceChildren();
+    }
+    stashHost.scrollTop = 0;
+  }
+
   head('final');
   check('still no runtime errors', $('#errbox').style.display === 'none',
         $('#errbox').textContent.slice(0, 600));
