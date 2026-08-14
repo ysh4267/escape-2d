@@ -24,14 +24,5 @@ is not ours to redistribute, so the directory is gitignored and never
 deployed. Nothing in the repository depends on it — the game detects the
 pack at boot and falls back to the CC0 set when it is absent.
 
-To build it yourself, from a machine with EFT installed:
-
-```sh
-python -m pip install UnityPy
-cd tools
-python extract_tarkov_sfx.py --game "E:\Program Files\EFT" --index
-python extract_tarkov_sfx.py --extract
-```
-
 Escape From Tarkov is a trademark of Battlestate Games. This is a
 non-commercial fan project and is not affiliated with or endorsed by them.
