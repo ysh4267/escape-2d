@@ -2,7 +2,7 @@
 // stash screen: gear doll + the big stash grid
 // =========================================================
 
-import { $, el, fmtWeight, debounce } from '../core/util.js';
+import { $, el, fmtWeight, debounce, keepScroll } from '../core/util.js';
 import { game, saveSoon } from '../core/state.js';
 import { renderGrid } from '../inventory/view.js';
 import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
@@ -59,12 +59,15 @@ export function renderStash() {
   const stHost = $('#stash-host');
   if (!eqHost || !stHost) return;
 
-  renderGearSlots(game.equipment, eqHost);
-  if (carryHost) renderCarry(game.equipment, carryHost);
+  // every one of these is a scroll box; replacing its children collapses the
+  // content and would otherwise scroll the player back to the top on each move
+  keepScroll([eqHost, carryHost, stHost], () => {
+    renderGearSlots(game.equipment, eqHost);
+    if (carryHost) renderCarry(game.equipment, carryHost);
+    stHost.replaceChildren();
+    stHost.append(renderGrid(game.stash, { filterFn: filterText ? matches : null }));
+  });
   $('#equip-weight').textContent = fmtWeight(game.equipment.weight());
-
-  stHost.replaceChildren();
-  stHost.append(renderGrid(game.stash, { filterFn: filterText ? matches : null }));
 
   markOpenable(eqHost);
   markOpenable(carryHost);
@@ -120,7 +123,7 @@ export function isOnCharacter(item) {
 }
 
 // ---------------------------------------------------------
-export function buildMenu(item, where, extra = []) {
+export function buildMenu(item, where, extra = [], opts = {}) {
   const actions = [];
   const examined = isKnown(item);
 
@@ -133,7 +136,7 @@ export function buildMenu(item, where, extra = []) {
   }
 
   if (examined) {
-    if (item.isContainer) {
+    if (item.isContainer && !opts.noOpen) {
       actions.push({
         label: 'OPEN', icon: 'box', key: 'DBL-CLICK',
         run: () => openContainerWindow(item),
@@ -141,7 +144,8 @@ export function buildMenu(item, where, extra = []) {
     }
     if (item.tpl.stack > 1 && item.stack > 1) {
       actions.push({
-        label: 'SPLIT', icon: 'split', key: 'CTRL+DRAG',
+        // the trader screen turns ctrl+drag off, so it must not advertise it
+        label: 'SPLIT', icon: 'split', key: dndContext.requestSplit ? 'CTRL+DRAG' : null,
         run: () => splitDialog(item, (n) => {
           const copy = splitStack(item, n);
           if (!copy) return;
@@ -186,7 +190,8 @@ export function buildMenu(item, where, extra = []) {
 
   actions.push('-');
   actions.push({
-    label: 'DISCARD', icon: 'discard', danger: true, key: 'DEL',
+    // no DEL hint: there is no selection outside this menu for a key to act on
+    label: 'DISCARD', icon: 'discard', danger: true,
     run: async () => {
       const ok = await confirmDialog({
         title: 'DISCARD ITEM',

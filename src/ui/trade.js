@@ -19,17 +19,17 @@
 // side pops a confirmation modal - staging is the confirmation.
 // =========================================================
 
-import { $, $$, el, icon, fmtNum, clamp } from '../core/util.js';
+import { $, $$, el, icon, fmtNum, clamp, keepScroll } from '../core/util.js';
 import { TRADERS, TRADER_BY_ID, loyaltyFor, canBuyFrom, sellValue, buyPrice, buyCurrency, LOYALTY_LEVELS } from '../data/traders.js';
 import { TPL, FX } from '../data/items.js';
 import { game, countMoney, addMoney, canAddMoney, takeMoney, traderState, saveSoon, addExp, registerSaveSection } from '../core/state.js';
 import { Item, Grid, autoPlace, detach } from '../inventory/model.js';
 import { renderGrid } from '../inventory/view.js';
-import { isKnown } from '../inventory/examine.js';
-import { dndContext, quickTransfer } from '../inventory/dnd.js';
+import { isKnown, needsExamine } from '../inventory/examine.js';
+import { dndContext, quickTransfer, isDragging } from '../inventory/dnd.js';
 import { setContextProvider, inspectDialog } from '../inventory/dialogs.js';
-import { openContainerWindow, refreshContainerWindows } from '../inventory/window.js';
-import { buildMenu, markOpenable } from './stash.js';
+import { openContainerWindow, refreshContainerWindows, closeContainerWindow } from '../inventory/window.js';
+import { buildMenu, markOpenable, examineNow } from './stash.js';
 import { sfx } from '../core/audio.js';
 import { on, emit, EV } from '../core/events.js';
 import { toast, refreshTopbar } from './shell.js';
@@ -120,12 +120,32 @@ export function initTrade() {
   window.addEventListener('beforeunload', () => {
     if (tradeTable.count) returnTableItems();
   });
+
+  // the deal bar advertises SPACE, so SPACE has to actually close the deal
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== ' ' && e.code !== 'Space') return;
+    if (!tradeScreenActive()) return;
+    const tag = e.target?.tagName;
+    // typing, or a focused control that already answers to SPACE itself
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || e.target?.isContentEditable) return;
+    if (!$('#modal-root').hidden || isDragging()) return;
+    e.preventDefault();
+    const t = TRADER_BY_ID[activeId];
+    if (mode === 'buy') doBuyStaged(t);
+    else doSell(t);
+  });
+}
+
+function tradeScreenActive() {
+  return !!$('#screen-hideout')?.classList.contains('is-active')
+    && !!$('#pane-traders')?.classList.contains('is-active');
 }
 
 // if the page dies between the debounced saves (crash, hard reload), whatever
 // sat on the trading table is serialised too, and lands back in the stash on
 // the next boot; anything the stash cannot take simply stays on the table
 registerSaveSection('tradeTable', {
+  roots: () => [tradeTable],
   dump: () => (tradeTable.count ? tradeTable.toJSON() : null),
   restore: (v) => {
     tradeTable.loadJSON(v);
@@ -166,16 +186,21 @@ registerSaveSection('traderStock', {
 
 export function activateTradeContext() {
   dndContext.quickTargets = (item) => {
-    if (mode === 'sell') {
-      return onTable(item) ? [game.stash] : [tradeTable];
-    }
-    return [game.stash];
+    // on the buy side there is nowhere for a stash item to go; returning the
+    // stash itself made ctrl+click shuffle items to a random free cell
+    if (mode !== 'sell') return [];
+    return onTable(item) ? [game.stash] : [tradeTable];
   };
   dndContext.equipSlotFor = () => null;
   dndContext.requestSplit = null;
   dndContext.canMove = (item) => !item.virtual;
   dndContext.onActivate = (item) => {
-    if (item.virtual) { stageOffer(TRADER_BY_ID[activeId], item.offer); return; }
+    // a single click on a shelf tile already stages the offer; letting the
+    // double-click stage it again put three on the table for two clicks
+    if (item.virtual) return;
+    // the menu on this screen promises EXAMINE on DBL-CLICK just as the stash
+    // does, and this branch was the one thing missing to make that true
+    if (needsExamine(item)) { examineNow(item); return; }
     if (item.isContainer && !onTable(item)) { openContainerWindow(item); return; }
     quickTransfer(item);
   };
@@ -186,14 +211,18 @@ export function activateTradeContext() {
     if (item.virtual) {
       const off = item.offer;
       const locked = off.ll > loyaltyLevel(t);
-      return [
-        {
+      const actions = [];
+      // in SELL mode the showcase is a display case: buying from it here would
+      // stage an offer the player cannot see and cannot complete
+      if (mode === 'buy') {
+        actions.push({
           label: `BUY — ${fmtNum(buyPrice(t, item.tpl, FX, off))}${CUR_SYM[buyCurrency(t, item.tpl, off)]}`,
           icon: 'cart', disabled: locked || off.stock <= 0,
           run: () => stageOffer(t, off),
-        },
-        { label: 'INSPECT', icon: 'info', run: () => inspectDialog(item) },
-      ];
+        });
+      }
+      actions.push({ label: 'INSPECT', icon: 'info', run: () => inspectDialog(item) });
+      return actions;
     }
     const extra = [];
     if (mode === 'sell') {
@@ -221,7 +250,9 @@ export function activateTradeContext() {
         extra.push({ label: why, icon: 'warn', disabled: true, run: () => {} });
       }
     }
-    return buildMenu(item, 'trade', extra);
+    // a case sitting on the trading table must not be openable: filling it
+    // there hid items inside something the trader was about to take away
+    return buildMenu(item, 'trade', extra, { noOpen: onTable(item) });
   });
 }
 
@@ -261,6 +292,7 @@ export function renderTrade() {
 
   renderTabs(tabs);
   renderBar($('#trader-bar'), t);
+  renderAssortTools(t);
 
   for (const seg of $$('#pane-traders .seg')) {
     seg.classList.toggle('is-active', seg.dataset.mode === mode);
@@ -270,10 +302,13 @@ export function renderTrade() {
   // shelf is idle and the table is what the stash drops onto
   const content = $('#trader-content');
   const table = $('#trade-table-host');
+  const shelfTop = $('.assort-scroll', content)?.scrollTop || 0;
   content.replaceChildren();
   table.replaceChildren();
   if (mode === 'buy') { renderBuy(t, content); renderBuyTable(t, table); }
   else { renderShowcaseIdle(t, content); renderSell(t, table); }
+  const shelf = $('.assort-scroll', content);
+  if (shelf) shelf.scrollTop = shelfTop;
 
   const clear = $('#btn-trade-clear');
   if (clear) {
@@ -289,12 +324,47 @@ export function renderTrade() {
   }
 
   renderDockedStash(t);
+  // a case on the trading table is on its way out of the stash; its popped-out
+  // window would let the player keep loading it right up to the sale
+  for (const it of tradeTable.items()) {
+    if (it.isContainer) closeContainerWindow(it.uid);
+    for (const d of it.descendants()) if (d.isContainer) closeContainerWindow(d.uid);
+  }
   refreshContainerWindows();
 }
 
 /** in sell mode the showcase still shows what the trader stocks, unclickable */
 function renderShowcaseIdle(t, host) {
   renderBuy(t, host, true);
+}
+
+/**
+ * The showcase toolbar. Only Fence has anything to put in it — but it lives in
+ * static DOM, so it has to be cleared for everyone else or his REFRESH STORE
+ * button stayed behind on Prapor's shelf and still charged 5000₽ to reroll a
+ * store the player was no longer looking at.
+ */
+function renderAssortTools(t) {
+  const tools = $('#assort-tools');
+  if (!tools) return;
+  tools.replaceChildren();
+  if (t.id !== 'fence') return;
+
+  const btn = el('button', {
+    class: 'btn btn--sm', dataset: { sfx: 'own' },
+    disabled: countMoney('RUB') < FENCE_REFRESH_COST,
+    onclick: () => {
+      if (!takeMoney(FENCE_REFRESH_COST, 'RUB')) { toast('Not enough money', 'warn'); return; }
+      fenceStock = null;
+      // the staged offer belonged to the old assortment and no longer exists
+      clearStaged();
+      sfx.trade('click');
+      toast('Fence found new stock', 'ok');
+      renderTrade(); refreshTopbar(); emit(EV.INVENTORY_CHANGED); saveSoon();
+    },
+  }, icon('rotate'), 'REFRESH STORE');
+  btn.title = `Fence finds new stock — ${fmtNum(FENCE_REFRESH_COST)}₽`;
+  tools.append(btn);
 }
 
 function renderTabs(host) {
@@ -368,21 +438,6 @@ function renderBuy(t, host, idle = false) {
   const offers = t.assort.length ? t.assort : randomFenceStock();
 
   const wrap = el('div', { class: 'assort-wrap' });
-
-  if (t.id === 'fence') {
-    const btn = el('button', {
-      class: 'btn btn--sm', disabled: countMoney('RUB') < FENCE_REFRESH_COST,
-      onclick: () => {
-        if (!takeMoney(FENCE_REFRESH_COST, 'RUB')) return;
-        fenceStock = null;
-        toast('Fence found new stock', 'ok');
-        renderTrade(); refreshTopbar(); saveSoon();
-      },
-    }, icon('rotate'), 'REFRESH STORE');
-    btn.title = `Fence finds new stock — ${fmtNum(FENCE_REFRESH_COST)}₽`;
-    const tools = $('#assort-tools');
-    if (tools) { tools.replaceChildren(); tools.append(btn); }
-  }
 
   if (!offers.length) {
     wrap.append(el('div', { class: 'empty-note' }, 'NOTHING IN STOCK'));
@@ -476,6 +531,8 @@ function renderBuy(t, host, idle = false) {
 function stageOffer(t, off) {
   const tpl = TPL[off.key];
   if (!tpl) return;
+  // the sell screen has no transaction panel to show a staged purchase in
+  if (mode !== 'buy') return;
   if (off.ll > loyaltyLevel(t)) { toast('Bad user loyalty level', 'warn'); sfx.ui('error'); return; }
   if (off.stock <= 0) { toast('Item is out of stock', 'warn'); sfx.ui('error'); return; }
 
@@ -510,14 +567,13 @@ function dealBlocker(t) {
  */
 function renderBuyTable(t, host) {
   const cur = stagedCurrency(t);
-  const total = stagedTotal(t);
-  const blocker = dealBlocker(t);
 
   // the deal bar sits at the top of the column and carries the total itself
-  const dealBtn = el('button', { class: 'deal-bar', disabled: !!blocker, dataset: { sfx: 'own' } },
+  const sumEl = el('span', { class: 'deal-bar__sum' }, '');
+  const dealBtn = el('button', { class: 'deal-bar', dataset: { sfx: 'own' } },
     el('span', { class: 'deal-bar__key' }, 'SPACE'),
     el('span', { class: 'deal-bar__label' }, 'DEAL!'),
-    el('span', { class: 'deal-bar__sum' }, CUR_SYM[cur] + ' ' + fmtNum(total)));
+    sumEl);
   dealBtn.addEventListener('click', () => doBuyStaged(t));
   host.append(dealBtn);
 
@@ -537,16 +593,29 @@ function renderBuyTable(t, host) {
     if (staged.tpl.imgUrl) art.append(el('img', { src: staged.tpl.imgUrl, alt: '' }));
     else art.append(el('div', { class: 'item__fallback' }, staged.tpl.short));
 
+    // A typed box, not a number spinner \u2014 which is what the real transaction
+    // area has, and which also keeps the field from rebuilding the panel under
+    // the player's cursor: `change` fires on blur, so re-rendering there ate
+    // the very click on DEAL!/Fill items that caused the blur.
     const qtyEl = el('input', {
-      class: 'deal-row__qty', type: 'number', min: '1', max: String(cap), value: String(staged.qty),
+      class: 'deal-row__qty', type: 'text', inputmode: 'numeric',
+      autocomplete: 'off', spellcheck: 'false', maxlength: '3',
+      value: String(staged.qty),
       title: fmtNum(unit) + ' ' + CUR_SYM[cur] + ' each, '
         + (staged.off.stock >= 1000 ? 'plenty' : staged.off.stock) + ' in stock',
     });
-    qtyEl.addEventListener('change', () => {
-      staged.qty = clamp(Math.round(Number(qtyEl.value) || 1), 1, cap);
-      filled = false;
-      renderTrade();
+    qtyEl.addEventListener('input', () => {
+      const digits = qtyEl.value.replace(/\D/g, '');
+      if (digits !== qtyEl.value) qtyEl.value = digits;
+      if (!digits) return;                       // mid-edit; wait for a number
+      const n = clamp(parseInt(digits, 10) || 1, 1, cap);
+      if (String(n) !== digits) qtyEl.value = String(n);
+      if (n === staged.qty) return;
+      staged.qty = n;
+      filled = false;                            // the price moved
+      sync();
     });
+    qtyEl.addEventListener('blur', () => { qtyEl.value = String(staged ? staged.qty : 1); });
 
     // the showcase is to the left, so the chevron points back at it
     rows.append(el('div', { class: 'deal-row' },
@@ -562,26 +631,49 @@ function renderBuyTable(t, host) {
   wrap.append(rows);
 
   // what has to be handed over, with the same n/n progress the real slot shows
-  const funds = countMoney(cur);
-  const short = total > funds;
+  let slotEl = null, cellEl = null, ratioEl = null;
   if (staged) {
     wrap.append(el('div', { class: 'deal-need' }, 'This item(s) is required from your stash:'));
-    const paid = filled ? total : Math.min(funds, total);
-    wrap.append(el('div', { class: `deal-slot${filled ? ' is-filled' : ''}${short ? ' is-short' : ''}` },
-      el('div', { class: 'deal-slot__cell' },
-        el('span', { class: 'deal-slot__sym' }, CUR_SYM[cur]),
-        filled ? el('span', { class: 'deal-slot__tick' }, '\u2713') : null),
-      el('span', { class: 'deal-slot__chev' }, '\u2039'),
-      el('div', { class: 'deal-slot__ratio' }, `${fmtNum(paid)}/${fmtNum(total)}`)));
+    cellEl = el('div', { class: 'deal-slot__cell' },
+      el('span', { class: 'deal-slot__sym' }, CUR_SYM[cur]));
+    ratioEl = el('div', { class: 'deal-slot__ratio' }, '');
+    slotEl = el('div', { class: 'deal-slot' },
+      cellEl, el('span', { class: 'deal-slot__chev' }, '\u2039'), ratioEl);
+    wrap.append(slotEl);
   }
 
   const fillBtn = el('button', {
-    class: 'btn', disabled: !staged || short || filled,
+    class: 'btn', dataset: { sfx: 'own' },
     title: 'Select to auto-fill requirements',
-    onclick: () => { filled = true; sfx.trade('buy'); renderTrade(); },
+    onclick: () => { filled = true; sfx.trade('buy'); sync(); },
   }, 'Fill items');
   wrap.append(el('div', { class: 'deal-foot' }, fillBtn));
-  if (blocker) wrap.append(el('div', { class: 'deal-warn' }, blocker));
+  const warnEl = el('div', { class: 'deal-warn' }, '');
+  wrap.append(warnEl);
+
+  /** repaint everything the quantity drives, without rebuilding the panel */
+  function sync() {
+    const total = stagedTotal(t);
+    const funds = countMoney(cur);
+    const short = total > funds;
+    const blocker = dealBlocker(t);
+
+    sumEl.textContent = CUR_SYM[cur] + ' ' + fmtNum(total);
+    dealBtn.disabled = !!blocker;
+    fillBtn.disabled = !staged || short || filled;
+    warnEl.textContent = blocker || '';
+    warnEl.hidden = !blocker;
+
+    if (slotEl) {
+      slotEl.classList.toggle('is-filled', filled);
+      slotEl.classList.toggle('is-short', short);
+      ratioEl.textContent = `${fmtNum(filled ? total : Math.min(funds, total))}/${fmtNum(total)}`;
+      const tick = cellEl.querySelector('.deal-slot__tick');
+      if (filled && !tick) cellEl.append(el('span', { class: 'deal-slot__tick' }, '\u2713'));
+      else if (!filled && tick) tick.remove();
+    }
+  }
+  sync();
 
   host.append(wrap);
 }
@@ -590,13 +682,16 @@ function renderBuyTable(t, host) {
 function doBuyStaged(t) {
   if (dealBlocker(t)) { sfx.ui('error'); return; }
   const cur = stagedCurrency(t);
-  const total = stagedTotal(t);
+  // charge for what is actually handed over: if the shelf ran short between
+  // staging and DEAL!, the staged total would have billed for the difference
+  const bought = Math.min(staged.qty, staged.off.stock);
+  if (bought < 1) { toast('Item is out of stock', 'warn'); sfx.ui('error'); return; }
+  const total = buyPrice(t, staged.tpl, FX, staged.off) * bought;
   if (countMoney(cur) < total) { toast('Not enough money', 'bad'); sfx.ui('error'); return; }
 
   // reserve space for the whole quantity first: a partial commit would take
   // the money for items that then have nowhere to go
   const made = [];
-  const bought = Math.min(staged.qty, staged.off.stock);
   for (let i = 0; i < bought;) {
     const stackSize = staged.tpl.stack > 1 ? Math.min(staged.tpl.stack, bought - i) : 1;
     const it = new Item(staged.tpl.key, { stack: stackSize, examined: true });
@@ -611,7 +706,6 @@ function doBuyStaged(t) {
     made.push(it);
     i += stackSize;
   }
-  if (!bought) { toast('Item is out of stock', 'warn'); return; }
 
   takeMoney(total, cur);
   const st = traderState(t.id);
@@ -634,13 +728,19 @@ function doBuyStaged(t) {
 // SELL
 // ---------------------------------------------------------
 function renderSell(t, host) {
+  // Switching traders with a full stash can strand items on the table, and a
+  // case can be filled after it was put down — so what the table holds is not
+  // necessarily what THIS trader will take. Price only what he will.
+  const onIt = tradeTable.items();
+  const sellable = onIt.filter((it) => sellableTo(t, it));
+  const refused = onIt.filter((it) => !sellableTo(t, it));
   let total = 0;
-  for (const it of tradeTable.items()) total += sellValue(t, it, FX);
+  for (const it of sellable) total += sellValue(t, it, FX);
 
   // the sell side mirrors the buy side: the same gold bar at the top of the
   // middle column, carrying the sum the trader will pay
   const dealBtn = el('button', {
-    class: 'deal-bar', disabled: !tradeTable.count, dataset: { sfx: 'own' },
+    class: 'deal-bar', disabled: !sellable.length, dataset: { sfx: 'own' },
   },
   el('span', { class: 'deal-bar__key' }, 'SPACE'),
   el('span', { class: 'deal-bar__label' }, 'DEAL!'),
@@ -664,22 +764,38 @@ function renderSell(t, host) {
 
   // what the trader pays for each staged item, on the item itself, so a bad
   // line is obvious before the deal rather than buried in the lump total
-  for (const it of tradeTable.items()) {
+  for (const it of sellable) {
     const tile = gridEl.querySelector('.item[data-uid="' + it.uid + '"]');
     if (tile) {
       tile.append(el('div', { class: 'toffer__price' },
         fmtNum(sellValue(t, it, FX)) + ' ' + CUR_SYM[t.currency]));
     }
   }
+  for (const it of refused) {
+    const tile = gridEl.querySelector('.item[data-uid="' + it.uid + '"]');
+    if (tile) {
+      tile.classList.add('is-nosell');
+      tile.append(el('div', { class: 'toffer__out' }, 'NOT BOUGHT'));
+    }
+  }
 
-  if (!tradeTable.count) wrap.append(el('div', { class: 'deal-warn' }, 'No selected items'));
+  if (!onIt.length) wrap.append(el('div', { class: 'deal-warn' }, 'No selected items'));
+  else if (refused.length) {
+    wrap.append(el('div', { class: 'deal-warn' },
+      `${t.name} will not take ${refused.length} item${refused.length > 1 ? 's' : ''} on the table`));
+  }
   host.append(wrap);
 }
 
 function doSell(t) {
-  const items = tradeTable.items();
-  if (!items.length) return;
-  sfx.trade('deal');
+  // never sell what this trader does not deal in, and never destroy a case
+  // that has been filled since it was put down
+  const items = tradeTable.items().filter((it) => sellableTo(t, it));
+  const refused = tradeTable.count - items.length;
+  if (!items.length) {
+    if (refused) toast(`${t.name} does not buy what is on the table`, 'warn');
+    return;
+  }
   let total = 0;
   for (const it of items) total += sellValue(t, it, FX);
   // the sold items sit on the table, not in the stash, so destroying them
@@ -688,6 +804,8 @@ function doSell(t) {
     toast('No room in the stash for the payout', 'warn');
     return;
   }
+  // the cue only rings once the deal is actually going through
+  sfx.trade('deal');
   addMoney(total, t.currency);
   for (const it of items) detach(it);
   const st = traderState(t.id);
@@ -695,6 +813,7 @@ function doSell(t) {
   st.rep = Math.min(10, st.rep + rub / 1400000);
   addExp(Math.round(items.length * 3));
   toast(`Sold ${items.length} item${items.length > 1 ? 's' : ''} — ${fmtNum(total)}${CUR_SYM[t.currency]}`, 'ok');
+  if (refused) toast(`${refused} item${refused > 1 ? 's' : ''} left on the table`, 'warn');
   renderTrade();
   refreshTopbar();
   emit(EV.INVENTORY_CHANGED);
@@ -707,9 +826,12 @@ function doSell(t) {
 function renderDockedStash(t) {
   const host = $('#trade-stash-host');
   if (!host) return;
-  host.replaceChildren();
-  const gridEl = renderGrid(game.stash);
-  host.append(gridEl);
+  let gridEl;
+  keepScroll([host], () => {
+    host.replaceChildren();
+    gridEl = renderGrid(game.stash);
+    host.append(gridEl);
+  });
   markOpenable(host);
 
   const note = $('#trade-stash-note');
@@ -745,6 +867,9 @@ function randomFenceStock() {
 /** traders restock between raids: stock counts reset and Fence rotates */
 export function restockTraders() {
   fenceStock = null;
+  // Fence's assortment is rebuilt from scratch, so an offer staged before the
+  // raid now points at a listing that no longer exists on any shelf
+  clearStaged();
   for (const t of TRADERS) {
     for (const off of t.assort) if (off.base != null) off.stock = off.base;
   }

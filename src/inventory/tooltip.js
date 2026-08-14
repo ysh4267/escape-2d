@@ -5,9 +5,11 @@
 import { $, el, icon, fmtNum, fmtWeight } from '../core/util.js';
 import { catLabel } from './view.js';
 import { isKnown } from './examine.js';
+import { on, EV } from '../core/events.js';
 
 let node = null;
 let hoverItem = null;
+let hoverNode = null;
 let raf = 0;
 let lastX = 0, lastY = 0;
 
@@ -17,6 +19,8 @@ export function initTooltip() {
   document.addEventListener('pointerout', onOut, true);
   document.addEventListener('pointermove', onMove, true);
   window.addEventListener('blur', hide);
+  // a screen change tears the hovered tile out from under the pointer
+  on(EV.SCREEN_CHANGED, hide);
 }
 
 function onOver(e) {
@@ -24,6 +28,7 @@ function onOver(e) {
   if (!tile || !tile._item || tile.closest('.drag-layer')) return;
   if (document.body.classList.contains('is-dragging')) return;
   hoverItem = tile._item;
+  hoverNode = tile;
   show(hoverItem);
 }
 
@@ -38,6 +43,9 @@ function onMove(e) {
   lastX = e.clientX; lastY = e.clientY;
   if (document.body.classList.contains('is-dragging')) { hide(); return; }
   if (!hoverItem || node.hidden) return;
+  // a re-render replaces the tile without ever sending a pointerout, which
+  // left the tooltip trailing the cursor describing an item that is gone
+  if (hoverNode && !hoverNode.isConnected) { hide(); return; }
   if (!raf) raf = requestAnimationFrame(place);
 }
 
@@ -54,6 +62,7 @@ function place() {
 
 export function hide() {
   hoverItem = null;
+  hoverNode = null;
   if (node) node.hidden = true;
 }
 

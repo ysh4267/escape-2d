@@ -43,8 +43,10 @@ export function initDnd() {
 
   // a drag must never outlive its context: the pointer getting cancelled,
   // the window losing focus or the screen changing all abort it cleanly
-  document.addEventListener('pointercancel', () => { if (drag) cancelDrag(); }, true);
-  window.addEventListener('blur', () => { if (drag) cancelDrag(); });
+  document.addEventListener('pointercancel', () => { if (drag) cancelDrag(); pending = null; }, true);
+  // an abandoned ctrl+press must die with the focus too, or its stale `ctrl`
+  // fires on the next unrelated pointerup
+  window.addEventListener('blur', () => { if (drag) cancelDrag(); pending = null; });
   on(EV.SCREEN_CHANGED, () => { if (drag) cancelDrag(); pending = null; });
 
   // this is a game: the browser menu never helps, except inside text fields
@@ -71,7 +73,8 @@ function onPointerDown(e) {
     rotateDrag();
     return;
   }
-  if (e.button !== 0) return;
+  // a right-click that opens the context menu abandons any half-started grab
+  if (e.button !== 0) { pending = null; return; }
   const node = e.target.closest('.item');
   if (!node || !node._item) return;
   if (node.closest('.drag-layer')) return;
@@ -109,14 +112,21 @@ function onPointerMove(e) {
 
 function onPointerUp(e) {
   if (drag) {
+    // a drag is ended by whichever button comes up; the right button is only
+    // ever a rotate, so it must not commit
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     commitDrag(e);
   } else if (pending && pending.ctrl) {
-    // ctrl+click without a drag: quick transfer
+    // releasing the RIGHT button used to satisfy this too, so ctrl+hold plus a
+    // right-click quick-transferred the item out from under the menu it opened
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     quickTransfer(pending.item);
+  } else if (e.button !== 0) {
+    return;
   }
   pending = null;
 }
@@ -167,6 +177,10 @@ function beginDrag(e) {
 
   node.classList.add('is-dragging');
   document.body.classList.add('is-dragging');
+  // a re-render mid-drag (an examination finishing, say) replaces this tile and
+  // the carried item shows up twice, solid in the grid and on the cursor. The
+  // uid on the body lets renderItem re-apply the class to the replacement.
+  document.body.dataset.dragUid = item.uid;
   rebuildGhost();
 }
 
@@ -209,7 +223,9 @@ function updateDrag(x, y) {
 
     const fits = model.canPlace(item, tx, ty, drag.rot, { ignore: item });
     const blocking = model.overlapping(item, tx, ty, drag.rot, item);
-    const mergeable = blocking && blocking !== 'many' && blocking.canStackWith(item);
+    // a merge is a drop: if the grid will not take the item, do not promise it
+    const mergeable = model.accepts(item)
+      && blocking && blocking !== 'many' && blocking.canStackWith(item);
     const splitting = drag.ctrl && item.stack > 1 && fits && !!dndContext.requestSplit;
     let kind = 'is-bad';
     if (splitting) kind = 'is-swap';
@@ -298,11 +314,12 @@ function cancelDrag() { endDrag(); }
 
 function endDrag() {
   clearHighlights();
-  if (drag) {
-    drag.ghost?.remove();
-    drag.node?.classList.remove('is-dragging');
-  }
+  if (drag) drag.ghost?.remove();
+  // clear by class, not through drag.node: after a mid-drag re-render that node
+  // is detached and the live tile is a different element
+  for (const n of document.querySelectorAll('.item.is-dragging')) n.classList.remove('is-dragging');
   document.body.classList.remove('is-dragging');
+  delete document.body.dataset.dragUid;
   drag = null;
   pending = null;
 }

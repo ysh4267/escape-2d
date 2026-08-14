@@ -451,7 +451,12 @@ export function moveToGrid(item, grid, x, y, rot = item.rot) {
   const target = grid.overlapping(item, x, y, rot, item);
 
   // -- merge into an existing stack --
-  if (target && target !== 'many' && target !== item && target.canStackWith(item)) {
+  // A grid that refuses the item refuses it as a merge too. This check used to
+  // be missing, and a merge runs before canPlace() ever sees the drop: dragging
+  // ammo or a money stack onto the matching offer in the trader's showcase
+  // merged it into the display-only copy, which the next repaint threw away.
+  if (grid.accepts(item) && canNest(item, grid)
+      && target && target !== 'many' && target !== item && target.canStackWith(item)) {
     const moved = Math.min(target.spaceLeft(), item.stack);
     target.stack += moved;
     target.fir = target.fir && item.fir;   // never launder a non-FiR stack into FiR
@@ -517,6 +522,9 @@ export function autoPlace(item, grids, opts = {}) {
   // merge pass
   if (opts.merge !== false && (item.tpl.stack || 1) > 1) {
     for (const g of grids) {
+      // same rule as the placement pass below: a gated grid is gated for
+      // merges too, or a round the trader refuses rides in on a stack he takes
+      if (!g.accepts(item) || !canNest(item, g)) continue;
       for (const other of g.items()) {
         if (other === item || !other.canStackWith(item)) continue;
         const moved = Math.min(other.spaceLeft(), item.stack);

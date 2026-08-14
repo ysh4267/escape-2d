@@ -64,6 +64,18 @@ export function icon(name, cls = 'ico') {
 
 export function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
+/**
+ * Re-render without throwing the player back to the top of a list.
+ * Replacing the children of a scroll box collapses its content height, which
+ * clamps scrollTop to 0 — so every repaint used to scroll the stash home.
+ */
+export function keepScroll(hosts, fn) {
+  const saved = [];
+  for (const h of hosts) if (h) saved.push([h, h.scrollTop, h.scrollLeft]);
+  try { fn(); }
+  finally { for (const [h, top, left] of saved) { h.scrollTop = top; h.scrollLeft = left; } }
+}
+
 // ---------- misc ----------
 export function deepClone(o) {
   return typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o));

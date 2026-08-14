@@ -8,6 +8,7 @@ import { catLabel } from './view.js';
 import { isKnown } from './examine.js';
 import { isDragging } from './dnd.js';
 import { sfx } from '../core/audio.js';
+import { on, EV } from '../core/events.js';
 
 // ---------------------------------------------------------
 // context menu
@@ -25,6 +26,11 @@ export function initContextMenu() {
   }, true);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContext(); });
   window.addEventListener('resize', closeContext);
+  // The menu is built from closures over one screen's item, trader and
+  // dndContext. A pane switch by keyboard, or a raid ending on its own, left
+  // it floating over the next screen with every entry still live — DROP on the
+  // result screen could delete loot the summary had already banked.
+  on(EV.SCREEN_CHANGED, closeContext);
 }
 
 function onContext(e) {
@@ -69,7 +75,16 @@ export function closeContext() {
 // ---------------------------------------------------------
 // modal shell
 // ---------------------------------------------------------
+/**
+ * Only one modal is ever on screen. Opening a second used to leave the first
+ * one's keydown and pointerdown listeners bound to the document forever —
+ * and the survivor's close() would then hide the newcomer.
+ */
+let closeOpen = null;
+
 export function openModal(build, opts = {}) {
+  if (closeOpen) closeOpen();
+
   const root = $('#modal-root');
   root.replaceChildren();
   const box = el('div', { class: `modal ${opts.class || ''}` });
@@ -81,8 +96,13 @@ export function openModal(build, opts = {}) {
   const onClick = (e) => { if (e.target === root && opts.dismissable !== false) close(); };
   document.addEventListener('keydown', onKey);
   root.addEventListener('pointerdown', onClick);
+  let done = false;
+  closeOpen = close;
 
   function close() {
+    if (done) return;                       // Escape + a button both firing
+    done = true;
+    if (closeOpen === close) closeOpen = null;
     document.removeEventListener('keydown', onKey);
     root.removeEventListener('pointerdown', onClick);
     root.hidden = true;
