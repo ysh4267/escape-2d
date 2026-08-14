@@ -34,12 +34,25 @@ const SEALED_SALT = 16;
 const SEALED_IV = 12;
 const PBKDF2_ROUNDS = 200000;
 
-/** cadence and level per gait; `gap` is the floor between two steps */
+/**
+ * Cadence and level per gait; `gap` is the floor between two steps.
+ *
+ * Gait and surface are independent: the gait decides how hard and how often
+ * you land, the surface decides what it lands on. Cue names are
+ * `step_<surface>_<gait>`. They used to be `step_<gait>` alone with the
+ * material baked in, so breaking into a sprint on a concrete floor switched
+ * the material to steel grating mid-stride.
+ */
 const STEP_MIX = {
-  walk: { cue: 'step_walk', gain: 0.5, rate: [0.94, 1.07], gap: 430 },
-  run: { cue: 'step_run', gain: 0.55, rate: [0.97, 1.09], gap: 330 },
-  sprint: { cue: 'step_sprint', gain: 0.62, rate: [1.0, 1.12], gap: 265 },
+  walk: { gain: 0.5, rate: [0.94, 1.07], gap: 430 },
+  run: { gain: 0.55, rate: [0.97, 1.09], gap: 330 },
+  sprint: { gain: 0.62, rate: [1.0, 1.12], gap: 265 },
 };
+/** the surfaces the pack carries; anything else falls back to the plant floor */
+const SURFACES = new Set(['concrete', 'metal', 'tile', 'asphalt']);
+const DEFAULT_SURFACE = 'concrete';
+
+const surfaceOr = (s) => (SURFACES.has(s) ? s : DEFAULT_SURFACE);
 
 /**
  * Per-cue mix. `bus` picks the output, `gain` scales it, `limit` is the
@@ -330,7 +343,10 @@ async function trySealed() {
 function prefetch() {
   if (!packReady) return;
   const warm = [
-    'step_walk', 'step_run', 'step_sprint', 'ui_click', 'ui_hover',
+    'ui_click', 'ui_hover',
+    // every surface's walk/run, so crossing from concrete onto grating does
+    // not land silently while the new set decodes
+    ...Object.keys(manifest).filter((c) => /^step_\w+_(walk|run)$/.test(c)),
     ...Object.keys(manifest).filter((c) => c.startsWith('search_') || c.startsWith('open_')),
   ];
   for (const cue of warm) {
@@ -467,22 +483,32 @@ export function hasCue(cue) { return !!(manifest[cue] && manifest[cue].length); 
 // ---------------------------------------------------------
 export const sfx = {
   /**
-   * One step, rate-limited by gait. Variants are cycled so the same sample
-   * never plays twice running and each is pitch-shifted slightly.
+   * One step, rate-limited by gait, on whatever the player is standing on.
+   * Variants are cycled so the same sample never plays twice running and each
+   * is pitch-shifted slightly.
    */
-  footstep(sprinting = false, running = false) {
+  footstep(sprinting = false, running = false, surface = DEFAULT_SURFACE) {
     if (!enabled || !ensure()) return;
-    const mix = sprinting ? STEP_MIX.sprint : running ? STEP_MIX.run : STEP_MIX.walk;
+    const gait = sprinting ? 'sprint' : running ? 'run' : 'walk';
+    const mix = STEP_MIX[gait];
     const now = performance.now();
     if (now - lastFootstep < mix.gap) return;
     lastFootstep = now;
-    // a pack without the faster gaits falls back to the walk set
-    const cue = hasCue(mix.cue) ? mix.cue : 'step_walk';
+    const surf = surfaceOr(surface);
+    // fall back along the surface axis, never the gait axis: a missing set
+    // should change the material, not turn a sprint into a walk
+    const cue = hasCue(`step_${surf}_${gait}`)
+      ? `step_${surf}_${gait}`
+      : `step_${DEFAULT_SURFACE}_${gait}`;
     play(cue, { gain: mix.gain, rate: mix.rate, limit: 0 });
   },
 
-  /** the player stops moving */
-  halt() { play('step_stop', { gain: 0.4 }); },
+  /** the player stops moving — one settling scuff on the same surface */
+  halt(surface = DEFAULT_SURFACE) {
+    const surf = surfaceOr(surface);
+    const cue = hasCue(`step_${surf}_stop`) ? `step_${surf}_stop` : `step_${DEFAULT_SURFACE}_stop`;
+    play(cue, { gain: 0.4 });
+  },
 
   /** interface cues, all on the quieter ui bus */
   ui(name) { play(`ui_${name}`); },

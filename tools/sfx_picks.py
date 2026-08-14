@@ -37,11 +37,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# the Factory floor is concrete underfoot with metal walkways; the game is
-# top-down and has no surface map, so the two are blended per step instead
-_WALK = [f"walk_concrete{i}" for i in range(1, 7)]
-_RUN = [f"run_concrete{i}" for i in range(1, 7)]
-_SPRINT = [f"sprint_metal{i}" for i in range(1, 7)]
 _GEAR = [f"gear_stereo{i}" for i in range(1, 7)]
 
 
@@ -50,24 +45,62 @@ def _seq(stem: str, n: int = 8, width: int = 2) -> list[str]:
     return [f"{stem}{i:0{width}d}" for i in range(1, n + 1)]
 
 
-PICKS = {
-    # ---------------- movement ----------------
-    # each step is the footfall mixed with a different gear rustle, the way
-    # the game stacks them on a moving player
-    "step_walk": {
-        "clips": [[w, g] for w, g in zip(_WALK, _GEAR)],
-        "gain": -1, "trim": [0, 1.2],
-    },
-    "step_run": {
-        "clips": [[w, g] for w, g in zip(_RUN, _GEAR)],
-        "gain": -1, "trim": [0, 1.2],
-    },
-    "step_sprint": {
-        "clips": [[w, g] for w, g in zip(_SPRINT, _GEAR)],
-        "gain": -1, "trim": [0, 1.2],
-    },
-    "step_stop": {"clips": ["stop_metal1", "stop_metal2", "stop_metal3"], "trim": [0, 1.4]},
+# ---------------- footsteps ----------------
+# Surface and gait are independent axes. They were not: sprinting used to pull
+# from `sprint_metal` whatever you were standing on, so breaking into a run on
+# a concrete floor swapped the material to steel grating mid-stride.
+#
+# Two naming conventions live side by side here and neither is guessable:
+#
+#   walk_concrete1      concrete and thick metal use a bare single digit
+#   walk_asphalt_01     everything else is zero-padded behind an underscore
+#
+# `SURFACES` maps our surface name -> (clip stem, how it numbers, how many).
+# Factory only needs four: the plant floor, the gratings, the office lino and
+# the yards outside.
+_BARE, _PAD = 'bare', 'pad'
 
+_SURFACE_CLIPS = {
+    #                walk                run                 sprint              stop
+    'concrete': (('concrete', _BARE), ('concrete', _BARE), ('asphalt', _PAD), ('asphalt', _PAD)),
+    'metal':    (('metal', _BARE),    ('metal', _BARE),    ('metal', _BARE),  ('metal', _BARE)),
+    'tile':     (('tile', _PAD),      ('tile', _PAD),      ('tile', _PAD),    ('tile', _PAD)),
+    'asphalt':  (('asphalt', _PAD),   ('asphalt', _PAD),   ('asphalt', _PAD), ('asphalt', _PAD)),
+}
+# Concrete is the one gap in the install: it has walk, run, turn and jump but
+# no sprint and no stop set at all. Asphalt stands in for those two - both are
+# hard mineral surfaces and it is a far smaller lie than the steel grating the
+# old mapping used. Every other surface is its own throughout.
+
+_GAITS = ('walk', 'run', 'sprint', 'stop')
+
+
+def _clips(gait: str, stem: str, style: str, n: int) -> list[str]:
+    if style == _BARE:
+        return [f"{gait}_{stem}{i}" for i in range(1, n + 1)]
+    return [f"{gait}_{stem}_{i:02d}" for i in range(1, n + 1)]
+
+
+def _step_cues() -> dict:
+    out: dict[str, dict] = {}
+    for surf, per_gait in _SURFACE_CLIPS.items():
+        for gait, (stem, style) in zip(_GAITS, per_gait):
+            # stop is a single settling scuff, so it needs fewer variants
+            n = 3 if gait == 'stop' else 6
+            clips = _clips(gait, stem, style, n)
+            if gait == 'stop':
+                out[f"step_{surf}_stop"] = {"clips": clips, "trim": [0, 1.4]}
+            else:
+                # every step is the footfall mixed with a different gear rustle,
+                # the way the game stacks them on a moving player
+                out[f"step_{surf}_{gait}"] = {
+                    "clips": [[c, g] for c, g in zip(clips, _GEAR)],
+                    "gain": -1, "trim": [0, 1.2],
+                }
+    return out
+
+
+PICKS = {
     # ---------------- container search ----------------
     # itemsounds.bundle carries exactly ten rummage loops and this uses all of
     # them; audio.js maps container type -> cue. They run 5-14s in the install
@@ -229,4 +262,5 @@ def _item_cues() -> dict:
     return out
 
 
+PICKS.update(_step_cues())
 PICKS.update(_item_cues())

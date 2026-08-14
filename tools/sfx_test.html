@@ -188,7 +188,7 @@ if (pack) {
   check('no shipped cue is dead weight', unused.length === 0, unused.join(','));
 
   // the categories the user specifically asked to hear
-  for (const cue of ['step_walk', 'step_run', 'step_sprint', 'search_wood', 'search_body',
+  for (const cue of ['search_wood', 'search_body',
     'open_case', 'item_med_medkit_pickup', 'item_weap_ar_drop', 'amb_factory',
     'hit_body', 'hit_armor', 'hit_helmet',
     'impact_metal', 'impact_wood', 'impact_concrete', 'ricochet']) {
@@ -239,6 +239,27 @@ if (pack) {
   const lidded = new Set(openPairs.map((m) => m[1]));
   const noLid = types.filter((t) => !lidded.has(t));
   check('only corpses open silently', noLid.every((t) => /body|deadscav/.test(t)), noLid.join(','));
+
+  // footsteps: surface and gait are independent axes, so the pack needs the
+  // full matrix. A hole here is what made sprinting swap the floor material.
+  const surfBlock = audioSrc.match(/const SURFACES = new Set\(\[([\s\S]*?)\]\)/);
+  const surfaces = [...(surfBlock ? surfBlock[1] : '').matchAll(/'(\w+)'/g)].map((m) => m[1]);
+  note(`${surfaces.length} footstep surfaces`);
+  const stepGaps = [];
+  for (const s of surfaces) {
+    for (const g of ['walk', 'run', 'sprint', 'stop']) {
+      if (!manifest[`step_${s}_${g}`]) stepGaps.push(`step_${s}_${g}`);
+    }
+  }
+  check('every surface has all four gaits', stepGaps.length === 0, stepGaps.join(','));
+
+  // and every surface the map names must be one the pack actually carries,
+  // or that region silently falls back to concrete
+  const mapSrc = await (await fetch('../src/data/maps.js')).text();
+  const used = [...new Set([...mapSrc.matchAll(/surface: '(\w+)'/g)].map((m) => m[1]))];
+  note(`map names ${used.length} surfaces: ${used.join(', ')}`);
+  const unknown = used.filter((s) => !surfaces.includes(s));
+  check('every map surface exists in the pack', unknown.length === 0, unknown.join(','));
 
   // weapons: each bank needs a player cue and a hostile one, and every weapon
   // template must land on a bank that exists

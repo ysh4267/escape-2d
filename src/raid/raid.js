@@ -473,6 +473,26 @@ export class Raid {
   }
 
   /**
+   * What the floor is made of at a point, which decides the footstep set.
+   *
+   * Region rectangles overlap - the silo pit sits inside the processing hall -
+   * so the smallest one covering the point wins, which is the more specific
+   * description of that spot. Outside every region (corridors, the gaps
+   * between blocks) the plant is concrete.
+   */
+  surfaceAt(x, y) {
+    let best = null, bestArea = Infinity;
+    for (const r of this.map.regions) {
+      if (!r.surface) continue;
+      const [x0, y0, x1, y1] = r.rect;
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+      const area = (x1 - x0) * (y1 - y0);
+      if (area < bestArea) { bestArea = area; best = r.surface; }
+    }
+    return best || 'concrete';
+  }
+
+  /**
    * The weapon the player will fire: the sling first, then the one on the
    * back, then the sidearm. The back slot used to be equippable but was never
    * read, so a rifle parked there was dead weight.

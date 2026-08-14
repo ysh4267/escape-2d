@@ -9,16 +9,15 @@
    UnityPy로 번들을 열어 `AudioClip` 오브젝트의 `m_Name` 필드를 읽는다
    (`extract_tarkov_sfx.py:97-114`). 디스크의 파일명이 아니라 BSG가 에셋에 붙인
    내부 식별자다. 인덱스에 32,815개가 들어 있다.
-2. **`sfx_picks.py`의 클립 178개 큐분 전부가 그 인덱스에 존재한다.** 대조 결과
-   미해결 0건, 매니페스트 누락 0건, 매니페스트에만 있고 픽에 없는 큐 0건.
+2. **`sfx_picks.py`가 참조하는 클립 302건 전부가 그 인덱스에 존재한다.** 미해결 0건,
+   매니페스트 누락 0건, 매니페스트에만 있고 픽에 없는 큐 0건, 고아 ogg 0건.
 3. **아이템 효과음은 BSG의 `ItemSound` 필드를 그대로 쓴다.** `build_items.py:300-301`이
    SPT 3.10.1 `items.json`의 `_props.ItemSound`를 `snd`로 복사하고, 게임은
-   `item_<snd>_<action>` 이름의 큐를 요청한다. 그 이름은 `itemsounds.bundle` 안의
-   실제 `AudioClip` 이름과 일치한다. 즉 **원본 게임이 쓰는 식별자로 원본 클립을 부른다.**
+   `item_<snd>_<action>` 이름의 큐를 요청한다. 그 이름이 `itemsounds.bundle` 안의
+   실제 클립 이름과 일치한다 — **원본 게임이 쓰는 식별자로 원본 클립을 부른다.**
 
-배포본 `assets/sfx-eft/pack.bin`을 실제로 복호화해 확인한 결과 파일 195개 / 큐 178개,
-내부 매니페스트가 `assets/sfx-eft/manifest.json`과 바이트 단위로 동일하다.
-로컬 추출본과 공개 배포본이 같은 매핑을 재생한다.
+현재 **170개 큐 / 347개 파일**. `tools/sfx_test.html` 55개 검사 전부 통과,
+`tools/smoke.html` 125개 통과.
 
 ---
 
@@ -30,64 +29,94 @@ EFT 설치본                     추출/가공                  런타임
 sounds.bundle          ┐                                  manifest[cue] = [파일]
 itemsounds.bundle      │   --index  AudioClip.m_Name              │
 resources.assets       ├─► --search 이름 검색        ─────► play(cue) ─► 3버스
-<무기>.bundle          │   sfx_picks.py  큐 ← 클립               (sfx/ui/ambient)
-sharedassets537.assets ┘   --extract ffmpeg 트림/믹스/모노/ogg
+<무기>.bundle 11종      │   sfx_picks.py  큐 ← 클립               (sfx/ui/ambient)
+sharedassets8/397/537  ┘   --extract ffmpeg 트림/믹스/모노/ogg
                             pack_sfx.py  deflate + AES-256-GCM
 ```
 
 추출 공정(`extract_tarkov_sfx.py:184-224`)은 모든 클립에 동일하게 적용된다 —
 모노 다운믹스, 앞뒤 -50dB 무음 제거, 32kHz(앰비언스만 22.05kHz), libvorbis q2.
-`trim [시작, 길이]`은 원본의 긴 잔향 꼬리를 자르기 위한 것이고, 목록이 중첩 리스트인
-큐는 `amix`로 한 파일에 믹스된다(발소리 = 발자국 + 장비 소리).
+
+`pack.bin`은 `SFX_PACK_KEY` 환경변수로 봉인한다. **키를 주지 않으면 새 패스프레이즈를
+만들어 버려서 `audio.js`의 `SEALED_KEY`와 어긋난다.** 재패킹은 반드시:
+
+```bash
+SFX_PACK_KEY='aAzve0EY1zPMn9Z28Z-1rzq3hX_bh36z' python tools/pack_sfx.py
+```
 
 ---
 
 ## 컨테이너별 출처
 
-| EFT 컨테이너 | 경로 | 큐 수 |
-|---|---|---|
-| `itemsounds.bundle` | `StreamingAssets\Windows\assets\content\audio\itemsounds\` | 153 |
-| `resources.assets` | `EscapeFromTarkov_Data\` | 16 |
-| `sounds.bundle` | `...\content\audio\prefabs\movement\` | 4 |
-| `grach.bundle` / `sks.bundle` / `mr133.bundle` | `...\content\audio\weapons\` | 3 |
-| `m4a1.bundle` | `...\content\audio\banks\` | 1 |
-| `sharedassets537.assets` | `EscapeFromTarkov_Data\` | 1 |
-
-> `stm9_fire_indoor_close`는 이름이 STM-9인데도 `stm9.bundle`이 아니라 **`m4a1.bundle`**
-> 안에 들어 있다. 파일명으로 짐작했으면 틀렸을 자리다.
+| EFT 컨테이너 | 담당 |
+|---|---|
+| `itemsounds.bundle` | 아이템 폴리 90큐 + 루팅 루프 10종 |
+| `sharedassets397.assets` | 탄착·도탄 7큐 |
+| `sounds.bundle` | 발소리 16큐 = 재질 4 × 보행 4 (102클립) |
+| `resources.assets` | 인터페이스·거래 16큐 |
+| `sharedassets8.assets` | 가구 뚜껑 8큐 |
+| 무기 뱅크 11종 | 총성 22큐 |
+| `sharedassets537.assets` | Factory 앰비언스 |
 
 ---
 
 ## 이동 — `sounds.bundle`
 
-| 큐 | 원본 클립 | 가공 | 트리거 |
-|---|---|---|---|
-| `step_walk` | `walk_concrete1`–`6` + `gear_stereo1`–`6` (6쌍 믹스) | trim 0–1.2s, −1dB | 이동 중 + **장비 총중량 35kg 초과**. `raid-ui.js:80` |
-| `step_run` | `run_concrete1`–`6` + `gear_stereo1`–`6` | trim 0–1.2s, −1dB | 이동 중 + 35kg 이하 (**기본 보행이 조깅이다**) |
-| `step_sprint` | `sprint_metal1`–`6` + `gear_stereo1`–`6` | trim 0–1.2s, −1dB | 스프린트 중 |
-| `step_stop` | `stop_metal1`, `2`, `3` | trim 0–1.4s | 직전 프레임까지 이동하다 멈춘 전환 프레임 1회. `raid-ui.js:83` |
+**재질축과 보행축은 서로 독립이다.** 예전엔 아니었다 — `step_sprint`만
+`sprint_metal`을 써서, 콘크리트 바닥에서 뛰기 시작하면 발밑 재질이 철골로 바뀌었다.
+큐 이름은 `step_<재질>_<보행>`이고 재질 4종 × 보행 4단계 = 16큐다.
 
-Factory 바닥은 콘크리트에 금속 통로가 섞여 있어 걷기/달리기는 `concrete`,
-스프린트는 `metal` 세트를 쓴다. `gear_stereo`는 원본에서 이동하는 플레이어의
-장비가 흔들리는 소리로, 게임이 발자국 위에 겹쳐 재생하는 레이어다 — 여기서는
-추출 단계에서 미리 믹스해 굽는다.
+| 재질 | walk | run | sprint | stop | 쓰는 구역 |
+|---|---|---|---|---|---|
+| `concrete` | `walk_concrete1–6` | `run_concrete1–6` | *asphalt 대체* | *asphalt 대체* | 공장 내부 전반, 구역 밖 기본값 |
+| `metal` | `walk_metal1–6` | `run_metal1–6` | `sprint_metal1–6` | `stop_metal1–3` | 사일로 피트, 1번 게이트 적재장 |
+| `tile` | `walk_tile_01–06` | `run_tile_01–06` | `sprint_tile_01–06` | `stop_tile_01–03` | 사무동, 서편 정비실 |
+| `asphalt` | `walk_asphalt_01–06` | `run_asphalt_01–06` | `sprint_asphalt_01–06` | `stop_asphalt_01–03` | 동편 야드, 서편 안뜰 |
 
-케이던스와 게인은 `audio.js:38-42`의 `STEP_MIX`가 정한다.
+> **설치본에 `sprint_concrete`와 `stop_concrete`가 아예 없다.** 콘크리트는 walk·run·
+> turn·jump만 있다. 그래서 그 두 칸만 asphalt로 메웠다 — 둘 다 단단한 무기질 표면이라
+> 예전에 쓰던 철골 그레이팅보다 훨씬 작은 거짓말이다. 나머지 재질은 전부 자기 것을 쓴다.
 
-| 보행 | 최소 간격 | 게인 | 피치 랜덤 |
-|---|---|---|---|
-| walk | 430ms | 0.50 | 0.94–1.07 |
-| run | 330ms | 0.55 | 0.97–1.09 |
-| sprint | 265ms | 0.62 | 1.00–1.12 |
+**클립 명명이 재질마다 다르다.** `concrete`와 두꺼운 `metal`은 한 자리 숫자를 그냥
+붙이고(`walk_concrete1`), 나머지는 언더스코어 뒤에 0을 채운다(`walk_asphalt_01`).
+유추하지 말고 `--search`로 확인할 것.
+
+폴백은 **재질축으로만** 한다(`audio.js`). 없는 세트가 있으면 재질이 콘크리트로 바뀔
+뿐, 스프린트가 걷기로 떨어지지는 않는다.
+
+| 보행 | 최소 간격 | 게인 | 피치 랜덤 | 조건 |
+|---|---|---|---|---|
+| walk | 430ms | 0.50 | 0.94–1.07 | 장비 총중량 **35kg 초과** |
+| run | 330ms | 0.55 | 0.97–1.09 | 35kg 이하 — **기본 보행이 조깅** |
+| sprint | 265ms | 0.62 | 1.00–1.12 | 스프린트 중 |
+
+`gear_stereo`는 원본에서 이동하는 플레이어의 장비가 흔들리는 소리다. 게임이 발자국
+위에 겹쳐 재생하는 레이어를 추출 단계에서 미리 믹스해 굽는다. `stop`만 예외로 맨
+클립이다.
+
+### 재질 판정
+
+`maps.js`의 각 구역에 `surface`가 붙어 있고 `raid.surfaceAt(x, y)`가 읽는다.
+구역 사각형은 일부러 겹친다 — 사일로 피트가 처리동 안에 들어 있다 — 그래서
+**해당 좌표를 덮는 가장 작은 사각형이 이긴다.** 어느 구역에도 안 들어가는 복도·틈은
+콘크리트다.
+
+> 스폰 지점 이름과 실제 재질이 어긋나는 곳이 셋 있다 — "West service rooms"(14, 62)는
+> 서편 안뜰 사각형에 1유닛 걸쳐 asphalt, "East wall room"은 동편 야드라 asphalt,
+> "East main hall"은 사무동 사각형 안이라 tile이 난다. 판정은 사각형대로 정확히
+> 동작하는 것이고, 구역 사각형이 대략적이라 생기는 일이다.
+
+> `step_<재질>_stop`은 실제로는 "빈 바닥을 클릭해 목적지에 도착" 한 경우에만 들린다.
+> 컨테이너 앞 도착은 같은 프레임에 오버레이가 열려 `!overlayOpen` 가드에 막힌다.
 
 ---
 
 ## 컨테이너 수색 — `itemsounds.bundle`
 
-원본의 루팅 루프 10종을 전부 쓴다. 게임 안 컨테이너 23종이 **빠짐없이** 이 10종에
-매핑되며, 폴백(`search_wood`)으로 떨어지는 타입은 없다.
+원본의 루팅 루프 10종을 전부 쓴다. 컨테이너 23종이 **빠짐없이** 매핑되며 폴백으로
+떨어지는 타입은 없다.
 
-| 큐 | 원본 클립 | 원본 길이 → trim | 컨테이너 타입 |
+| 큐 | 원본 클립 | 원본 → trim | 컨테이너 |
 |---|---|---|---|
 | `search_wood` | `woodbox_looting` | 8.28s → 5.5s | crate, ammobox, weaponbox, weaponbox6, grenadebox, rationcrate |
 | `search_industrial` | `industrialbox_looting` | 10.45s → 6.0s | toolbox, suitcase, medcase, medcrate |
@@ -100,257 +129,178 @@ Factory 바닥은 콘크리트에 금속 통로가 섞여 있어 걷기/달리�
 | `search_cash` | `cashregister_looting` | 5.06s → 3.0s | cashreg |
 | `search_body` | `looting_body_extended` | 9.95s → 5.5s | deadscav, pmcbody |
 
-**재생 방식이 다르다.** 이 큐들만 단발이 아니라 **루프 소스를 열어 두는 방식**이다
-(`audio.js:445-478`). 수색 시작(`raid.js:293`)에 80ms 페이드인으로 열리고,
-끝나거나(`raid.js:397`) 중단되면(`raid.js:307`) 120ms 페이드아웃으로 닫힌다.
-아이템이 하나씩 나올 때마다 다시 울리지 않는다 — 원본도 그렇고, 초당 하나씩
-발견되는 동안 4~6초 클립을 재트리거하면 같은 소리가 네 겹으로 쌓이기 때문이다.
+**이 큐들만 재생 방식이 다르다.** 단발이 아니라 루프 소스를 열어 둔다
+(`audio.js:445-478`). 80ms 페이드인, 종료 시 120ms 페이드아웃. 아이템이 하나씩 나올
+때마다 다시 울리지 않는다 — 원본도 그렇고, 4~6초 클립을 초당 재트리거하면 같은 소리가
+네 겹으로 쌓인다. **아이템 발견 효과음은 의도적으로 없다** (원본에 없음).
 
-**아이템 발견 효과음은 의도적으로 없다.** 원본에 그런 큐가 없다
-(`sfx_picks.py:66-68`).
+### 뚜껑 여는 소리 — `sharedassets8.assets`
 
-### 뚜껑 여는 소리
+원래는 `itemsounds.bundle`의 `container_*_open` 4종을 썼다. 그건 **손에 든 아이템
+케이스**가 내는 소리이고, 레이드에 놓인 가구는 자기 소리를 따로 갖고 있다. 이제
+그쪽을 쓰므로 수색 루프와 재질이 맞는다 — 코트처럼 뒤적이는 것은 코트처럼 열린다.
 
-| 큐 | 원본 클립 | 길이 | 적용 컨테이너 |
+| 큐 | 원본 클립 | 길이 | 컨테이너 |
 |---|---|---|---|
-| `open_metal` | `container_metal_open` | 0.55s (36,393Hz) | safe, banksafe, filecab / 인벤토리의 시큐어 컨테이너 |
-| `open_case` | `container_case_open` | 0.61s | suitcase, medcase / 인벤토리의 그 외 컨테이너 |
-| `open_pouch` | `container_pouch_open` | 0.71s | jacket, sportbag, duffle / 인벤토리의 배낭 |
-| `open_plastic` | `container_plastic_open` | 0.51s | 나머지 15종 전부 |
+| `open_wood` | `woodbox_open`, `woodbox_small_open` | 0.70 / 0.49s | crate, ammobox, weaponbox, weaponbox6, grenadebox, rationcrate |
+| `open_case` | `plasticcase_heavy_open` | 0.49s | toolbox, suitcase, medcase, medcrate, pcblock, techcrate |
+| `open_metal` | `safe_open` | 0.81s | safe, banksafe |
+| `open_drawer` | `drawer_metal_open`, `drawer_metal_squeek_1` | 0.44s | drawer |
+| `open_locker` | `door_metallocker_open` | 0.76s | filecab |
+| `open_jacket` | `jacket_open` | 0.87s | jacket |
+| `open_bag` | `sportbag_open` | 1.41s | sportbag, duffle, medbag |
+| `open_cash` | `cashregister_open` | 1.50s | cashreg |
 
-`audio.js:496-502`의 분기가 수색 큐보다 훨씬 거칠다. 나무 상자(crate, ammobox,
-weaponbox, grenadebox, rationcrate)와 시체(deadscav, pmcbody)까지 전부
-`open_plastic`을 받는다 — 뒤적이는 소리는 재질별로 맞는데 여는 소리는 그렇지 않다.
+**시체는 뚜껑 소리가 없다.** `deadscav`/`pmcbody`는 `OPEN_CUE`에 일부러 넣지 않았고
+`sfx.openContainer()`는 테이블에 없는 타입이면 그냥 return한다. 이전 빌드는 시신을
+열 때 플라스틱 케이스 뚜껑 소리를 냈다.
 
-`raid.js:289`의 이 호출은 `if (container.searched) return`보다 **앞**에 있어서,
-이미 다 턴 컨테이너를 다시 열어도 뚜껑 소리는 항상 난다.
+`raid.js:289`의 호출은 `if (container.searched) return`보다 **앞**이라, 이미 다 턴
+컨테이너를 다시 열어도 뚜껑 소리는 난다.
+
+---
+
+## 총성 — 무기별 뱅크 11종
+
+**무기 12정이 각자 자기 녹음을 쓴다.** 이전에는 `fire_pistol`/`rifle`/`shotgun`/`smg`
+4종을 구경으로 갈라 썼다.
+
+설치본은 녹음 시기에 따라 총성 이름을 **세 가지 방식**으로 짓고, 어느 것도 무기
+이름에서 유추할 수 없다:
+
+```
+ak74_indoor_close_01      신형 뱅크, 번호 변형 8개
+akm_close_indoor_01       같은 시기인데 close/indoor 순서가 반대
+tt_fire_indoor_close      구형 뱅크, 변형 1~2개, 이름에 "fire"가 들어감
+```
+
+전부 실내(`indoor`) 변형이다. Factory가 지붕 덮인 공장이라 반사가 맞는다.
+
+| 큐 | 원본 클립 | 변형 | 번들 | 무기 |
+|---|---|---|---|---|
+| `fire_ak74` | `ak74_indoor_close_01`–`08` | 8 | `ak74.bundle` | AK-74N |
+| `fire_aksu` | `aksu_indoor_close_01`–`08` | 8 | `aksu.bundle` | AKS-74U |
+| `fire_akm` | `akm_close_indoor_01`–`08` | 8 | `akm.bundle` | AKM, VPO-136 |
+| `fire_kedr` | `kedr_indoor_close_01`–`08` | 8 | `kedr.bundle` | PP-91 Kedr |
+| `fire_kedrb` | `kedr_indoor_close_silenced_01`–`08` | 8 | `kedr.bundle` | PP-91-01 Kedr-B (**소음형**) |
+| `fire_pm` | `pm_indoor_close1`–`2` | 2 | `pm.bundle` | Makarov PM |
+| `fire_pb` | `pb_silenced_indoor_close1` | 1 | `pb.bundle` | PB (**소음형**) |
+| `fire_tt` | `tt_fire_indoor_close`, `2` | 2 | `tt.bundle` | TT-33 |
+| `fire_mp133` | `mr133_fire_indoor_close` | 1 | `mr133.bundle` | MP-133 |
+| `fire_mp153` | `mr153_fire_indoor_close` | 1 | `mr153.bundle` | MP-153 |
+| `fire_saiga` | `saiga_indoor_close1` | 1 | `saiga12.bundle` | Saiga-12K |
+
+VPO-136만 자기 뱅크가 없다. AKM 계열 7.62x39 카빈이라 AKM 뱅크를 쓰는 **유일한
+의도적 재사용**이다.
+
+Kedr-B와 PB는 소음형이라 원본의 `_silenced` 뱅크를 쓴다 — 게임 안에서도 조용하다.
+
+### 적의 사격 — `fire_<뱅크>_far`
+
+**이전에는 적이 쏴도 아무 소리가 나지 않았다.** `ai.js`가 `sfx`를 import조차 하지
+않았고 `registerShot`은 예광탄 기록만 남겼다.
+
+이제 같은 뱅크의 `_distant` 변형을 −7dB로 재생한다(`ai.js:shoot`). 스캐브는 스폰 시
+티어별 후보에서 뱅크를 하나 뽑아 두므로 같은 개체는 계속 같은 총을 쓴다:
+
+| 티어 | 후보 |
+|---|---|
+| 1 | mp133, akm, kedr |
+| 2 | akm, aksu, kedr, mp153 |
+| 3+ | ak74, aksu, akm, saiga |
+
+---
+
+## 탄착 — `sharedassets397.assets`
+
+명중 판정을 소리로 갈랐다. 이전에는 총성 외에 아무 피드백도 없었다.
+
+| 큐 | 원본 클립 | 변형 | 언제 |
+|---|---|---|---|
+| `hit_body` | `body1`–`6` | 6 | 살에 맞음 |
+| `hit_armor` | `bodyarmor1`–`4_close` | 4 | 방탄복이 막음 |
+| `hit_helmet` | `impact_helmet_ric_3p_1`–`4` | 4 | 헬멧이 튕겨냄 |
+| `impact_metal` | `metal1`–`6` | 6 | 빗나가 금속에 |
+| `impact_wood` | `wood1`–`5` | 5 | 빗나가 나무에 |
+| `impact_concrete` | `generic_hard1`–`3` | 3 | 빗나가 콘크리트에 |
+| `ricochet` | `ricochet1`–`13` | 12 | 도탄 (`ricochet8`은 원본에 없음) |
+
+`damagePlayer()`가 방탄복 흡수·헬멧 도탄 분기에서 무엇이 막았는지 기록해
+해당 큐를 낸다. 플레이어는 막힌 탄과 관통을 소리로 구분할 수 있다.
 
 ---
 
 ## 아이템 취급 — `itemsounds.bundle`
 
-큐 이름을 런타임에 조립한다(`audio.js:428-437`):
+큐 이름을 런타임에 조립한다: `item_<snd>_<pickup|drop|use>`.
 
-```
-item_<snd>_<pickup|drop|use>      snd = 아이템 템플릿의 ItemSound 값
-```
+**클래스 목록을 하드코딩하지 않고 `items-db.json`에서 파생한다.** 이전 픽 파일은
+48개 클래스와 전체 `_use` 세트를 갖고 있었는데, 아이템이 실제로 쓰는 건 40종이고
+`_use`는 10종만 발동 가능했다 — **팩에 실려 나가지만 절대 재생될 수 없는 큐가
+57개** 있었다. 이제 pickup 40 + drop 40 + use 10 + generic 폴백 3 = 90큐다.
 
-`snd`가 없으면 `ITEM_CLASS[cat]`, 그것도 없으면 `generic`. 조립한 큐가 팩에 없으면
-`item_generic_<action>`으로 폴백한다. **`play()`의 성공 여부가 아니라 `hasCue()`로
-폴백을 판단한다** — 디코딩 중인 큐는 `false`를 반환하고 잠시 뒤 울리는데, 그걸
-실패로 보면 그 위에 generic이 겹쳐 나기 때문이다.
+`_use`는 `raid-ui.js`의 USE 메뉴 조건(`tpl.res` && cat이 meds/food/drink)을 그대로
+반영한다. 원본 번들에 `_use` 클립이 없는 5종(grenade, item_money, jewelry,
+smallmetal, spec_multitool)은 `_NO_USE`로 제외되고 `_pickup`으로 대체된다.
 
-> **폴백 경로는 현재 전부 죽어 있다.** 템플릿 194개 전부가 `snd`를 갖고 있고(누락 0),
-> 호출부 6곳 전부가 문자열이 아니라 템플릿 객체를 넘기며, `snd` 40종 전부가 매니페스트에
-> 큐를 갖는다. 따라서 `ITEM_CLASS` 테이블(`audio.js:82-93`)도 `item_generic_<action>`
-> 폴백(`audio.js:436`)도 실제로는 한 번도 발동하지 않는다 — 새 아이템을 위한 방어 코드다.
-> `item_generic_pickup`/`_drop`은 폴백이 아니라 `snd="generic"`인 아이템 40개가
-> **직접** 요청해서 가장 자주 울린다.
-
-현재 아이템 194개가 쓰는 `ItemSound` 값은 40종이다.
-
-| `snd` | 아이템 수 | pickup | drop | use | 예 |
-|---|---|---|---|---|---|
-| `generic` | 40 | 0.72s | 0.73s | 0.63s | AA Battery |
-| `gear_generic` | 12 | 0.30s | 0.57s | 0.96s | Documents case |
-| `jewelry` | 10 | 0.64s | 0.31s | — | Physical Bitcoin |
-| `med_medkit` | 9 | 0.34s | 0.53s | **6.31s** | Grizzly |
-| `gear_backpack` | 9 | 0.71s | 0.66s | 1.41s | Duffle bag |
-| `keys` | 8 | 0.25s | 0.34s | 0.63s | Factory emergency exit key |
-| `weap_ar` | 8 | 1.00s | 0.78s | 0.73s | AK-74N |
-| `ammo_singleround` | 7 | 0.19s | 0.27s | 0.20s | 5.45x39mm BP gs |
-| `gear_armor` | 6 | 0.74s | 0.45s | 1.01s | 6B13 assault armor |
-| `gear_goggles` | 6 | 0.56s | 0.58s | 0.81s | Peltor ComTac II |
-| `container_plastic` | 6 | 0.29s | 0.26s | 0.81s | Item case |
-| `container_case` | 5 | 0.15s | 0.54s | 0.33s | Secure container Alpha |
-| `gear_helmet` | 5 | 0.43s | 0.46s | 0.50s | 6B47 Ratnik-BSh |
-| `med_stimulator` | 4 | 0.19s | 0.44s | 1.93s | Morphine injector |
-| `food_snack` | 4 | 0.54s | 0.42s | **7.54s** | Alyonka chocolate bar |
-| `container_metal` | 4 | 0.31s | 0.61s | 0.46s | Ammunition case |
-| `med_bandage` | 4 | 0.38s | 0.58s | **5.72s** | Army bandage |
-| `spec_multitool` | 4 | 0.31s | 0.30s | — | Pliers Elite |
-| `grenade` | 4 | 0.33s | 0.44s | — | F-1 hand grenade |
-| `food_bottle` | 3 | 0.75s | 0.64s | 3.78s | Bottle of water (0.6L) |
-| `item_money` | 3 | 0.35s | 0.38s | — | Roubles |
-| `item_cloth_generic` | 3 | 0.51s | 0.34s | 1.06s | Paracord |
-| `knife_generic` | 3 | 0.44s | 0.53s | 0.45s | 6Kh5 Bayonet |
-| `food_tin_can` | 3 | 0.69s | 0.65s | 4.85s | Can of beef stew |
-| `weap_pistol` | 3 | 0.98s | 0.40s | 0.72s | Makarov PM |
-| `med_pills` | 2 | 0.29s | 0.43s | 0.57s | Analgin painkillers |
-| `smallmetal` | 2 | 0.32s | 0.30s | — | Electric motor |
-| `mag_plastic` | 2 | 0.28s | 0.24s | 0.27s | AK-74 6L20 30-round |
-| `magazine_metal` | 2 | 0.53s | 0.44s | 0.41s | PM 8-round |
-| `ammo_pack_generic` | 2 | 0.38s | 0.54s | 0.20s | Pack of nails |
-| `food_juice_carton` | 2 | 0.72s | 0.73s | 3.02s | Pack of Vita juice |
-| `ammo_shotgun` | 1 | 0.72s | 0.88s | 0.30s | 12/70 7mm buckshot |
-| `spec_armorrep` | 1 | 0.42s | 0.54s | 2.94s | Car battery |
-| `item_paper` | 1 | 0.46s | 0.33s | 0.75s | Slim diary |
-| `item_map` | 1 | 0.35s | 0.40s | 0.94s | Factory plan map |
-| `mod` | 1 | 0.23s | 0.24s | 0.55s | GPS Signal Amplifier |
-| `food_soda_can` | 1 | 0.72s | 0.41s | 4.00s | Can of Hot Rod |
-| `item_book` | 1 | 0.51s | 0.83s | 1.03s | Intelligence folder |
-| `item_plastic_generic` | 1 | 0.46s | 0.41s | 0.85s | Rechargeable battery |
-| `weap_pump` | 1 | 0.23s | 0.64s | 0.47s | MP-133 |
-
-`—`는 원본 번들에 `_use` 클립이 아예 없는 클래스다(`sfx_picks.py:133`의 `_NO_USE`:
-grenade, item_money, jewelry, smallmetal, spec_multitool). 이 경우 `sfx.use()`는
-`item_<cls>_pickup`으로 대체한다.
-
-**pickup/drop은 trim 0–2.0s, use는 0–3.5s** 로 자른다. `food_snack_use`(7.54s)나
-`med_medkit_use`(6.31s)처럼 원본이 긴 것들은 앞 3.5초만 쓴다.
-
-### 아이템 효과음 호출 지점
-
-| 코드 | 액션 | 트리거 |
-|---|---|---|
-| `dnd.js:166` | `pickup` | 드래그 문턱 4px을 넘겨 아이템이 칸에서 손에 들리는 순간 |
-| `dnd.js:281` | `drop` | 그리드 칸에 내려놓아 `moveToGrid`가 성공한 순간 |
-| `dnd.js:320` | `pickup` | Ctrl+클릭 퀵 이동으로 `autoPlace`가 성공 |
-| `dnd.js:324` | `pickup` | Ctrl+클릭 퀵 이동에서 스택 일부만 합쳐졌을 때 |
-| `examine.js:66` | `pickup` | 미확인 아이템 검사(Examine)가 시작될 때 |
-| `raid-ui.js:433` | `use` | 레이드 오버레이에서 `res`가 남은 meds/food/drink를 USE |
+아이템을 추가하고 `--extract`를 다시 돌리면 그 소리가 자동으로 들어온다. 팩이
+데이터베이스와 어긋날 수 없다.
 
 ---
 
-## 인터페이스 — `resources.assets`
+## 인터페이스 · 거래 · 결과 — `resources.assets`
 
-| 큐 | 원본 클립 | 길이 | 버스/게인 | 트리거 |
-|---|---|---|---|---|
-| `ui_click` | `button_click` | 0.42s | ui 0.45 | `.btn`/`.seg`/`.map-card` 클릭(`shell.js:76`), 은신처 탭(`:64`), 컨텍스트 메뉴 항목(`dialogs.js:53`), 드래그 중 회전(`dnd.js:127`) |
-| `ui_hover` | `button_over` | 0.14s | ui 0.22, 60ms 제한, −6dB | `.btn`/`.seg`/`.ttab`/`.map-card` 진입(`shell.js:72`), 은신처 탭(`:65`) |
-| `ui_context` | `menu_context_menu` | 0.14s | ui 0.40 | 아이템 우클릭으로 컨텍스트 메뉴가 실제로 뜰 때(액션 0개면 무음) |
-| `ui_error` | `error_message` | 0.33s | ui 0.50, **400ms 제한** | `toast()`가 `warn`/`bad`로 호출될 때(`shell.js:38`) + 거래 거부 6곳 직접 호출 |
-| `ui_close` | `menu_escape` | 0.15s | ui 0.35 | 컨테이너 창 X 버튼(`window.js:75`), 레이드 오버레이 닫힘(`raid-ui.js:315`) |
-| `ui_window_open` | `menu_open_container` | 0.33s | ui 0.45 | 레이드 인벤토리 오버레이가 닫힘→열림(`raid-ui.js:308`) |
-| `ui_inspect_open` | `menu_inspector_window_open` | 0.17s | ui 0.40 | 모달이 열릴 때 전부 — INSPECT, SPLIT, 확인 대화상자, PROFILE |
-| `ui_inspect_close` | `menu_inspector_window_close` | 0.10s | ui 0.40 | 모달이 닫힐 때 전부 — ESC, 배경 클릭, CLOSE/CANCEL/CONFIRM |
-| `ui_equip` | `clothes_equip` | 0.91s | **sfx** 0.55 | 드래그로 장비 슬롯에 착용 성공(`dnd.js:286`) |
-| `ui_exp` | `notification_exp` | 0.57s | ui 0.40, 900ms 제한 | 프로필 레벨이 실제로 오른 순간(`shell.js:61`) |
-
-`ui_equip`만 ui 버스가 아니라 **sfx 버스**다 — 인터페이스 소리가 아니라 실제 착용
-폴리로 취급한다.
-
----
-
-## 거래 — `resources.assets`
-
-| 큐 | 원본 클립 | 길이 | 트리거 |
+| 큐 | 원본 클립 | 버스/게인 | 트리거 |
 |---|---|---|---|
-| `trade_tab` | `menu_trader_press` | 0.65s | 초상화 탭에서 **다른** 상인으로 전환(`trade.js:282`) |
-| `trade_click` | `trade_click_button` | 0.42s | BUY/SELL 세그먼트 전환(`:97`), 오퍼를 테이블에 올림(`:468`), CLEAR(`:495`, `:641`), 수량 −/+(`:527`), ALL(`:542`) |
-| `trade_buy` | `buy_button_click` | 0.84s | **Fill items** 로 결제 금액 할당(`:560`) |
-| `trade_deal` | `trade_operation_complete` | 1.21s | 구매 커밋 성공(`:620`), 판매 DEAL! 진입(`:683`) |
+| `ui_click` | `button_click` | ui 0.45 | `.btn`/`.seg`/`.map-card` 클릭, 은신처 탭, 컨텍스트 메뉴 항목, 드래그 중 회전 |
+| `ui_hover` | `button_over` | ui 0.22, 60ms | 위 요소 진입 |
+| `ui_context` | `menu_context_menu` | ui 0.40 | 우클릭 메뉴가 실제로 뜰 때 |
+| `ui_error` | `error_message` | ui 0.50, 400ms | `toast()`가 `warn`/`bad`일 때 + 거래 거부 6곳 |
+| `ui_close` | `menu_escape` | ui 0.35 | 컨테이너 창 X, 레이드 오버레이 닫힘 |
+| `ui_window_open` | `menu_open_container` | ui 0.45 | 레이드 오버레이 열림 |
+| `ui_inspect_open` | `menu_inspector_window_open` | ui 0.40 | 모달 열림 전부 |
+| `ui_inspect_close` | `menu_inspector_window_close` | ui 0.40 | 모달 닫힘 전부 |
+| `ui_equip` | `clothes_equip` | **sfx** 0.55 | 드래그로 장비 착용 성공 |
+| `ui_exp` | `notification_exp` | ui 0.40, 900ms | 레벨이 실제로 오름 |
+| `trade_tab` | `menu_trader_press` | ui 0.45 | 다른 상인으로 전환 |
+| `trade_click` | `trade_click_button` | ui 0.45 | 오퍼 스테이징, 세그먼트 전환, CLEAR, 수량 조작 |
+| `trade_buy` | `buy_button_click` | ui 0.50 | Fill items |
+| `trade_deal` | `trade_operation_complete` | ui 0.60 | 구매 커밋 성공, 판매 DEAL! 진입 |
+| `extract_done` | `quest_completed` | ui 0.65 | 탈출 6초 홀드 완주 |
+| `death` | `fp_death_heartbeat` | sfx 0.70 | `finish(KIA)` — MIA/LEFT는 무음 |
+| `amb_factory` | `amb_factory_rework_day_loop` | ambient | 레이드 진입 2.5s 페이드인 / 종료 0.8s 페이드아웃 |
 
-> `trade.js:683`의 판매 성사음은 지급액 계산과 `canAddMoney` 검사보다 **앞줄**이라,
-> 이후 "No room in the stash for the payout"으로 판매가 취소돼도 소리는 이미 난 뒤다.
-
----
-
-## 레이드 결과 · 앰비언스 · 총성
-
-| 큐 | 원본 클립 | 출처 | 트리거 |
-|---|---|---|---|
-| `extract_done` | `quest_completed` (4.99s → 3.5s) | `resources.assets` | 탈출 지점에서 6초 홀드 완주(`raid.js:638`) |
-| `death` | `fp_death_heartbeat` (9.24s → 4.0s) | `resources.assets` | `finish(KIA)` — HP 0. MIA/LEFT는 무음 |
-| `amb_factory` | `amb_factory_rework_day_loop` (87.82s 전체, 22.05kHz, −2dB) | `sharedassets537.assets` | 레이드 화면 진입 시 2.5초 페이드인(`raid-ui.js:50`), 종료 시 0.8초 페이드아웃(`:477`) |
-
-탈출음에 원본의 탈출 큐가 아니라 **퀘스트 완료음**을 쓴다. 앰비언스는 87초를 통째로
-써서 루프 지점이 잘 들리지 않게 했고, 팩에 없으면 `audio.js:571-609`의 합성 드론
-(47Hz 톱니 + 70.5Hz 사인 + 밴드패스 노이즈)으로 대체된다.
-
-### 총성 — 무기별 뱅크
-
-전부 **`_fire_indoor_close`** 변형이다. Factory가 지붕 덮인 공장이라 실내 반사가
-맞기 때문이다. 모두 trim 0–1.2~1.6s, −3dB, 재생 시 0.96–1.05 피치 랜덤.
-
-| 큐 | 원본 클립 | 들어 있는 번들 | 조건 (`audio.js:518-525`) | 해당 무기 |
-|---|---|---|---|---|
-| `fire_pistol` | `grach_fire_indoor_close` | `grach.bundle` | `cat === 'pistol'` | PM, PB, TT-33 |
-| `fire_shotgun` | `mr133_fire_indoor_close` | `mr133.bundle` | `cal`이 `12`로 시작 | MP-133, MP-153, Saiga-12K |
-| `fire_smg` | `stm9_fire_indoor_close` | **`m4a1.bundle`** | `cal`이 `9x`로 시작 | PP-91 Kedr, Kedr-B |
-| `fire_rifle` | `sks_fire_indoor_close` | `sks.bundle` | 나머지 | AK-74N, AKM, AKS-74U, VPO-136 |
-
-분기 순서가 중요하다 — `cat === 'pistol'`이 먼저라서 9x18 마카로프는 `fire_smg`가
-아니라 `fire_pistol`로 간다. 무기 12정 전부 의도한 큐로 떨어진다.
-
-대체가 정확하지는 않다. `fire_rifle`은 SKS(7.62x39) 소리를 AK-74N(5.45x39)에도
-쓰고, `fire_smg`는 AR 플랫폼 9mm 카빈(STM-9) 소리를 PP-91 케드르에 쓴다.
-구경별 개별 매칭이 아니라 **부류당 하나**를 고른 결과다.
-
-`snd` 필드를 쓰지 않는 게 맞다. 무기 템플릿의 `snd`는 Saiga·MP-153·Kedr·AK를
-전부 `weap_ar` 하나로 뭉뚱그리므로 `cal` 기반 분기보다 오히려 거칠다.
-
-접두사 검사라 데이터가 늘면 깨질 자리가 둘 있다 — `startsWith('9x')`는 `9x39`
-(VSS/AS Val 소총탄)도 잡아 저격소총에 SMG 소리를 내고, `startsWith('12')`는
-`12.7x55`(ASh-12)를 산탄총으로 분류한다. 현재 DB에는 둘 다 없다.
-
-**적의 사격은 아예 소리가 없다.** `sfx.fire`는 `raid.js:523`의 `playerFire()`
-한 곳에서만 호출된다. AI는 `ai.js:132`에서 `registerShot({hostile:true})`만 부르고
-그건 0.12초짜리 예광탄 기록을 배열에 넣을 뿐이며(`raid.js:462`), `ai.js`는 `sfx`를
-import조차 하지 않는다.
+`ui_equip`만 ui 버스가 아니라 sfx 버스다 — 인터페이스 소리가 아니라 착용 폴리로
+취급한다. 탈출음은 원본의 탈출 큐가 아니라 **퀘스트 완료음**이다.
 
 ---
 
-## 재생되지 않는 큐 54개
+## 남은 문제
 
-팩에 오디오가 들어 있지만 현재 빌드에서 도달할 수 없는 큐다. 178개 중 **124개가
-실제로 울린다.**
-
-| 이유 | 개수 | 큐 |
-|---|---|---|
-| **스캐브 스폰이 0** | 5 | `fire_pistol`, `fire_rifle`, `fire_shotgun`, `fire_smg`, `death` |
-| `sfx.use()`가 meds/food/drink 전용 | 33 | `item_keys_use`, `item_weap_ar_use`, `item_gear_armor_use` 등 |
-| 해당 `ItemSound`를 쓰는 아이템이 없음 | 16 | `weap_dmr`, `weap_rifle`, `bigknife`, `magazine_drum`, `magazine_belt`, `ammo_launcher`, `container_pouch`, `spec_weaprep` 계열 |
-
-**총성과 사망음은 지금 들을 수 없다.** `raid.js:94`의 `spawnScavs(count = 0)`이
-적을 하나도 만들지 않고, `firing`은 `raid.scavAt()`이 적을 반환할 때만 켜지므로
-(`raid-ui.js:205-208`) 빈 바닥을 클릭하면 이동 명령이지 발사가 아니다. 사망도
-스캐브 사격이 유일한 피해원이라 마찬가지다. 주석대로 `count`를 7로 되돌리면
-5개 전부 살아난다.
-
-`_use` 큐 43개 중 실제로 울릴 수 있는 건 10개뿐이다 — `raid-ui.js:423`의 USE 메뉴가
-`tpl.res && cat이 meds/food/drink`인 아이템에만 붙기 때문이다. 나머지 33개는
-번들에는 있지만 게임에 발동 경로가 없다.
-
----
-
-## 확인된 함정과 비대칭
-
-- **`assets/sfx-eft/`에 매니페스트가 참조하지 않는 ogg 36개가 남아 있다.** 카테고리
-  기반이던 옛 명명(`item_med_pickup`, `use_pills` 등)의 잔재로, 매니페스트가 로딩을
-  결정하므로 재생되지는 않는다. 다만 `pack_sfx.py` 재실행 시 혼동 소지가 있다.
-- **Alt+클릭 퀵 장착(`dnd.js:85-90`)은 무음이다.** 드래그 착용(`:286`)만 `ui_equip`을
-  낸다. 같은 `moveToSlot`을 쓰는데 소리가 갈린다.
-- **`closeAllContainerWindows`는 무음이다.** 레이드 진입/종료 시 컨테이너 창이
-  한꺼번에 닫히는데 `ui_close`가 나지 않는다. X 버튼(`window.js:75`)만 소리를 낸다.
-- **`ui_error`의 400ms 레이트 리밋이 이중 호출을 가린다.** 예를 들어 `trade.js:585`는
-  직접 `ui_error`를 부르고 `toast(..., 'bad')`가 `shell.js:38`에서 또 부르는데,
-  실제로는 한 번만 들린다.
-- **`ui_inspect_open` / `ui_inspect_close`는 아이템 검사 전용이 아니다.** 모달
-  전체(SPLIT 창, DISCARD 확인, WIPE PROFILE, PROFILE 창)가 같은 두 큐를 공유한다.
-- **`container_metal_open`만 36,393Hz다.** 나머지 원본 클립은 44.1kHz. 원본 자체가
-  그렇고, 어차피 추출 시 전부 32kHz로 리샘플된다.
-- **발소리와 총성은 레이트 리밋을 우회한다.** `play(cue, { ..., limit: 0 })`에서 `0`은
-  falsy라 `audio.js:362`의 `if (mix.limit && ...)` 검사가 통째로 건너뛰어진다.
-  발소리는 `STEP_MIX`의 `gap`이 따로 막아 주지만, 총성은 아무 상한이 없다 —
-  900 RPM 케드르는 초당 15개의 보이스를 캡 없이 쌓는다.
-- **`open_plastic`이 재질 논리를 깬다.** 나무 궤짝은 `open_plastic`(플라스틱 뚜껑)으로
-  열리고 곧바로 `search_wood`(나무 뒤적임)로 넘어간다. 시체도 마찬가지로 뚜껑 소리가
-  먼저 난다. 원본 팩에 `open_wood`가 없어서 클립을 더 뽑기 전에는 고칠 수 없다.
-  다만 `medbag`은 천 가방인데 `open_plastic`을 받는 반면 같은 그룹의
-  `sportbag`/`duffle`은 `open_pouch`를 받는다 — 이건 `audio.js:499` 조건에 단어 하나
-  추가하면 정합해진다.
+- **거래 화면 일부 버튼은 소리가 두 번 난다.** `shell.js:76`의 문서 전역 클릭
+  핸들러가 `.btn`/`.seg`를 잡는데, 자기 큐를 내는 컨트롤 중 `data-sfx`가 붙은 건
+  DEAL! 버튼 둘뿐이다. BUY/SELL 세그먼트와 Fill items 버튼은 `ui_click`과
+  `trade_*`가 겹친다. **`trade.js`가 현재 편집 중이라 손대지 않았다** — 해당
+  요소에 `dataset: { sfx: 'own' }`을 붙이면 해결된다.
+- **총성·탄착·사망음은 아직 들을 수 없다.** `raid.js:94`의 `spawnScavs(count = 0)`이
+  적을 만들지 않아서다(의도된 설정). `count`를 7로 되돌리면 전부 살아난다 — 배선은
+  끝나 있고 `sfx_test.html`이 실제 입력으로 호출해 검증한다.
+- `ui_error`의 400ms 리밋이 이중 호출을 가린다. `trade.js`가 직접 부르고 `toast()`가
+  또 불러도 한 번만 들린다.
+- `ui_inspect_open`/`_close`는 아이템 검사 전용이 아니다. 모달 전체가 공유한다.
+- Alt+클릭 퀵 장착은 무음이다. 드래그 착용만 `ui_equip`을 낸다.
 
 ---
 
 ## 재현
 
 ```bash
-python tools/extract_tarkov_sfx.py --index                # 32,815 클립 카탈로그
-python tools/extract_tarkov_sfx.py --search looting       # 이름으로 검색
-python tools/extract_tarkov_sfx.py --extract              # assets/sfx-eft/*.ogg
-python tools/pack_sfx.py                                  # pack.bin 봉인
+python tools/extract_tarkov_sfx.py --index      # 32,815 클립 카탈로그
+python tools/extract_tarkov_sfx.py --search ak74  # 이름으로 검색
+python tools/extract_tarkov_sfx.py --extract    # assets/sfx-eft/*.ogg
+SFX_PACK_KEY='aAzve0EY1zPMn9Z28Z-1rzq3hX_bh36z' python tools/pack_sfx.py
 ```
 
-인덱스는 `tools/cache/tarkov_sfx_index.json`(gitignore)에 남고, 추출본도
-`assets/sfx-eft/`(gitignore)에 남는다. 저장소가 추적하는 건 봉인된 `pack.bin`뿐이다.
+인덱스(`tools/cache/`)와 추출본(`assets/sfx-eft/`)은 둘 다 gitignore다. 저장소가
+추적하는 건 봉인된 `pack.bin`뿐이다. 원본 오디오는 Battlestate Games의 저작물이며,
+소유한 사본에서 로컬로 쓰는 것과 재배포는 다른 문제다.

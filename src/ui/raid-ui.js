@@ -75,12 +75,14 @@ function loop(now) {
       raid.playerFire(enemy ? enemy.x : aim[0], enemy ? enemy.y : aim[1]);
     }
     // the base gait is a jog, so normal movement uses the run set; a heavy
-    // load drops the player to the slower walk cadence
+    // load drops the player to the slower walk cadence. The surface under the
+    // player picks the material, independently of the gait.
+    const surface = raid.surfaceAt(raid.player.x, raid.player.y);
     if (raid.player.moving && !overlayOpen) {
-      sfx.footstep(raid.player.sprint, game.equipment.weight() <= 35);
+      sfx.footstep(raid.player.sprint, game.equipment.weight() <= 35, surface);
     }
     // one settling scuff when the player comes to rest
-    if (wasMoving && !raid.player.moving && !overlayOpen) sfx.halt();
+    if (wasMoving && !raid.player.moving && !overlayOpen) sfx.halt(surface);
     wasMoving = raid.player.moving;
   }
   renderer.followCamera(raid.player.x, raid.player.y, dt);

@@ -60,77 +60,98 @@ export const MAPS = {
      * loot regions. Containers are scattered inside these rectangles onto
      * walkable cells, so every raid lays out slightly differently.
      * `spawn` lists [containerType, count] pairs.
+     *
+     * `surface` is what the floor is made of, which picks the footstep set:
+     * concrete for the plant floor, metal for gratings and dock plates, tile
+     * for the offices and service rooms, asphalt for the yards outside.
+     * Rectangles overlap on purpose (the silo pit sits inside the processing
+     * hall), so `surfaceAt` takes the smallest one covering a point.
+     * Anywhere outside every region falls back to concrete.
      */
     regions: [
       {
         id: 'north_strip', name: 'Unloading and storage area',
         rect: [30, 5, 98, 26],
+        surface: 'concrete',
         spawn: [['crate', 3], ['toolbox', 1], ['techcrate', 1], ['jacket', 2], ['duffle', 1], ['ammobox', 1]],
       },
       {
         id: 'gate1_bay', name: 'Gate 1 loading bay',
         rect: [100, 4, 128, 24],
+        surface: 'metal',
         spawn: [['crate', 2], ['weaponbox', 1], ['duffle', 1], ['jacket', 1]],
       },
       {
         id: 'main_hall', name: 'Processing area',
         rect: [40, 30, 100, 96],
+        surface: 'concrete',
         spawn: [['crate', 4], ['jacket', 4], ['duffle', 2], ['weaponbox', 2], ['toolbox', 1],
                 ['grenadebox', 2], ['safe', 1], ['deadscav', 2], ['suitcase', 1], ['ammobox', 1]],
       },
       {
         id: 'east_rooms', name: 'Office block',
         rect: [88, 33, 112, 60],
+        surface: 'tile',
         spawn: [['filecab', 2], ['drawer', 2], ['pcblock', 1], ['safe', 1], ['jacket', 2], ['cashreg', 1]],
       },
       {
         id: 'east_yard', name: 'Eastern yard',
         rect: [106, 28, 130, 90],
+        surface: 'asphalt',
         spawn: [['jacket', 3], ['duffle', 1], ['crate', 2], ['medbag', 2], ['rationcrate', 1]],
       },
       {
         id: 'gate4_corridor', name: 'Gate 4 corridor / Med tents',
         rect: [94, 90, 130, 100],
+        surface: 'concrete',
         spawn: [['medbag', 3], ['medcase', 1], ['medcrate', 1], ['duffle', 1], ['deadscav', 1]],
       },
       {
         id: 'gate5_annex', name: 'Gate 5 south annex',
         rect: [57, 100, 68, 126],
+        surface: 'concrete',
         spawn: [['weaponbox', 1], ['crate', 1], ['grenadebox', 1], ['jacket', 1]],
       },
       {
         id: 'gate3_room', name: 'Gate 3 room',
         rect: [3, 14, 26, 24],
+        surface: 'concrete',
         spawn: [['crate', 1], ['jacket', 1], ['toolbox', 1]],
       },
       {
         id: 'west_courtyard', name: 'West courtyard',
         rect: [0, 40, 15, 70],
+        surface: 'asphalt',
         spawn: [['crate', 1], ['jacket', 1], ['duffle', 1], ['deadscav', 1]],
       },
       {
         id: 'west_service', name: 'West service rooms',
         rect: [15, 40, 34, 70],
+        surface: 'tile',
         spawn: [['drawer', 2], ['filecab', 1], ['jacket', 2], ['safe', 1], ['pcblock', 1], ['medbag', 1]],
       },
       {
         id: 'west_storage', name: 'Finished-products area',
         rect: [3, 70, 34, 100],
+        surface: 'concrete',
         spawn: [['crate', 3], ['techcrate', 1], ['toolbox', 2], ['weaponbox6', 1], ['sportbag', 2], ['jacket', 2]],
       },
       {
         id: 'gate0_corridor', name: 'Gate 0 corridor',
         rect: [5, 112, 15, 140],
+        surface: 'concrete',
         spawn: [['crate', 1], ['jacket', 1], ['deadscav', 1]],
       },
       {
         id: 'south_rooms', name: 'South workshops',
         rect: [0, 100, 30, 128],
+        surface: 'concrete',
         spawn: [['crate', 2], ['toolbox', 1], ['jacket', 2], ['ammobox', 1], ['banksafe', 1]],
       },
       {
         id: 'silo_pit', name: 'Silo pit',
         rect: [44, 52, 76, 94],
+        surface: 'metal',
         spawn: [['crate', 2], ['toolbox', 2], ['grenadebox', 1], ['techcrate', 1], ['deadscav', 2], ['weaponbox', 1]],
       },
     ],
