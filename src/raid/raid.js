@@ -384,7 +384,8 @@ export class Raid {
           c.found.add(uid);
           this.stats.found++;
           addExp(4);
-          sfx.found();
+          // no chime per item: the game has no search-success cue, the
+          // rummage simply keeps going and the item appears in the panel
           emit(EV.LOOT_FOUND, c);
         }
         if (c.found.size >= c.order.length && this.searchProgress >= step * 0.5) {

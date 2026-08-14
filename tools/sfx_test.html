@@ -125,7 +125,7 @@ for (const fn of ['play', 'hasCue', 'setEnabled', 'setVolume', 'audioState', 'st
   check(`exports ${fn}`, typeof audio[fn] === 'function');
 }
 for (const m of ['footstep', 'halt', 'ui', 'trade', 'item', 'searchStart', 'searchStop',
-  'openContainer', 'use', 'fire', 'found', 'death', 'extract']) {
+  'openContainer', 'use', 'fire', 'death', 'extract']) {
   check(`sfx.${m} exists`, typeof audio.sfx[m] === 'function');
 }
 // a cue with no audio behind it must be a quiet no-op, never a throw
@@ -170,7 +170,7 @@ if (pack) {
 
   // the categories the user specifically asked to hear
   for (const cue of ['step_walk', 'step_run', 'step_sprint', 'search_wood', 'search_body',
-    'open_case', 'item_med_medkit_pickup', 'item_weap_ar_drop', 'found', 'amb_factory']) {
+    'open_case', 'item_med_medkit_pickup', 'item_weap_ar_drop', 'amb_factory']) {
     check(`cue present: ${cue}`, !!manifest[cue]);
   }
 

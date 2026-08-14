@@ -101,14 +101,15 @@ it — the rig, backpack and pouch come home loaded, and emptying them is the
 UNLOAD button in the stash rather than something the result screen does for
 you.
 
-**Sound.** 179 cues over three buses — world foley, interface, ambience —
+**Sound.** 178 cues over three buses — world foley, interface, ambience —
 covering footsteps by gait, per-material container rummaging, item handling
 keyed to what the item *is*, interface and trader clicks, weapon reports,
 extraction and death.
 
-The audio is third-party, so it ships sealed: a build step deflates the 93 clips
-into a single AES-256-GCM container, and only that container is tracked — 94
-files and 1164 KiB become one request of 870 KiB. The page unseals it on load.
+The audio is third-party, so it ships sealed: a build step deflates the 195
+clips into a single AES-256-GCM container, and only that container is tracked —
+196 files and 2143 KiB become one request of 1557 KiB. The page unseals it on
+load.
 The seal is nominal, not protection: a static site has to carry the key, so it
 is right there in the source. What it buys is that the pack is not a folder of
 ready-to-play files. Any cue with no sample behind it is a silent no-op.

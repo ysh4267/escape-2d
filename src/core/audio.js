@@ -47,9 +47,6 @@ const STEP_MIX = {
  * drag across a grid would machine-gun the pickup foley.
  */
 const CUE_MIX = {
-  // the clip runs two seconds and finds land about one apart, so without a
-  // floor here every reveal stacked another copy on the last
-  found: { bus: 'sfx', gain: 0.55, limit: 1600 },
   death: { bus: 'sfx', gain: 0.7 },
   extract_done: { bus: 'ui', gain: 0.65 },
   ui_hover: { bus: 'ui', gain: 0.22, limit: 60 },
@@ -263,7 +260,7 @@ async function trySealed() {
 function prefetch() {
   if (!packReady) return;
   const warm = [
-    'step_walk', 'step_run', 'step_sprint', 'ui_click', 'ui_hover', 'found',
+    'step_walk', 'step_run', 'step_sprint', 'ui_click', 'ui_hover',
     ...Object.keys(manifest).filter((c) => c.startsWith('search_') || c.startsWith('open_')),
   ];
   for (const cue of warm) {
@@ -527,7 +524,6 @@ export const sfx = {
     play(cue, { rate: [0.96, 1.05], limit: 0 });
   },
 
-  found() { play('found'); },
   death() { play('death'); },
   extract() { play('extract_done'); },
 };

@@ -63,8 +63,9 @@ PICKS = {
     # clothing has its own rummage in the install - the coat-pocket rustle
     "search_jacket": {"clips": ["jacket_looting"], "trim": [0, 4.0]},
     "search_body": {"clips": ["looting_body_extended"], "trim": [0, 5.5]},
-    # the little "something turned up" flourish
-    "found": {"clips": ["looting_luck2_other"], "trim": [0, 2.0], "gain": 1},
+    # There is deliberately no "found an item" cue. The game has none - the
+    # rummage keeps running and the item just appears - and looting_luck2_other
+    # is a one-off, not the systematic set a per-reveal chime would need.
 
     # ---------------- container lids ----------------
     "open_case": {"clips": ["container_case_open"], "trim": [0, 2.0]},
