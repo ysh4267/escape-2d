@@ -42,6 +42,9 @@ const ROMAN = ['I', 'II', 'III', 'IV'];
 const FENCE_REFRESH_COST = 5000;
 /** ceiling on one order, matching the three digits the quantity box takes */
 const MAX_BUY_QTY = 999;
+/** how much room the staged item's artwork may take in the middle column */
+const ART_MAX_W = 180;
+const ART_MAX_H = 124;
 
 /** the sell zone: items dragged here are what the DEAL button will sell */
 export const tradeTable = new Grid(9, 6, { tag: 'tradeTable', label: 'TRADING TABLE' });
@@ -615,7 +618,16 @@ function renderBuyTable(t, host) {
     const unit = buyPrice(t, staged.tpl, FX, staged.off);
     const cap = Math.min(staged.off.stock, MAX_BUY_QTY);
 
-    const art = el('div', { class: 'deal-row__art' });
+    // The goods keep their real footprint here. The box used to be a fixed
+    // 46x46 square, so a five-by-two rifle was crushed into less than one cell
+    // and every offer looked the same size on the table.
+    const cellPx = clamp(
+      Math.min(46, Math.floor(ART_MAX_W / staged.tpl.w), Math.floor(ART_MAX_H / staged.tpl.h)),
+      16, 46);
+    const art = el('div', {
+      class: 'deal-row__art',
+      style: { width: `${cellPx * staged.tpl.w}px`, height: `${cellPx * staged.tpl.h}px` },
+    });
     if (staged.tpl.imgUrl) art.append(el('img', { src: staged.tpl.imgUrl, alt: '' }));
     else art.append(el('div', { class: 'item__fallback' }, staged.tpl.short));
 

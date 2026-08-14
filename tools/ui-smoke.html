@@ -89,6 +89,60 @@ try {
           `${ammoBefore} -> ${after}`);
   }
 
+  head('a drop in the docked stash lands on the cell you dropped it');
+  const dockGrid = () => $('#trade-stash-host .grid');
+  {
+    const gr = dockGrid();
+    const r = gr.getBoundingClientRect();
+    const cw = (r.width - 2) / game.stash.w, ch = (r.height - 2) / game.stash.h;
+    // the grid must measure its true size: as a flex item it was squeezed, and
+    // every drop coordinate is derived from this rectangle
+    check('the docked grid measures one real cell per row/column',
+          Math.abs(cw - ch) < 0.5, `cw=${cw.toFixed(2)} ch=${ch.toFixed(2)}`);
+    let landed = 0, tried = 0;
+    for (const [tx, ty] of [[6, 1], [2, 10], [9, 20]]) {
+      const occ = game.stash.itemAt(tx, ty);
+      if (occ) game.stash.remove(occ);
+      const it = game.stash.items().find((i) => i.w === 1 && i.h === 1 && !i.isContainer);
+      if (!it) continue;
+      const hostEl = $('#trade-stash-host');
+      hostEl.scrollTop = Math.max(0, ty * ch - 200);
+      hostEl.scrollLeft = Math.max(0, tx * cw - 200);
+      await sleep(40);
+      const tile = $$('#trade-stash-host .item').find((n) => n._item === it);
+      if (!tile) continue;
+      const gb = dockGrid().getBoundingClientRect();
+      const dx = gb.left + 1 + tx * cw + cw / 2, dy = gb.top + 1 + ty * ch + ch / 2;
+      fire(tile, 'pointerdown');
+      fire(D, 'pointermove', { x: dx - 30, y: dy - 30 });
+      fire(D, 'pointermove', { x: dx, y: dy });
+      fire(D, 'pointerup', { x: dx, y: dy, buttons: 0 });
+      await sleep(140);
+      const p = game.stash.posOf(it);
+      tried++;
+      if (p && p.x === tx && p.y === ty) landed++;
+    }
+    check('every drop landed on its target cell', tried > 0 && landed === tried,
+          `${landed}/${tried}`);
+    $('#trade-stash-host').scrollTop = 0;
+    $('#trade-stash-host').scrollLeft = 0;
+  }
+
+  head('the staged item keeps its own footprint in the deal panel');
+  for (const key of ['w_vpo136', 'mag_ak74']) {
+    const tile = $$('#trader-content .item.toffer--buyable').find((n) => n._item?.offer?.key === key);
+    if (!tile) continue;
+    click(tile);
+    await sleep(150);
+    const art = $('.deal-row__art');
+    const ar = art.getBoundingClientRect();
+    const tpl = W.ESCAPE2D.TPL[key];
+    check(`${key} artwork is ${tpl.w}x${tpl.h}-shaped, not a single square`,
+          Math.abs((ar.width / ar.height) - (tpl.w / tpl.h)) < 0.12,
+          `box ${ar.width.toFixed(0)}x${ar.height.toFixed(0)} ratio ${(ar.width / ar.height).toFixed(2)} vs ${(tpl.w / tpl.h).toFixed(2)}`);
+    const d = $('.deal-row__drop'); if (d) { click(d); await sleep(120); }
+  }
+
   head('buy panel: quantity edit must not swallow the next click');
   const offer = $$('#trader-content .item.toffer--buyable')[0];
   click(offer);
@@ -316,9 +370,12 @@ try {
   $('#trade-stash-host').dispatchEvent(new W.Event('scroll', { bubbles: false }));
   await sleep(120);
   check('menu closed when the panel scrolled', $('#context-menu').hidden);
+  // a programmatic scrollTop queues a real scroll event on the next frame, and
+  // that would close the menu the next section is about to open
+  $('#trade-stash-host').scrollTop = 0;
+  await sleep(300);
 
   head('context menu does not outlive a pane switch');
-  await sleep(60);
   const anyStash = $$('#trade-stash-host .item')[0];
   fire(anyStash, 'contextmenu', { button: 2 });
   await sleep(80);

@@ -23,6 +23,13 @@
 /* ---------------- the grid ---------------- */
 .grid {
   position: relative;
+  /* A grid is exactly as big as its model says. Inside a flex parent it was a
+     shrinkable item: the trader screen's docked stash column is a column flex
+     box, so the 10x32 stash was squeezed from 1986px to 604px tall. The tiles
+     are absolutely positioned and did not move, but every drop coordinate is
+     derived from the element's measured height (gridCellAt), so a row came out
+     18.81px instead of 62px and items landed nowhere near the cursor. */
+  flex: none;
   background-color: rgba(0,0,0,.42);
   background-image:
     linear-gradient(to right,  var(--line-1) 1px, transparent 1px),
