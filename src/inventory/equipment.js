@@ -13,19 +13,41 @@ import { el, icon } from '../core/util.js';
 import { renderSlot, renderGrid, renderContainerBlock } from './view.js';
 import { SLOT_ACCEPTS } from '../data/items.js';
 
+/**
+ * The slots, named and positioned the way the game's own character screen
+ * does it (see the loadout screen on the wiki). The body block is a four-row
+ * grid whose areas are declared in inventory.css:
+ *
+ *     EARPIECE   HEADWEAR    FACE COVER
+ *                BODY ARMOR  EYEWEAR
+ *     ON SLING ............  HOLSTER
+ *     ON BACK  ............  SHEATH
+ *
+ * with the carry block — TACTICAL RIG, POCKETS, BACKPACK, POUCH — beside it.
+ * The gap at row two, column one is where the real screen puts ARMBAND and
+ * DOGTAG; this game has neither, so the silhouette shows through instead.
+ *
+ * `w`/`h` are the empty outline in stash cells. Every square slot is 2x2 there
+ * and the two long-gun slots are a wide bar, exactly as in the reference — a
+ * slot still grows past that when it holds something bigger, so worn gear
+ * stays 1:1 with the stash.
+ *
+ * Order is also quick-equip priority: a rifle looks for the sling before the
+ * back, so keep `primary` ahead of `secondary`.
+ */
 export const SLOT_DEFS = [
-  { key: 'head',      label: 'HEAD',    icon: 'body',      w: 2, h: 2 },
-  { key: 'ears',      label: 'EARS',    icon: 'info',      w: 2, h: 2 },
-  { key: 'face',      label: 'FACE',    icon: 'body',      w: 2, h: 1 },
-  { key: 'eyes',      label: 'EYES',    icon: 'eye',       w: 2, h: 1 },
-  { key: 'armor',     label: 'ARMOR',   icon: 'box',       w: 3, h: 3 },
-  { key: 'rig',       label: 'RIG',     icon: 'box',       w: 3, h: 3 },
-  { key: 'backpack',  label: 'BACKPACK',icon: 'box',       w: 3, h: 3 },
-  { key: 'secure',    label: 'POUCH',   icon: 'stash',     w: 3, h: 3 },
-  { key: 'primary',   label: 'SLING',   icon: 'crosshair', w: 4, h: 1, wide: true },
-  { key: 'secondary', label: 'BACK',    icon: 'crosshair', w: 4, h: 1, wide: true },
-  { key: 'holster',   label: 'HOLSTER', icon: 'crosshair', w: 2, h: 1 },
-  { key: 'scabbard',  label: 'SHEATH',  icon: 'discard',   w: 2, h: 1 },
+  { key: 'ears',      label: 'EARPIECE',     icon: 'info',      w: 2, h: 2, area: 'ears' },
+  { key: 'head',      label: 'HEADWEAR',     icon: 'body',      w: 2, h: 2, area: 'head' },
+  { key: 'face',      label: 'FACE COVER',   icon: 'body',      w: 2, h: 2, area: 'face' },
+  { key: 'armor',     label: 'BODY ARMOR',   icon: 'box',       w: 2, h: 2, area: 'armor' },
+  { key: 'eyes',      label: 'EYEWEAR',      icon: 'eye',       w: 2, h: 2, area: 'eyes' },
+  { key: 'primary',   label: 'ON SLING',     icon: 'crosshair', w: 4, h: 2, area: 'sling', wide: true },
+  { key: 'holster',   label: 'HOLSTER',      icon: 'crosshair', w: 2, h: 2, area: 'holster' },
+  { key: 'secondary', label: 'ON BACK',      icon: 'crosshair', w: 4, h: 2, area: 'back', wide: true },
+  { key: 'scabbard',  label: 'SHEATH',       icon: 'discard',   w: 2, h: 2, area: 'sheath' },
+  { key: 'rig',       label: 'TACTICAL RIG', icon: 'box',       w: 2, h: 2, carry: true },
+  { key: 'backpack',  label: 'BACKPACK',     icon: 'box',       w: 2, h: 2, carry: true },
+  { key: 'secure',    label: 'POUCH',        icon: 'stash',     w: 2, h: 2, carry: true },
 ];
 
 export class Equipment {
@@ -151,29 +173,49 @@ export class Equipment {
 // ---------------------------------------------------------
 // rendering
 //
-// Worn gear and carried storage are deliberately two separate panels: the
-// doll is where you dress the character, the storage panel is where you
-// actually shuffle loot.
+// Two panels, as in the game: the character screen is where you dress the
+// PMC — every slot plus the pockets — and the inventory panel beside it is
+// where the rig and the bags open up so you can actually shuffle loot.
 // ---------------------------------------------------------
-export function renderGearSlots(equipment, host) {
+export function renderGearSlots(equipment, host, opts = {}) {
   host.replaceChildren();
   const doll = el('div', { class: 'equip' });
+
+  // what is worn on the body, on the character screen's own four-row grid
+  const body = el('div', { class: 'equip__body' });
+  body.append(icon('pmc', 'equip__pmc'));
   for (const d of SLOT_DEFS) {
-    doll.append(renderSlot(equipment.slots[d.key], { w: d.w, h: d.h }));
+    if (d.carry) continue;
+    const cell = renderSlot(equipment.slots[d.key], d);
+    cell.style.gridArea = d.area;
+    body.append(cell);
   }
+
+  // what is carried: the rig, then the pockets, then the bags — the pockets
+  // belong here rather than in the inventory panel, because they are part of
+  // the character and not something you can take off
+  const carry = el('div', { class: 'equip__carry' });
+  const slotCell = (key) => {
+    const d = SLOT_DEFS.find((s) => s.key === key);
+    return renderSlot(equipment.slots[key], d);
+  };
+  carry.append(slotCell('rig'));
+
+  const pockets = el('div', { class: 'slot-cell slot-cell--pockets' },
+    el('div', { class: 'slot__head' }, el('span', { class: 'slot__name' }, 'POCKETS')));
+  const row = el('div', { class: 'pockets' });
+  for (const g of equipment.pockets) row.append(renderGrid(g, opts));
+  pockets.append(row);
+  carry.append(pockets);
+
+  carry.append(slotCell('backpack'), slotCell('secure'));
+
+  doll.append(body, carry);
   host.append(doll);
 }
 
 export function renderCarry(equipment, host, opts = {}) {
   host.replaceChildren();
-
-  // pockets: four independent single-cell grids
-  const pocketWrap = el('div', { class: 'cnt' },
-    el('div', { class: 'cnt__head' }, icon('box'), el('span', { class: 'cnt__name' }, 'POCKETS')));
-  const row = el('div', { style: { display: 'flex', gap: '4px' } });
-  for (const g of equipment.pockets) row.append(renderGrid(g, opts));
-  pocketWrap.append(row);
-  host.append(pocketWrap);
 
   let any = false;
   for (const key of ['rig', 'backpack', 'secure']) {

@@ -492,6 +492,90 @@ try {
           `${gearHost.scrollWidth} vs ${gearHost.clientWidth}`);
   }
 
+  head('the character screen is laid out the way the game lays it out');
+  {
+    // reference: the loadout screen on the wiki —
+    //   EARPIECE  HEADWEAR    FACE COVER | TACTICAL RIG
+    //             BODY ARMOR  EYEWEAR    | POCKETS
+    //   ON SLING .........    HOLSTER    | BACKPACK
+    //   ON BACK  .........    SHEATH     | POUCH
+    const cells = $$('.equip__body > .slot-cell');
+    const box = {};
+    for (const c of cells) {
+      const n = c.querySelector('.slot__name')?.textContent;
+      if (n) box[n] = c.getBoundingClientRect();
+    }
+    const named = ['EARPIECE', 'HEADWEAR', 'FACE COVER', 'BODY ARMOR', 'EYEWEAR',
+                   'ON SLING', 'HOLSTER', 'ON BACK', 'SHEATH'];
+    check('every body slot is on the doll under its real name',
+          named.every((n) => box[n]), named.filter((n) => !box[n]).join(', '));
+    const near = (a, b) => Math.abs(a - b) < 2;
+    check('EARPIECE, HEADWEAR and FACE COVER share the top row',
+          near(box['EARPIECE'].top, box['HEADWEAR'].top) && near(box['HEADWEAR'].top, box['FACE COVER'].top)
+          && box['EARPIECE'].left < box['HEADWEAR'].left && box['HEADWEAR'].left < box['FACE COVER'].left,
+          `${box['EARPIECE'].top} ${box['HEADWEAR'].top} ${box['FACE COVER'].top}`);
+    check('BODY ARMOR sits under HEADWEAR and EYEWEAR under FACE COVER',
+          near(box['BODY ARMOR'].left, box['HEADWEAR'].left)
+          && near(box['EYEWEAR'].left, box['FACE COVER'].left)
+          && box['BODY ARMOR'].top > box['HEADWEAR'].top,
+          `${box['BODY ARMOR'].left} vs ${box['HEADWEAR'].left}`);
+    check('row two, column one is left open (ARMBAND and DOGTAG in the real game)',
+          !cells.some((c) => {
+            const r = c.getBoundingClientRect();
+            return near(r.left, box['EARPIECE'].left) && near(r.top, box['BODY ARMOR'].top);
+          }));
+    check('ON SLING starts in column one and spans into column two',
+          near(box['ON SLING'].left, box['EARPIECE'].left)
+          && box['ON SLING'].right > box['HEADWEAR'].left + 4
+          && box['ON SLING'].top > box['BODY ARMOR'].top,
+          `${box['ON SLING'].left}..${box['ON SLING'].right} vs col2 at ${box['HEADWEAR'].left}`);
+    check('HOLSTER is beside ON SLING in the third column',
+          near(box['HOLSTER'].top, box['ON SLING'].top)
+          && near(box['HOLSTER'].left, box['FACE COVER'].left));
+    check('ON BACK and SHEATH repeat that row underneath',
+          near(box['ON BACK'].left, box['ON SLING'].left)
+          && near(box['ON BACK'].width, box['ON SLING'].width)
+          && near(box['SHEATH'].left, box['HOLSTER'].left)
+          && box['ON BACK'].top > box['ON SLING'].top);
+    check('the long-gun bars never overlap the third column',
+          box['ON SLING'].right <= box['HOLSTER'].left + 1
+          && box['ON BACK'].right <= box['SHEATH'].left + 1,
+          `${box['ON SLING'].right} vs ${box['HOLSTER'].left}`);
+
+    const carry = $$('.equip__carry > .slot-cell')
+      .map((c) => c.querySelector('.slot__name')?.textContent);
+    check('the carried block reads RIG, POCKETS, BACKPACK, POUCH',
+          carry.join('|') === 'TACTICAL RIG|POCKETS|BACKPACK|POUCH', carry.join('|'));
+
+    const cell = parseFloat(getComputedStyle(D.documentElement).getPropertyValue('--cell'));
+    const pk = $$('#equipment-host .pockets .grid');
+    check('the four pockets are on the character screen, one cell each',
+          pk.length === 4 && pk.every((g) => Math.abs(g.getBoundingClientRect().width - cell - 2) < 1.5),
+          pk.map((g) => g.getBoundingClientRect().width.toFixed(0)).join(','));
+    check('and are no longer duplicated in the INVENTORY panel',
+          !$$('#carry-host .cnt__name').some((n) => /POCKET/i.test(n.textContent)));
+
+    head('every slot carries the reference header bar');
+    const heads = $$('#equipment-host .slot-cell > .slot__head');
+    check('a header bar per slot, pockets included', heads.length === cells.length + 4,
+          `${heads.length} heads, ${cells.length} body slots + 4`);
+    const gearHeads = $$('#equipment-host .slot-cell').filter((c) => c.querySelector('.slot'));
+    check('every gear slot has a chevron', gearHeads.every((c) => c.querySelector('.slot__more')));
+    const emptyOne = gearHeads.find((c) => c.querySelector('.slot.is-empty'));
+    check('an empty slot is hatched and its chevron is dead',
+          !!emptyOne && emptyOne.querySelector('.slot__more').disabled,
+          emptyOne ? 'chevron enabled' : 'no empty slot to check');
+    const bagCell = gearHeads.find((c) => c.querySelector('.slot')?._slot?.item?.isContainer);
+    check('a container slot offers a live chevron', !!bagCell && !bagCell.querySelector('.slot__more').disabled);
+    if (bagCell) {
+      click(bagCell.querySelector('.slot__more'));
+      const win = await until(() => $('.cwin'), 2500);
+      check('the chevron opens that container', !!win);
+      win?.querySelector('.cwin__close')?.click();
+      await sleep(80);
+    }
+  }
+
   head('final');
   check('still no runtime errors', $('#errbox').style.display === 'none',
         $('#errbox').textContent.slice(0, 600));

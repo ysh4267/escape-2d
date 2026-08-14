@@ -116,7 +116,10 @@ async function boot() {
   // a wipe reloads the page, and an unconditional save here wrote the profile
   // straight back over the key that had just been removed
   window.addEventListener('beforeunload', () => { if (!wiping) save(); });
-  window.ESCAPE2D = { game, TPL, save, wipe: hardReset };
+  // Item and moveToSlot are here so the headless pass can dress the PMC in the
+  // widest gear in the game; importing model.js from the harness page instead
+  // builds a second copy of the module with an empty template registry.
+  window.ESCAPE2D = { game, TPL, save, wipe: hardReset, Item, moveToSlot };
 }
 
 // ---------------------------------------------------------

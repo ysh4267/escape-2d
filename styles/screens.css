@@ -4,10 +4,12 @@
 
 /* ---------------- stash pane ---------------- */
 .pane-grid { display: grid; gap: 14px; height: 100%; }
-/* the GEAR column has to clear the widest thing that can be worn — a 5-wide
-   Pilgrim backpack, drawn at the stash's own cell size (5 * 62 + 2 + 24 of
-   panel padding) — or the doll scrolls sideways */
-.pane-grid--stash { grid-template-columns: minmax(336px, 360px) minmax(300px, 380px) 1fr; }
+/* The GEAR column carries the character screen: three columns of slots, the
+   middle one as wide as the widest body armour in the game (4 * 62 + 2), all
+   at the stash's own cell size. Worst case that block measures 526px, and the
+   panel adds 24px of padding. INVENTORY has to clear a 5-wide Pilgrim, and
+   STASH is 10 cells plus its scrollbar. */
+.pane-grid--stash { grid-template-columns: minmax(468px, 546px) minmax(316px, 336px) 1fr; }
 
 /* ---------------- deploy pane ---------------- */
 .deploy { display: grid; grid-template-columns: 1fr minmax(320px, 380px); gap: 14px; height: 100%; }
@@ -559,15 +561,14 @@
   backdrop-filter: blur(3px);
   padding: 16px;
 }
-/* the last column is the gear doll, which now draws at stash cell size — the
-   widest worn item is 5 cells across, same budget as the stash pane */
+/* the last column is the character screen, on the stash pane's own budget */
 .overlay__grid {
   flex: 1; min-height: 0;
   display: grid;
-  grid-template-columns: 1fr minmax(320px, 380px) minmax(336px, 360px);
+  grid-template-columns: 1fr minmax(316px, 336px) minmax(468px, 546px);
   gap: 14px;
 }
-.overlay__grid.is-solo { grid-template-columns: minmax(320px, 380px) minmax(336px, 360px); justify-content: center; }
+.overlay__grid.is-solo { grid-template-columns: minmax(316px, 336px) minmax(468px, 546px); justify-content: center; }
 .overlay__close { align-self: center; flex: 0 0 auto; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--tx-3); font-size: 11px; letter-spacing: .18em; }
 .overlay__close:hover { color: var(--tx-0); }
 
@@ -621,21 +622,46 @@
    fixed-height box, where it was clipped with no way to scroll to it — so the
    columns only get narrower here, and only collapse to one at the width where
    a single column is genuinely all that fits. */
-@media (max-width: 1360px) {
+/* The character screen is a wide thing — three columns of slots at the stash's
+   own cell size — so the cell steps down at the width where GEAR, INVENTORY
+   and a 10-wide stash stop fitting side by side, rather than letting the stash
+   scroll sideways. Each breakpoint is the measured sum of the three: the doll
+   at its widest gear, a 5-wide Pilgrim, and ten stash cells plus a scrollbar. */
+@media (max-width: 1599px) {
   :root { --cell: 54px; }
-  /* 5 * 54 + 2 + 24 = 296 */
-  .pane-grid--stash { grid-template-columns: minmax(296px, 310px) minmax(240px, 300px) 1fr; }
+  .pane-grid--stash { grid-template-columns: minmax(410px, 482px) minmax(276px, 296px) 1fr; }
+  .overlay__grid { grid-template-columns: 1fr minmax(276px, 296px) minmax(410px, 482px); }
+  .overlay__grid.is-solo { grid-template-columns: minmax(276px, 296px) minmax(410px, 482px); }
+}
+@media (max-width: 1419px) {
+  :root { --cell: 48px; }
+  .pane-grid--stash { grid-template-columns: minmax(370px, 439px) minmax(246px, 268px) 1fr; }
+  .overlay__grid { grid-template-columns: 1fr minmax(246px, 268px) minmax(370px, 439px); }
+  .overlay__grid.is-solo { grid-template-columns: minmax(246px, 268px) minmax(370px, 439px); }
+}
+@media (max-width: 1360px) {
   .trade__body { grid-template-columns: 34fr 26fr 34fr; }
 }
-@media (max-width: 1100px) {
-  :root { --cell: 48px; }
+@media (max-width: 1289px) {
   .deploy { grid-template-columns: 1fr; }
   /* one column now really is one column: let the pane scroll instead of
      clipping whatever lands below the fold */
   .pane { overflow: auto; }
   .pane-grid, .trade { height: auto; min-height: 100%; }
   .pane-grid--stash { grid-template-columns: 1fr; }
-  .trade__body { grid-template-columns: 1fr; }
   .trade__col, .pane-grid--stash > .panel { min-height: 340px; }
+}
+@media (max-width: 1100px) {
+  .trade__body { grid-template-columns: 1fr; }
   .tbar__rep { display: none; }
+}
+/* From 1900 across there is room to stand the worn block and the carried block
+   side by side, which is how the character screen itself reads; below that they
+   wrap and the carried block drops underneath. Last in the file on purpose:
+   .overlay__grid's own rule is further down than the stash pane's, so an
+   override placed at the top of the sheet lost to it. */
+@media (min-width: 1900px) {
+  .pane-grid--stash { grid-template-columns: minmax(660px, 820px) minmax(316px, 336px) 1fr; }
+  .overlay__grid { grid-template-columns: 1fr minmax(316px, 336px) minmax(660px, 820px); }
+  .overlay__grid.is-solo { grid-template-columns: minmax(316px, 336px) minmax(660px, 820px); }
 }

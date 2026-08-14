@@ -204,21 +204,50 @@ export function renderGridBlock(gridModel, title, opts = {}) {
 // ---------------------------------------------------------
 // equipment slot
 // ---------------------------------------------------------
+/**
+ * One slot as the character screen draws it: a named header bar with a
+ * chevron, and the outline underneath. Returns the wrapper — the drop target
+ * is the `.slot` inside it, which is what drag & drop hit-tests for.
+ */
 export function renderSlot(slot, opts = {}) {
+  const cell = el('div', { class: 'slot-cell' });
+  if (opts.wide) cell.classList.add('slot-cell--wide');
+
   const node = el('div', { class: 'slot', dataset: { slot: slot.key } });
   node._slot = slot;
-  if (slot.wide) node.classList.add('slot--wide');
+  if (slot.wide || opts.wide) node.classList.add('slot--wide');
 
   // A slot is at least its own outline and grows to whatever it holds, so worn
   // gear is drawn at exactly one stash cell per grid square. It used to be
   // stretched to fill the outline instead, which squashed a 5x2 rifle into a
   // 4x1 box and blew a 1x1 up to twice its size.
   const wCells = Math.max(opts.w || 2, slot.item ? slot.item.w : 0);
-  const hCells = Math.max(opts.h || 1, slot.item ? slot.item.h : 0);
-  node.style.width = `calc(var(--cell) * ${wCells} + 2px)`;
+  const hCells = Math.max(opts.h || 2, slot.item ? slot.item.h : 0);
+  // the long-gun bar spans two columns of the doll, so its width comes from
+  // the grid; the cell count is only the floor that keeps a rifle at 1:1
+  if (opts.wide) node.style.minWidth = `calc(var(--cell) * ${wCells} + 2px)`;
+  else node.style.width = `calc(var(--cell) * ${wCells} + 2px)`;
   node.style.height = `calc(var(--cell) * ${hCells} + 2px)`;
 
-  node.append(el('div', { class: 'slot__label' }, slot.label));
+  const head = el('div', { class: 'slot__head' },
+    el('span', { class: 'slot__name' }, opts.label || slot.label));
+  const chevron = el('button', {
+    class: 'slot__more', type: 'button', tabindex: '-1',
+    title: slot.item ? (slot.item.isContainer ? 'Open' : 'Inspect') : '',
+    disabled: !slot.item,
+    onclick: (e) => {
+      e.stopPropagation();
+      const it = slot.item;
+      if (!it) return;
+      // loaded lazily: view.js sits underneath both of these modules, and
+      // importing them at the top would close the cycle
+      if (it.isContainer) import('./window.js').then((m) => m.openContainerWindow(it));
+      else import('./dialogs.js').then((m) => m.inspectDialog(it));
+    },
+  }, icon('chev-right'));
+  head.append(chevron);
+  cell.append(head);
+
   if (slot.item) {
     const tile = renderItem(slot.item, { static: true });
     tile.style.left = '50%';
@@ -226,9 +255,11 @@ export function renderSlot(slot, opts = {}) {
     tile.style.transform = 'translate(-50%, -50%)';
     node.append(tile);
   } else {
+    node.classList.add('is-empty');
     node.append(el('div', { class: 'slot__hint' }, icon(slot.icon)));
   }
-  return node;
+  cell.append(node);
+  return cell;
 }
 
 // ---------------------------------------------------------

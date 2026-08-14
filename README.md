@@ -54,9 +54,12 @@ the way through. Four on Factory want a key, and one wants a shoulder.
 | **ctrl + drag** onto a free cell | split the stack |
 | **alt + click** | equip into the matching slot |
 
-Gear and carried storage are separate panels: the doll on the left is where
-you dress the character, the inventory panel next to it is where you actually
-shuffle loot.
+Two panels, as in the game. GEAR is the character screen, laid out the way the
+real one is — earpiece, headwear and face cover across the top, body armour and
+eyewear beneath, the two long-gun bars spanning the first two columns with the
+holster and sheath beside them, and the rig, pockets, backpack and pouch in
+their own column. INVENTORY next to it is where the rig and the bags open up so
+you can actually shuffle loot.
 
 ---
 
@@ -214,7 +217,7 @@ python -m http.server 8777
 | `tools/pack_sfx.py` | compresses and seals the sound pack (and `--unpack` reverses it) |
 | `tools/sfx_picks.py` | which clip backs which cue |
 | `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |
-| `tools/ui-smoke.html` | drives the real game in an iframe with synthetic pointer and key events, asserting the trader screen, drag & drop, menus and modals behave |
+| `tools/ui-smoke.html` | drives the real game in an iframe with synthetic pointer and key events, asserting the trader screen, drag & drop, menus, modals and the character screen's layout behave |
 | `tools/preview_map.html` | `?level=…` renders the raw extracted geometry for one storey |
 | `tools/preview_nav.html` | `?level=basement\|ground\|second\|third` — navmesh components, spawn/extract reachability, doors, stairwells and per-area walkability |
 | `tools/sfx_test.html` | checks the shipped effects are served and that the audio surface is what the game calls |
