@@ -10,7 +10,7 @@ and transcode them into the small ogg set this project plays.
 The audio in an EFT install is Battlestate Games' copyrighted material. It is
 fine to use it locally from a copy you own; it is NOT ours to redistribute, so
 everything this script writes lands in a gitignored directory and the public
-build falls back to the CC0 set in assets/sfx. See assets/sfx/CREDITS.md.
+build falls back to the CC0 set in assets/sfx.
 
 Bundles are plain UnityFS (Unity 2022.3), so UnityPy reads them directly:
     python -m pip install UnityPy

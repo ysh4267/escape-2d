@@ -10,7 +10,7 @@
 # request, and the factory ambience is synthesised at runtime. PARKED keeps
 # the vetted picks for the rest so they can be restored in one edit.
 #
-# output: ../assets/sfx/*.ogg  +  ../assets/sfx/CREDITS.md
+# output: ../assets/sfx/*.ogg
 # =========================================================
 
 import json
@@ -178,42 +178,17 @@ def main():
             continue
         made.append((out_name, src_key, os.path.getsize(dest)))
 
-    print('[3/3] writing manifest and credits')
+    print('[3/3] writing manifest')
     manifest = sorted(n for n, _, _ in made)
-    keep = {n + '.ogg' for n in manifest} | {'manifest.json', 'CREDITS.md'}
+    keep = {n + '.ogg' for n in manifest} | {'manifest.json'}
     for fn in os.listdir(OUT):
         if fn not in keep:
             os.remove(os.path.join(OUT, fn))
             print(f'      removed stale {fn}')
+    # SOURCES carries the licence and author of every pack this pulls from;
+    # it is the record of where these effects came from
     with open(os.path.join(OUT, 'manifest.json'), 'w', encoding='utf-8') as f:
         json.dump(manifest, f, indent=0)
-
-    used = sorted({k for _, k, _ in made})
-    lines = [
-        '# Sound credits',
-        '',
-        'Escape From Tarkov\'s own audio is copyrighted by Battlestate Games and is',
-        'not redistributed here. These effects come from openly licensed libraries:',
-        '',
-    ]
-    for key in used:
-        s = SOURCES[key]
-        names = ', '.join(f'`{n}`' for n, k, _ in made if k == key)
-        lines += [
-            f'## {s["title"]} — {s["author"]}',
-            f'- license: **{s["license"]}**',
-            f'- source: {s["page"]}',
-            f'- used as: {names}',
-            '',
-        ]
-    lines += [
-        'The factory ambience is synthesised at runtime in `src/core/audio.js`',
-        'and ships no file. Every other cue was removed by request; the vetted',
-        'picks for them are parked in `tools/build_sounds.py` under `PARKED`.',
-        '',
-    ]
-    with open(os.path.join(OUT, 'CREDITS.md'), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(lines))
 
     total = sum(sz for _, _, sz in made)
     print(f'\ndone: {len(made)} effects, {total/1024:.0f} KiB total')

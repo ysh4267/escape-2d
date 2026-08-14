@@ -111,8 +111,7 @@ bundles are plain UnityFS — indexes all 32,815 AudioClips in it, and
 transcodes the picks in `tools/sfx_picks.py` into `assets/sfx-eft/`. That
 audio is Battlestate Games' copyright, so it is gitignored and never
 deployed; the published build falls back to the CC0 pack in `assets/sfx/`
-and any cue without a sample is a silent no-op. See
-[assets/sfx/CREDITS.md](assets/sfx/CREDITS.md).
+and any cue without a sample is a silent no-op.
 
 The mapping follows the game's own taxonomy rather than one invented here:
 footsteps are `<gait>_<surface>` layered with a `gear_stereo` webbing rustle,
