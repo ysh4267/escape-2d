@@ -30,6 +30,19 @@ export function initStash() {
     renderStash();
     saveSoon();
   });
+
+  // extracting no longer empties your gear for you, so unloading it is an
+  // explicit action here instead
+  $('#btn-unload-gear').addEventListener('click', async () => {
+    const { Raid } = await import('../raid/raid.js');
+    const { moved, overflow } = Raid.depositToStash();
+    if (overflow.length) toast(`${overflow.length} items stayed in your gear — stash is full`, 'warn');
+    else if (moved.length) toast(`${moved.length} items unloaded into the stash`, 'ok');
+    else toast('Nothing to unload', 'info');
+    renderStash();
+    emit(EV.INVENTORY_CHANGED);
+    saveSoon();
+  });
 }
 
 function matches(item) {

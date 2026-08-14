@@ -163,7 +163,7 @@ function beginDrag(e) {
   pending = null;
 
   // the item leaves its slot the moment the drag starts, so the foley does too
-  sfx.item(item.cat, 'pickup');
+  sfx.item(item.tpl, 'pickup');
 
   node.classList.add('is-dragging');
   document.body.classList.add('is-dragging');
@@ -278,7 +278,7 @@ function commitDrag(e) {
     if (target.kind === 'grid') {
       const res = moveToGrid(item, target.grid, target.x, target.y, rot);
       changed = res.ok;
-      if (res.ok) sfx.item(item.cat, 'drop');
+      if (res.ok) sfx.item(item.tpl, 'drop');
       else emit(EV.TOAST, { kind: 'warn', text: 'No room there' });
     } else if (target.kind === 'slot') {
       const res = moveToSlot(item, target.slot);
@@ -313,13 +313,15 @@ export function quickTransfer(item) {
   if (!targets.length) return false;
   const from = item.holder;
   const before = item.stack;
-  const cat = item.cat;
+  // the template is read before the move, because a fully merged stack is
+  // detached and its item object is no longer safe to dereference after
+  const tpl = item.tpl;
   if (autoPlace(item, targets)) {
-    sfx.item(cat, 'pickup');
+    sfx.item(tpl, 'pickup');
     dndContext.onChange();
     return true;
   }
-  if (item.stack !== before) { sfx.item(cat, 'pickup'); dndContext.onChange(); return true; }
+  if (item.stack !== before) { sfx.item(tpl, 'pickup'); dndContext.onChange(); return true; }
   if (from) emit(EV.TOAST, { kind: 'warn', text: 'No space' });
   return false;
 }

@@ -63,7 +63,7 @@ export function startExamine(item, onChange) {
     timer: setTimeout(finish, duration * 1000),
   };
   if (!rafId) rafId = requestAnimationFrame(repaint);
-  sfx.item(tpl.cat, 'pickup');   // turning it over in your hands
+  sfx.item(tpl, 'pickup');   // turning it over in your hands
   active.onChange();
   return true;
 }

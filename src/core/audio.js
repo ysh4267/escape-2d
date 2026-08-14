@@ -47,7 +47,9 @@ const STEP_MIX = {
  * drag across a grid would machine-gun the pickup foley.
  */
 const CUE_MIX = {
-  found: { bus: 'sfx', gain: 0.55 },
+  // the clip runs two seconds and finds land about one apart, so without a
+  // floor here every reveal stacked another copy on the last
+  found: { bus: 'sfx', gain: 0.55, limit: 1600 },
   death: { bus: 'sfx', gain: 0.7 },
   extract_done: { bus: 'ui', gain: 0.65 },
   ui_hover: { bus: 'ui', gain: 0.22, limit: 60 },
@@ -72,20 +74,25 @@ const CUE_MIX = {
 const DEFAULT_MIX = { bus: 'sfx', gain: 0.6, limit: 55 };
 
 /**
- * Gameplay category -> the item-foley family it sounds like. The families are
- * the game's own (itemsounds.bundle), so a helmet really does land with the
- * helmet sound.
+ * Fallback foley family, by gameplay category.
+ *
+ * Item sounds come from the template's own `snd` field, which is the game's
+ * ItemSound value copied through by tools/build_items.py - so a pill bottle
+ * rattles, a bandage rustles and a medkit clicks, instead of every med
+ * sharing one guessed sound. This table only catches a template that somehow
+ * has no `snd`.
  */
 const ITEM_CLASS = {
-  ammo: 'ammo', mag: 'mag',
-  meds: 'med', food: 'food', drink: 'drink',
-  armor: 'armor', helmet: 'helmet', backpack: 'backpack',
-  rig: 'gear', headset: 'gear', facecover: 'gear', armband: 'gear',
-  glasses: 'glasses',
-  weapon: 'weapon', pistol: 'pistol', melee: 'melee', grenade: 'metal',
-  container: 'case', secure: 'case',
-  electronics: 'metal', barter: 'generic', valuables: 'metal',
-  info: 'generic', key: 'metal', money: 'generic',
+  ammo: 'ammo_singleround', mag: 'magazine_metal',
+  meds: 'med_medkit', food: 'food_tin_can', drink: 'food_bottle',
+  armor: 'gear_armor', helmet: 'gear_helmet', backpack: 'gear_backpack',
+  rig: 'gear_generic', headset: 'gear_goggles', facecover: 'gear_generic',
+  armband: 'item_cloth_generic', glasses: 'gear_goggles',
+  weapon: 'weap_ar', pistol: 'weap_pistol', melee: 'knife_generic',
+  grenade: 'grenade',
+  container: 'container_plastic', secure: 'container_case',
+  electronics: 'item_plastic_generic', barter: 'generic',
+  valuables: 'jewelry', info: 'item_paper', key: 'keys', money: 'item_money',
 };
 
 /**
@@ -244,10 +251,22 @@ async function trySealed() {
   }
 }
 
-/** warm the cues that must not be late the first time they fire */
+/**
+ * Warm the cues that must not be late the first time they fire.
+ *
+ * The rummage loops are in here for a reason: a cue that is not decoded yet
+ * cannot start, and searchStart has to poll until it is. A jacket takes two
+ * seconds to search, so a quarter-second of decode was most of the sound
+ * missing - the container popped open in silence, which read as the rummage
+ * being broken rather than late.
+ */
 function prefetch() {
   if (!packReady) return;
-  for (const cue of ['step_walk', 'step_run', 'step_sprint', 'ui_click', 'ui_hover', 'found']) {
+  const warm = [
+    'step_walk', 'step_run', 'step_sprint', 'ui_click', 'ui_hover', 'found',
+    ...Object.keys(manifest).filter((c) => c.startsWith('search_') || c.startsWith('open_')),
+  ];
+  for (const cue of warm) {
     for (const name of manifest[cue] || []) load(name);
   }
 }
@@ -312,6 +331,25 @@ function persist() {
   try { localStorage.setItem('escape2d.audio', JSON.stringify({ enabled, volume })); } catch { /* ignore */ }
 }
 
+/**
+ * Poll a decoding clip and fire it once, as long as it lands soon enough to
+ * still belong to the moment that asked for it. `late` marks the retry so it
+ * cannot schedule another one behind itself.
+ */
+function waitAndPlay(cue, name, mix, asked, tries = 0) {
+  setTimeout(() => {
+    const buf = buffers.get(name);
+    if (buf === 'pending' || buf === undefined) {
+      if (tries < 8) waitAndPlay(cue, name, mix, asked, tries + 1);
+      return;
+    }
+    if (buf === 'failed') return;
+    // half a second late is still the same event; anything slower is not
+    if (performance.now() - asked > 500) return;
+    play(cue, { ...mix, late: true, limit: 0 });
+  }, 60);
+}
+
 // ---------------------------------------------------------
 /**
  * Fire one cue. Unknown cues, cues with no file and a muted context are all
@@ -330,9 +368,18 @@ export function play(cue, opts = {}) {
   if (names.length > 1 && i === lastVariant.get(cue)) i = (i + 1) % names.length;
   lastVariant.set(cue, i);
 
-  const buf = buffers.get(names[i]);
-  if (buf === undefined) { load(names[i]); return false; }
-  if (buf === 'pending' || buf === 'failed') return false;
+  const name = names[i];
+  const buf = buffers.get(name);
+  if (buf === undefined || buf === 'pending') {
+    // First use of this cue. Dropping it here is why the very first pickup of
+    // each item family, and the first rummage of a raid, came out silent:
+    // there are far too many cues to prefetch them all, so decode this one
+    // and fire it as soon as it lands instead of losing it.
+    if (buf === undefined) load(name);
+    if (!mix.late) waitAndPlay(cue, name, mix, now);
+    return false;
+  }
+  if (buf === 'failed') return false;
 
   lastPlayed.set(cue, now);
 
@@ -377,12 +424,19 @@ export const sfx = {
   trade(name) { play(`trade_${name}`); },
 
   /**
-   * Item foley for a gameplay category: sfx.item('meds', 'pickup').
-   * Falls back to the generic family for anything unmapped.
+   * Item foley. Pass the template - `sfx.item(item.tpl, 'pickup')` - and it
+   * uses the item's own ItemSound family, which is what the real game keys
+   * off. A bare category string still works for older call sites.
    */
-  item(cat, action = 'pickup') {
-    const cls = ITEM_CLASS[cat] || 'generic';
-    if (!play(`item_${cls}_${action}`)) play(`item_generic_${action}`);
+  item(tplOrCat, action = 'pickup') {
+    const cls = typeof tplOrCat === 'string'
+      ? (ITEM_CLASS[tplOrCat] || 'generic')
+      : (tplOrCat?.snd || ITEM_CLASS[tplOrCat?.cat] || 'generic');
+    // fall back on whether the cue exists, never on whether play() succeeded:
+    // a cue that is merely still decoding returns false and fires a moment
+    // later, and treating that as failure played the generic one over it
+    const cue = `item_${cls}_${action}`;
+    play(hasCue(cue) ? cue : `item_generic_${action}`);
   },
 
   /**
@@ -450,9 +504,17 @@ export const sfx = {
     play(cue, { gain: 0.5 });
   },
 
-  /** consuming a med or a ration */
-  use(cat) {
-    play(cat === 'food' ? 'use_food' : cat === 'drink' ? 'use_drink' : 'use_med');
+  /**
+   * Consuming a med or a ration, using the item's own family so a painkiller
+   * rattles and a bandage tears rather than both clicking like a medkit.
+   */
+  use(tplOrCat) {
+    const cls = typeof tplOrCat === 'string'
+      ? (ITEM_CLASS[tplOrCat] || 'med_medkit')
+      : (tplOrCat?.snd || ITEM_CLASS[tplOrCat?.cat] || 'med_medkit');
+    // a few families have no _use clip in the bundle; those handle instead
+    const cue = `item_${cls}_use`;
+    play(hasCue(cue) ? cue : `item_${cls}_pickup`);
   },
 
   /** weapon report, chosen from the weapon's own class */

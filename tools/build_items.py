@@ -293,6 +293,13 @@ def main():
                 tpl['container']['filter'] = f
         extra.pop('filter', None)
 
+        # Which foley the item makes when it is picked up, dropped or used.
+        # This is the game's own per-template field, so a helmet lands like a
+        # helmet and a pill bottle rattles, instead of everything in a
+        # category sharing one guessed sound.
+        if props.get('ItemSound'):
+            tpl['snd'] = props['ItemSound']
+
         # --- gameplay props straight from the template where they exist ---
         if props.get('MaxHpResource'):
             tpl['res'] = {'max': int(props['MaxHpResource'])}

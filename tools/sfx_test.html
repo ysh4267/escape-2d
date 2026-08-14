@@ -170,8 +170,21 @@ if (pack) {
 
   // the categories the user specifically asked to hear
   for (const cue of ['step_walk', 'step_run', 'step_sprint', 'search_wood', 'search_body',
-    'open_case', 'item_med_pickup', 'item_weapon_drop', 'found', 'amb_factory']) {
+    'open_case', 'item_med_medkit_pickup', 'item_weap_ar_drop', 'found', 'amb_factory']) {
     check(`cue present: ${cue}`, !!manifest[cue]);
+  }
+
+  // item foley is keyed off each template's own ItemSound value, carried
+  // through as `snd`, so every value the item database uses needs a cue
+  const db = await (await fetch('../src/data/items-db.json')).json();
+  const tpls = Array.isArray(db) ? db : Object.values(db.items || db);
+  const sounds = [...new Set(tpls.map((t) => t.snd).filter(Boolean))];
+  note(`${sounds.length} ItemSound families across ${tpls.length} templates`);
+  check('every template carries an ItemSound family', tpls.every((t) => t.snd),
+    tpls.filter((t) => !t.snd).map((t) => t.key).slice(0, 6).join(','));
+  for (const action of ['pickup', 'drop']) {
+    const gaps = sounds.filter((s) => !manifest[`item_${s}_${action}`]);
+    check(`every family has a ${action} cue`, gaps.length === 0, gaps.join(','));
   }
 
   // every rummage loop in itemsounds.bundle is mapped to some container type,

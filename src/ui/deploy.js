@@ -62,6 +62,7 @@ export function renderDeploy() {
   brief.append(block('RULES OF ENGAGEMENT', [
     note('Left-click the ground to move, or click a container to search it.'),
     note('Loot found in raid keeps its status when you extract; gear you brought does not.'),
+    note('Extract and everything stays packed as you left it — unload in the stash when you want to.'),
     note('Die or run out of time and only your secure container comes back.'),
   ]));
 
@@ -90,15 +91,43 @@ function note(text) {
 // ---------------------------------------------------------
 function drawThumb(cv, m) {
   if (!geoCache) return;
-  const g = cv.getContext('2d');
   const L = geoCache.levels[m.level];
-  const [, , vw, vh] = geoCache.viewBox;
-  const s = Math.min(cv.width / vw, cv.height / vh) * 0.94;
-  const ox = (cv.width - vw * s) / 2;
-  const oy = (cv.height - vh * s) / 2;
+  if (!L || !L.floor?.length) return;
+
+  // Match the canvas to the box it is actually displayed in, at device
+  // resolution. It used to be a fixed 520x264 buffer stretched into whatever
+  // the card happened to be, which is why the plan came out soft.
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const box = cv.getBoundingClientRect();
+  const cssW = Math.round(box.width || cv.clientWidth || 520);
+  const cssH = Math.round(box.height || cv.clientHeight || 264);
+  if (cssW < 2 || cssH < 2) return;   // not laid out yet; renderDeploy retries
+  cv.width = Math.round(cssW * dpr);
+  cv.height = Math.round(cssH * dpr);
+
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Fit the floor's own bounding box rather than the SVG viewBox. Factory's
+  // viewBox is far wider than the plant, so fitting it left the map small in
+  // a sea of dead space.
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const poly of L.floor) {
+    for (const p of poly) {
+      if (p[0] < x0) x0 = p[0];
+      if (p[0] > x1) x1 = p[0];
+      if (p[1] < y0) y0 = p[1];
+      if (p[1] > y1) y1 = p[1];
+    }
+  }
+  const bw = x1 - x0, bh = y1 - y0;
+  if (!(bw > 0 && bh > 0)) return;
+  const s = Math.min(cssW / bw, cssH / bh) * 0.92;
+  const ox = (cssW - bw * s) / 2 - x0 * s;
+  const oy = (cssH - bh * s) / 2 - y0 * s;
 
   g.fillStyle = '#05090b';
-  g.fillRect(0, 0, cv.width, cv.height);
+  g.fillRect(0, 0, cssW, cssH);
 
   g.beginPath();
   for (const poly of L.floor) {
@@ -108,7 +137,7 @@ function drawThumb(cv, m) {
     });
     g.closePath();
   }
-  g.fillStyle = '#2f4550';
+  g.fillStyle = '#3d5a68';
   g.fill('evenodd');
 
   g.fillStyle = '#16232b';
@@ -122,8 +151,8 @@ function drawThumb(cv, m) {
     g.fill();
   }
 
-  g.strokeStyle = '#586f7c';
-  g.lineWidth = 1;
+  g.strokeStyle = '#8fb3c4';
+  g.lineWidth = 1.2;
   for (const line of L.walls || []) {
     g.beginPath();
     line.forEach((p, i) => {

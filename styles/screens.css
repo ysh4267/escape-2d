@@ -22,8 +22,14 @@
 .map-card.is-active { border-color: var(--pale); box-shadow: 0 0 0 1px rgba(184,219,217,.25), var(--shadow-1); }
 .map-card:disabled { opacity: .45; cursor: not-allowed; }
 .map-card__art { height: 300px; background: #05090b; position: relative; overflow: hidden; }
-.map-card__art canvas, .map-card__art img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .85; }
-.map-card__art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,.85)); }
+/* the canvas is sized to this box in device pixels, so it needs no fitting —
+   object-fit would only crop a buffer that already matches */
+.map-card__art canvas, .map-card__art img { width: 100%; height: 100%; display: block; }
+.map-card__art img { object-fit: cover; }
+.map-card__art::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, transparent 72%, rgba(0,0,0,.55));
+}
 .map-card__meta { padding: 10px 12px; }
 .map-card__name { color: var(--white); font-size: 15px; letter-spacing: .12em; }
 .map-card__sub { color: var(--tx-3); font-size: 11px; letter-spacing: .08em; margin-top: 3px; }

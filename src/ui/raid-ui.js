@@ -430,7 +430,7 @@ function activateRaidContext() {
           const used = Math.max(1, Math.round(raid.player.hp - before));
           item.res = Math.max(0, item.res - (tpl.heal ? used : 20));
           if (item.res <= 0) detach(item);
-          sfx.use(tpl.cat);
+          sfx.use(tpl);
           raidToast(`Used ${tpl.name}`, 'ok');
           dndContext.onChange();
         },
@@ -552,9 +552,9 @@ function showResult(result) {
 
   const btn = $('#btn-result-continue');
   btn.onclick = () => {
-    const { moved, overflow } = Raid.depositToStash();
-    if (overflow.length) toast(`${overflow.length} items stayed in your gear — stash is full`, 'warn');
-    else if (moved.length) toast(`${moved.length} items unloaded into the stash`, 'ok');
+    // what you carried out stays exactly where you packed it — the rig, the
+    // backpack and the pouch come home loaded, and unloading is the player's
+    // call in the stash rather than something the result screen does for them
     raid = null;
     saveSoon();
     refreshTopbar();

@@ -96,10 +96,12 @@ scav leaves a searchable body with its own gear in it.
 
 **Extraction.** Anything carried into a raid loses its found-in-raid mark on
 insertion; anything carried out gains it. Die or run the clock out and only the
-secure container comes home. Worn gear stays equipped between raids — only
-loose loot is unloaded into the stash.
+secure container comes home. What you carry out stays exactly where you packed
+it — the rig, backpack and pouch come home loaded, and emptying them is the
+UNLOAD button in the stash rather than something the result screen does for
+you.
 
-**Sound.** 76 cues over three buses — world foley, interface, ambience —
+**Sound.** 179 cues over three buses — world foley, interface, ambience —
 covering footsteps by gait, per-material container rummaging, item handling
 keyed to what the item *is*, interface and trader clicks, weapon reports,
 extraction and death.
@@ -115,10 +117,12 @@ The mapping follows the game's own taxonomy rather than one invented here:
 footsteps are `<gait>_<surface>` layered with a `gear_stereo` webbing rustle,
 looting uses all ten of the game's rummage loops, one per material (`woodbox`,
 `industrialbox`, `safe`, `drawer_wood`, `drawer_metal`, `cashregister`,
-`sportbag`, `techno_box`, `jacket`, body), and item foley is per class
-(`med_medkit`, `gear_helmet`,
-`weap_rifle`, `magazine_metal`…) so a helmet lands like a helmet. Mute lives
-in the top bar, volume in the profile panel.
+`sportbag`, `techno_box`, `jacket`, body), and item foley comes from each
+template's own `ItemSound` value — the field the real game keys off, carried
+through into `src/data/items-db.json` by the item builder — so a pill bottle
+rattles, a bandage rustles and a helmet lands like a helmet, rather than every
+item in a category sharing one guessed sound. Mute lives in the top bar,
+volume in the profile panel.
 
 **Traders.** Eight traders with the documented buy-back multipliers — Therapist
 0.51, Ragman 0.50, Jaeger 0.48, Mechanic 0.45, Prapor 0.40, Skier 0.39,

@@ -697,9 +697,10 @@ export class Raid {
   }
 
   /**
-   * Empty everything you were carrying into the stash after a raid.
-   * Worn gear stays equipped — only the loose contents of the rig, pockets,
-   * backpack and pouch are unloaded, so you are not re-dressing every run.
+   * Empty the loose contents of the rig, pockets, backpack and pouch into the
+   * stash. Nothing calls this on extraction any more — what you carried out
+   * stays packed where you put it — but the stash keeps it as an explicit
+   * "unload everything" action.
    */
   static depositToStash() {
     const eq = game.equipment;

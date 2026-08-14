@@ -72,49 +72,6 @@ PICKS = {
     "open_plastic": {"clips": ["container_plastic_open"], "trim": [0, 2.0]},
     "open_pouch": {"clips": ["container_pouch_open"], "trim": [0, 2.0]},
 
-    # ---------------- item handling ----------------
-    # <cue> = item_<class>_<pickup|drop>; the class comes from the item's
-    # gameplay category in src/data/items.js
-    "item_generic_pickup": {"clips": ["generic_pickup"], "trim": [0, 1.6]},
-    "item_generic_drop": {"clips": ["generic_drop"], "trim": [0, 1.6]},
-    "item_metal_pickup": {"clips": ["smallmetal_pickup"], "trim": [0, 1.6]},
-    "item_metal_drop": {"clips": ["smallmetal_drop"], "trim": [0, 1.6]},
-    "item_ammo_pickup": {"clips": ["ammo_generic_pickup"], "trim": [0, 1.6]},
-    "item_ammo_drop": {"clips": ["ammo_generic_drop"], "trim": [0, 1.6]},
-    "item_mag_pickup": {"clips": ["magazine_metal_pickup"], "trim": [0, 1.6]},
-    "item_mag_drop": {"clips": ["magazine_metal_drop"], "trim": [0, 1.6]},
-    "item_med_pickup": {"clips": ["med_medkit_pickup"], "trim": [0, 1.6]},
-    "item_med_drop": {"clips": ["med_medkit_drop"], "trim": [0, 1.6]},
-    "item_food_pickup": {"clips": ["food_tin_can_pickup"], "trim": [0, 1.6]},
-    "item_food_drop": {"clips": ["food_tin_can_drop"], "trim": [0, 1.6]},
-    "item_drink_pickup": {"clips": ["food_bottle_pickup"], "trim": [0, 1.6]},
-    "item_drink_drop": {"clips": ["food_bottle_drop"], "trim": [0, 1.6]},
-    "item_armor_pickup": {"clips": ["gear_armor_pickup"], "trim": [0, 1.8]},
-    "item_armor_drop": {"clips": ["gear_armor_drop"], "trim": [0, 1.8]},
-    "item_helmet_pickup": {"clips": ["gear_helmet_pickup"], "trim": [0, 1.8]},
-    "item_helmet_drop": {"clips": ["gear_helmet_drop"], "trim": [0, 1.8]},
-    "item_backpack_pickup": {"clips": ["gear_backpack_pickup"], "trim": [0, 1.8]},
-    "item_backpack_drop": {"clips": ["gear_backpack_drop"], "trim": [0, 1.8]},
-    "item_gear_pickup": {"clips": ["gear_generic_pickup"], "trim": [0, 1.8]},
-    "item_gear_drop": {"clips": ["gear_generic_drop"], "trim": [0, 1.8]},
-    "item_glasses_pickup": {"clips": ["gear_goggles_pickup"], "trim": [0, 1.6]},
-    "item_glasses_drop": {"clips": ["gear_goggles_drop"], "trim": [0, 1.6]},
-    "item_weapon_pickup": {"clips": ["weap_rifle_pickup"], "trim": [0, 2.0]},
-    "item_weapon_drop": {"clips": ["weap_rifle_drop"], "trim": [0, 2.0]},
-    "item_pistol_pickup": {"clips": ["weap_pistol_pickup"], "trim": [0, 1.8]},
-    "item_pistol_drop": {"clips": ["weap_pistol_drop"], "trim": [0, 1.8]},
-    "item_melee_pickup": {"clips": ["knife_generic_pickup"], "trim": [0, 1.6]},
-    "item_melee_drop": {"clips": ["knife_generic_drop"], "trim": [0, 1.6]},
-    "item_case_pickup": {"clips": ["container_case_pickup"], "trim": [0, 1.8]},
-    "item_case_drop": {"clips": ["container_case_drop"], "trim": [0, 1.8]},
-    "item_glass_pickup": {"clips": ["waterglass_pickup"], "trim": [0, 1.6]},
-    "item_glass_drop": {"clips": ["waterglass_drop"], "trim": [0, 1.6]},
-
-    # consuming a med / ration in raid
-    "use_med": {"clips": ["med_medkit_use"], "trim": [0, 3.0]},
-    "use_pills": {"clips": ["med_pills_use"], "trim": [0, 2.5]},
-    "use_food": {"clips": ["food_tin_can_use"], "trim": [0, 3.0]},
-    "use_drink": {"clips": ["food_bottle_use"], "trim": [0, 3.0]},
 
     # ---------------- interface ----------------
     "ui_click": {"clips": ["button_click"], "trim": [0, 0.5]},
@@ -149,3 +106,33 @@ PICKS = {
     # the real Factory bed, kept long so the loop point is hard to hear
     "amb_factory": {"clips": ["amb_factory_rework_day_loop"], "rate": 22050, "q": 1, "gain": -2},
 }
+
+# ---------------- item handling ----------------
+# Every item template in the game carries an ItemSound field naming the foley
+# it makes, and itemsounds.bundle holds a <class>_pickup / _drop / _use for
+# each. tools/build_items.py copies that field into src/data/items-db.json as
+# `snd`, so the game can ask for the exact sound the real item makes rather
+# than one guessed from a category. These are the classes the current item
+# selection actually uses, plus the rest of the set so new items are covered.
+ITEM_SOUNDS = [
+    "generic", "smallmetal", "jewelry", "keys", "item_money", "item_paper",
+    "item_book", "item_map", "item_cloth_generic", "item_plastic_generic",
+    "med_medkit", "med_pills", "med_bandage", "med_stimulator",
+    "food_tin_can", "food_bottle", "food_juice_carton", "food_soda_can", "food_snack",
+    "gear_armor", "gear_helmet", "gear_backpack", "gear_generic", "gear_goggles",
+    "weap_ar", "weap_dmr", "weap_rifle", "weap_pistol", "weap_pump",
+    "knife_generic", "bigknife", "grenade",
+    "mag_plastic", "magazine_metal", "magazine_drum", "magazine_belt",
+    "ammo_singleround", "ammo_pack_generic", "ammo_shotgun", "ammo_launcher",
+    "container_case", "container_metal", "container_plastic", "container_pouch",
+    "spec_multitool", "spec_armorrep", "spec_weaprep", "mod",
+]
+
+# a handful have no _use clip in the bundle; the extractor skips what is absent
+_NO_USE = {"grenade", "item_money", "jewelry", "smallmetal", "spec_multitool"}
+
+for _cls in ITEM_SOUNDS:
+    PICKS[f"item_{_cls}_pickup"] = {"clips": [f"{_cls}_pickup"], "trim": [0, 2.0]}
+    PICKS[f"item_{_cls}_drop"] = {"clips": [f"{_cls}_drop"], "trim": [0, 2.0]}
+    if _cls not in _NO_USE:
+        PICKS[f"item_{_cls}_use"] = {"clips": [f"{_cls}_use"], "trim": [0, 3.5]}
