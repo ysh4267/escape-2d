@@ -26,6 +26,9 @@ export function initContextMenu() {
   }, true);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContext(); });
   window.addEventListener('resize', closeContext);
+  // the menu is position:fixed, so scrolling the panel underneath slides a
+  // different item under it while its actions still point at the first one
+  document.addEventListener('scroll', closeContext, true);
   // The menu is built from closures over one screen's item, trader and
   // dndContext. A pane switch by keyboard, or a raid ending on its own, left
   // it floating over the next screen with every entry still live — DROP on the

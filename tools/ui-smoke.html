@@ -244,6 +244,79 @@ try {
   const drop = $('.deal-row__drop');
   if (drop) { click(drop); await sleep(120); }
 
+  head('SPLIT actually splits');
+  const stackTile = $$('#trade-stash-host .item').find((n) => n._item?.stack >= 4);
+  check('found a stack to split', !!stackTile, 'no stack of 4+ in the docked stash');
+  if (stackTile) {
+    const src = stackTile._item;
+    const was = src.stack, tpl = src.tplId;
+    const countOf = () => game.stash.items().filter((i) => i.tplId === tpl).length;
+    const before = countOf();
+    fire(stackTile, 'contextmenu', { button: 2 });
+    await sleep(80);
+    const splitBtn = Array.from(D.querySelectorAll('#context-menu .ctx__item'))
+      .find((b) => /^SPLIT/.test(b.textContent));
+    check('the menu offers SPLIT', !!splitBtn);
+    click(splitBtn);
+    await sleep(220);
+    const accept = Array.from(D.querySelectorAll('#modal-root .btn'))
+      .find((b) => /ACCEPT/.test(b.textContent));
+    check('the split dialog opened', !!accept);
+    click(accept);
+    await sleep(220);
+    check('the stack was actually split in two', countOf() === before + 1 && src.stack < was,
+          `${before} -> ${countOf()} stacks, source ${was} -> ${src.stack}`);
+  }
+
+  head('SPACE must not fire behind an open context menu');
+  click($('#pane-traders .seg[data-mode="sell"]'));
+  await sleep(200);
+  const sellTile = $$('#trade-stash-host .item').find((n) => n._item && !n._item.isContainer);
+  if (sellTile) {
+    fire(sellTile, 'contextmenu', { button: 2 });
+    await sleep(80);
+    const put = Array.from(D.querySelectorAll('#context-menu .ctx__item'))
+      .find((b) => /PLACE ON TABLE/.test(b.textContent));
+    if (put) {
+      click(put);
+      await sleep(200);
+      const sold = sellTile._item;
+      const onTableTile = $$('.table-grid .item').find((n) => n._item === sold);
+      fire(onTableTile, 'contextmenu', { button: 2 });
+      await sleep(80);
+      check('a menu is open over the table item', !$('#context-menu').hidden);
+      const rubWas = game.stash.items().filter((i) => i.tplId === 'rub').reduce((n, i) => n + i.stack, 0);
+      D.dispatchEvent(new W.KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+      await sleep(200);
+      const rubNow = game.stash.items().filter((i) => i.tplId === 'rub').reduce((n, i) => n + i.stack, 0);
+      check('SPACE did not sell behind the open menu', rubNow === rubWas, `${rubWas} -> ${rubNow}`);
+      D.dispatchEvent(new W.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await sleep(80);
+      // and the clear button must be able to take it back off the table in BUY mode
+      click($('#pane-traders .seg[data-mode="buy"]'));
+      await sleep(180);
+      check('CLEAR is live whenever the table holds something',
+            tradeTableCount() === 0 || !$('#btn-trade-clear').disabled,
+            `table=${tradeTableCount()} disabled=${$('#btn-trade-clear').disabled}`);
+    }
+  }
+  function tradeTableCount() {
+    const any = $$('.table-grid .item')[0];
+    return any ? 1 : 0;
+  }
+
+  head('a context menu does not survive scrolling its panel');
+  click($('#pane-traders .seg[data-mode="buy"]'));
+  await sleep(160);
+  const scrollTile = $$('#trade-stash-host .item')[0];
+  fire(scrollTile, 'contextmenu', { button: 2 });
+  await sleep(80);
+  check('menu open before the scroll', !$('#context-menu').hidden);
+  $('#trade-stash-host').scrollTop = 60;
+  $('#trade-stash-host').dispatchEvent(new W.Event('scroll', { bubbles: false }));
+  await sleep(120);
+  check('menu closed when the panel scrolled', $('#context-menu').hidden);
+
   head('context menu does not outlive a pane switch');
   await sleep(60);
   const anyStash = $$('#trade-stash-host .item')[0];

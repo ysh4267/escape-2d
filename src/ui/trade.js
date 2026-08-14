@@ -27,7 +27,7 @@ import { Item, Grid, autoPlace, detach } from '../inventory/model.js';
 import { renderGrid } from '../inventory/view.js';
 import { isKnown, needsExamine } from '../inventory/examine.js';
 import { dndContext, quickTransfer, isDragging } from '../inventory/dnd.js';
-import { setContextProvider, inspectDialog } from '../inventory/dialogs.js';
+import { setContextProvider, inspectDialog, closeContext } from '../inventory/dialogs.js';
 import { openContainerWindow, refreshContainerWindows, closeContainerWindow } from '../inventory/window.js';
 import { buildMenu, markOpenable, examineNow } from './stash.js';
 import { sfx } from '../core/audio.js';
@@ -40,6 +40,8 @@ let mode = 'buy';
 const CUR_SYM = { RUB: '₽', USD: '$', EUR: '€' };
 const ROMAN = ['I', 'II', 'III', 'IV'];
 const FENCE_REFRESH_COST = 5000;
+/** ceiling on one order, matching the three digits the quantity box takes */
+const MAX_BUY_QTY = 999;
 
 /** the sell zone: items dragged here are what the DEAL button will sell */
 export const tradeTable = new Grid(9, 6, { tag: 'tradeTable', label: 'TRADING TABLE' });
@@ -129,6 +131,11 @@ export function initTrade() {
     // typing, or a focused control that already answers to SPACE itself
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || e.target?.isContentEditable) return;
     if (!$('#modal-root').hidden || isDragging()) return;
+    // Clicking DEAL! closes the context menu on the way in, because the
+    // pointerdown lands outside it. A key press does not, and the menu's
+    // actions still hold the Item that the deal is about to detach — REMOVE
+    // FROM TABLE on a sold item put it back in the stash, payout and all.
+    if (!$('#context-menu').hidden) return;
     e.preventDefault();
     const t = TRADER_BY_ID[activeId];
     if (mode === 'buy') doBuyStaged(t);
@@ -230,6 +237,9 @@ export function activateTradeContext() {
         extra.push({
           label: 'REMOVE FROM TABLE', icon: 'back',
           run: () => {
+            // a sold item still has a holder-less object behind this closure;
+            // autoPlace would happily put it back and pay the player twice
+            if (!item.holder) return;
             if (!autoPlace(item, [game.stash])) toast('No room in the stash', 'warn');
             dndContext.onChange();
           },
@@ -239,6 +249,7 @@ export function activateTradeContext() {
           label: `PLACE ON TABLE — ${fmtNum(sellValue(t, item, FX))}${CUR_SYM[t.currency]}`,
           icon: 'sell',
           run: () => {
+            if (!item.holder) return;
             if (!autoPlace(item, [tradeTable])) toast('No room on the table', 'warn');
             dndContext.onChange();
           },
@@ -302,20 +313,30 @@ export function renderTrade() {
   // shelf is idle and the table is what the stash drops onto
   const content = $('#trader-content');
   const table = $('#trade-table-host');
+  // both of these scrollers are rebuilt as brand-new elements, so their offset
+  // has to be carried across by hand or every action scrolls them home
   const shelfTop = $('.assort-scroll', content)?.scrollTop || 0;
+  const zone = $('.table-zone', table);
+  const zoneTop = zone?.scrollTop || 0;
+  const zoneLeft = zone?.scrollLeft || 0;
   content.replaceChildren();
   table.replaceChildren();
   if (mode === 'buy') { renderBuy(t, content); renderBuyTable(t, table); }
   else { renderShowcaseIdle(t, content); renderSell(t, table); }
   const shelf = $('.assort-scroll', content);
   if (shelf) shelf.scrollTop = shelfTop;
+  const zone2 = $('.table-zone', table);
+  if (zone2) { zone2.scrollTop = zoneTop; zone2.scrollLeft = zoneLeft; }
 
   const clear = $('#btn-trade-clear');
   if (clear) {
-    clear.disabled = mode === 'buy' ? !staged : !tradeTable.count;
+    // the button is labelled "Clear the table", so it has to be live whenever
+    // the table holds something — items stranded there are invisible in BUY
+    // mode, and this was the only control that could reach them
+    clear.disabled = !staged && !tradeTable.count;
     clear.onclick = () => {
       if (mode === 'buy') clearStaged();
-      else returnTableItems();
+      if (tradeTable.count) returnTableItems();
       sfx.trade('click');
       renderTrade();
       emit(EV.INVENTORY_CHANGED);
@@ -533,13 +554,18 @@ function stageOffer(t, off) {
   if (!tpl) return;
   // the sell screen has no transaction panel to show a staged purchase in
   if (mode !== 'buy') return;
-  if (off.ll > loyaltyLevel(t)) { toast('Bad user loyalty level', 'warn'); sfx.ui('error'); return; }
-  if (off.stock <= 0) { toast('Item is out of stock', 'warn'); sfx.ui('error'); return; }
+  if (off.ll > loyaltyLevel(t)) { toast('Bad user loyalty level', 'warn'); return; }
+  if (off.stock <= 0) { toast('Item is out of stock', 'warn'); return; }
 
   // one offer at a time: picking a different one replaces what is on the
   // table, picking the same one again adds another of it
   if (staged && staged.off === off) {
-    if (staged.qty >= off.stock) { toast('Item is out of stock', 'warn'); sfx.ui('error'); return; }
+    // the same ceiling the quantity box enforces, so clicking cannot walk the
+    // order past what the field will let you type back
+    if (staged.qty >= Math.min(off.stock, MAX_BUY_QTY)) {
+      toast(staged.qty >= MAX_BUY_QTY ? 'Maximum amount reached' : 'Item is out of stock', 'warn');
+      return;
+    }
     staged.qty++;
   } else {
     staged = { off, tpl, qty: 1 };
@@ -587,7 +613,7 @@ function renderBuyTable(t, host) {
       el('small', {}, 'click an offer on the shelf to put it on the table')));
   } else {
     const unit = buyPrice(t, staged.tpl, FX, staged.off);
-    const cap = Math.min(staged.off.stock, 999);
+    const cap = Math.min(staged.off.stock, MAX_BUY_QTY);
 
     const art = el('div', { class: 'deal-row__art' });
     if (staged.tpl.imgUrl) art.append(el('img', { src: staged.tpl.imgUrl, alt: '' }));
@@ -680,14 +706,15 @@ function renderBuyTable(t, host) {
 
 /** commit every offer on the table as one transaction, the way DEAL! does */
 function doBuyStaged(t) {
+  closeContext();
   if (dealBlocker(t)) { sfx.ui('error'); return; }
   const cur = stagedCurrency(t);
   // charge for what is actually handed over: if the shelf ran short between
   // staging and DEAL!, the staged total would have billed for the difference
   const bought = Math.min(staged.qty, staged.off.stock);
-  if (bought < 1) { toast('Item is out of stock', 'warn'); sfx.ui('error'); return; }
+  if (bought < 1) { toast('Item is out of stock', 'warn'); return; }
   const total = buyPrice(t, staged.tpl, FX, staged.off) * bought;
-  if (countMoney(cur) < total) { toast('Not enough money', 'bad'); sfx.ui('error'); return; }
+  if (countMoney(cur) < total) { toast('Not enough money', 'bad'); return; }
 
   // reserve space for the whole quantity first: a partial commit would take
   // the money for items that then have nowhere to go
@@ -700,7 +727,6 @@ function doBuyStaged(t) {
     if (!autoPlace(it, [game.stash], { merge: false })) {
       for (const m of made) detach(m);
       toast('Not enough space in stash', 'warn');
-      sfx.ui('error');
       return;
     }
     made.push(it);
@@ -788,6 +814,8 @@ function renderSell(t, host) {
 }
 
 function doSell(t) {
+  // no menu may outlive the transaction it is describing
+  closeContext();
   // never sell what this trader does not deal in, and never destroy a case
   // that has been filled since it was put down
   const items = tradeTable.items().filter((it) => sellableTo(t, it));

@@ -564,7 +564,11 @@ function activateRaidContext() {
           const copy = splitStack(item, n);
           if (!copy) return;
           const host = item.holder?.kind === 'grid' ? [item.holder.grid] : [];
-          if (!autoPlace(copy, [...host, ...game.equipment.carryGrids()])) item.stack += copy.stack;
+          // merge:false, or autoPlace's merge pass folds the half we just split
+          // straight back into the stack it came from and the action does nothing
+          if (!autoPlace(copy, [...host, ...game.equipment.carryGrids()], { merge: false })) {
+            item.stack += copy.stack;
+          }
           dndContext.onChange();
         }),
       });

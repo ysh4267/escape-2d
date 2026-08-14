@@ -89,7 +89,10 @@ export function activateStashContext() {
     // moving out of the character goes to the stash, and vice versa
     const inChar = isOnCharacter(item);
     if (inChar) return [game.stash];
-    return [...game.equipment.carryGrids(), ...game.equipment.nestedGrids(), game.stash];
+    // not the stash itself: with the gear full, autoPlace fell through to it
+    // and re-homed the item to the first free cell, reporting success — a
+    // hand-packed stash got shuffled one ctrl+click at a time
+    return [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()];
   };
   dndContext.equipSlotFor = (item) => game.equipment.slotFor(item);
   dndContext.requestSplit = (item, cb) => splitDialog(item, cb);
@@ -151,7 +154,10 @@ export function buildMenu(item, where, extra = [], opts = {}) {
           if (!copy) return;
           const host = item.holder?.kind === 'grid' ? item.holder.grid : null;
           const targets = host ? [host, ...(dndContext.quickTargets(item) || [])] : (dndContext.quickTargets(item) || []);
-          if (!autoPlace(copy, targets)) {
+          // merge:false or the split is a no-op: the source stack is the first
+          // candidate and has exactly `n` room, so the half just split off gets
+          // merged straight back into it
+          if (!autoPlace(copy, targets, { merge: false })) {
             item.stack += copy.stack;   // nowhere to put the split-off half
             toast('No space to split into', 'warn');
             return;
