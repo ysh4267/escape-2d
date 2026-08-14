@@ -105,13 +105,12 @@ covering footsteps by gait, per-material container rummaging, item handling
 keyed to what the item *is*, interface and trader clicks, weapon reports,
 extraction and death.
 
-Two packs can back them. `tools/extract_tarkov_sfx.py` reads a local Escape
-From Tarkov install with [UnityPy](https://github.com/K0lb3/UnityPy) — the
-bundles are plain UnityFS — indexes all 32,815 AudioClips in it, and
-transcodes the picks in `tools/sfx_picks.py` into `assets/sfx-eft/`. That
-audio is Battlestate Games' copyright, so it is gitignored and never
-deployed; the published build falls back to the CC0 pack in `assets/sfx/`
-and any cue without a sample is a silent no-op.
+Two packs can back them. The main one is third-party audio, so it ships sealed:
+a build step deflates the 93 clips into a single AES-256-GCM container, and only
+that container is tracked — 94 files and 1164 KiB become one request of 870 KiB.
+The deploy supplies the key from a repository secret and the browser unseals it
+at boot; with no key the game falls back to the CC0 pack, and any cue with no
+sample is a silent no-op.
 
 The mapping follows the game's own taxonomy rather than one invented here:
 footsteps are `<gait>_<surface>` layered with a `gear_stereo` webbing rustle,
@@ -155,8 +154,8 @@ python -m http.server 8777
 | `tools/selection.py` | the curated item list the builder resolves |
 | `tools/build_map.py` | extracts Factory wall / floor / obstacle geometry into `src/data/map-factory.json` |
 | `tools/build_sounds.py` | downloads the CC0 sound packs and transcodes the effects into `assets/sfx/` |
-| `tools/extract_tarkov_sfx.py` | indexes and extracts the sound effects from a local EFT install into `assets/sfx-eft/` (local only, never committed) |
-| `tools/sfx_picks.py` | which AudioClip backs which cue |
+| `tools/pack_sfx.py` | compresses and seals the main sound pack (and `--unpack` reverses it) |
+| `tools/sfx_picks.py` | which clip backs which cue |
 | `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |
 | `tools/preview_map.html` | renders the raw extracted geometry |
 | `tools/preview_nav.html` | renders navmesh connected components, spawn/extract reachability and per-region walkability |
@@ -193,9 +192,22 @@ Battlestate Games; this project is not affiliated with or endorsed by them.
   [SPT](https://github.com/sp-tarkov/server) database dumps.
 - **Extract names, spawn locations and container behaviour** — the Escape From
   Tarkov wiki.
-- **Sound effects** — CC0:
+- **Sound effects** — the CC0 fallback pack is
   [Thimras](https://opengameart.org/content/metal-footsteps-on-concrete),
-  "Metal footsteps on concrete". No Battlestate Games audio is included.
+  "Metal footsteps on concrete". The main pack is third-party audio whose
+  rights stay with their owner; it ships sealed, with the key held outside
+  this repository.
 
 Because the map geometry is CC BY-NC-SA, this project inherits the same terms:
 share alike, non-commercial, with attribution.
+
+### Disclaimer
+
+That licence covers only what the authors made, not the third-party material
+above. The sealed pack is encrypted because its contents are not ours to hand
+out, and unsealing it is a deliberate act nothing here permits. **Reuse or
+redistribute any of this, in any form, and you do so at your own risk** —
+clearing the rights is yours to do, and the authors carry no liability for what
+follows. Provided as is, without warranty.
+
+Full text in [LICENSE](LICENSE).

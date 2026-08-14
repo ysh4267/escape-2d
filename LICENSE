@@ -40,8 +40,39 @@ Third-party material
     Thimras, "Metal footsteps on concrete"
     https://opengameart.org/content/metal-footsteps-on-concrete
 
-    No Escape From Tarkov audio is included in this project.
+  Sound effects (assets/sfx-eft/pack.bin)
+    Third-party audio, sealed with tools/pack_sfx.py. All rights remain with
+    their owner. NOT covered by the licence above and NOT licensed for
+    redistribution. It ships encrypted, and its key is held outside this
+    repository.
 
 Escape From Tarkov is a trademark of Battlestate Games. This is a
 non-commercial fan project and is not affiliated with, endorsed by, or
 sponsored by Battlestate Games.
+
+-------------------------------------------------------------------------------
+
+Disclaimer
+
+The CC BY-NC-SA 4.0 grant above covers only the parts of this project its
+authors made. It does not - and cannot - license the third-party material
+listed above, whose rights stay with their respective owners.
+
+assets/sfx-eft/pack.bin is encrypted precisely because its contents are not
+ours to hand out. Unsealing it to get at the audio inside - by lifting the key
+out of a deployed build, or by any other route - is a deliberate act taken
+against that intent, and nothing here should be read as permission for it.
+Whoever does it, and whoever then plays, copies, publishes or builds on what
+comes out, does so on their own initiative and carries the consequences alone.
+
+The same holds for the project as a whole. If you copy, fork, mirror, host,
+repackage, transcode or otherwise further process this repository or anything
+derived from it, you do so entirely at your own risk. Clearing the rights to
+the third-party material is your responsibility, not the authors'. The authors
+accept no liability for any claim, demand, takedown, ban, penalty, loss or
+damage of any kind arising from your use, distribution or further processing
+of this work.
+
+This work is provided "AS IS", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and non-infringement.

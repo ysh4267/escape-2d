@@ -1,16 +1,26 @@
 // =========================================================
 // sound
 //
-// Two packs can back the game:
+// Three sources can back the game, tried in this order at boot:
 //
-//   assets/sfx-eft/   the real thing, pulled out of a local Escape From
-//                     Tarkov install by tools/extract_tarkov_sfx.py. Not
-//                     redistributable, so it is gitignored and simply absent
-//                     from the published build.
-//   assets/sfx/       the CC0 fallback that ships with the repo.
+//   assets/sfx-eft/*.ogg    loose clips, there only if someone has run
+//                           tools/extract_tarkov_sfx.py against their own
+//                           Escape From Tarkov install. Gitignored.
+//   assets/sfx-eft/pack.bin the same clips deflated into one container and
+//                           sealed with AES-256-GCM (tools/pack_sfx.py).
+//                           This is what the repository ships. The deploy
+//                           drops the passphrase beside it as key.json, out
+//                           of a repository secret, so the key is never in
+//                           the tree; without it this is opaque bytes.
+//   assets/sfx/             the CC0 fallback.
 //
-// Whichever is present at boot wins; every call site talks to the same cue
-// names either way, and a cue with no file behind it is a silent no-op.
+// Whichever answers first wins; every call site talks to the same cue names
+// either way, and a cue with no file behind it is a silent no-op.
+//
+// The audio in the sealed pack is Battlestate Games' copyright. Sealing it
+// keeps it out of a public tree as ready-to-play files - it is deliberately
+// not a protection scheme, since the browser has to be handed the key to
+// play anything at all.
 //
 // Three buses hang off the master gain — world foley, interface, ambience —
 // so the interface can sit under the raid without a separate mixer.
@@ -20,6 +30,14 @@ const PACKS = [
   { dir: 'assets/sfx-eft/', manifest: 'assets/sfx-eft/manifest.json' },
   { dir: 'assets/sfx/', manifest: 'assets/sfx/manifest.json' },
 ];
+
+/** the sealed pack, and where the deploy leaves the key for it */
+const SEALED = { blob: 'assets/sfx-eft/pack.bin', key: 'assets/sfx-eft/key.json' };
+/** header of tools/pack_sfx.py: magic(6) | salt(16) | iv(12) | ciphertext+tag */
+const SEALED_MAGIC = 'E2SFX1';
+const SEALED_SALT = 16;
+const SEALED_IV = 12;
+const PBKDF2_ROUNDS = 200000;
 
 /** cadence and level per gait; `gap` is the floor between two steps */
 const STEP_MIX = {
@@ -107,6 +125,8 @@ let packReady = false;
 
 /** file base name -> AudioBuffer | 'pending' | 'failed' */
 const buffers = new Map();
+/** file base name -> ogg bytes, when the sealed pack is what booted */
+const packBlobs = new Map();
 /** cue -> last variant index, so the same file never plays twice running */
 const lastVariant = new Map();
 /** cue -> last play time, for the per-cue rate limit */
@@ -139,23 +159,89 @@ export function initAudio() {
   window.addEventListener('keydown', unlock, { passive: true });
 }
 
-/** pick whichever pack is actually deployed */
+const asset = (path) => new URL(`../../${path}`, import.meta.url);
+
+function packLoaded() {
+  packReady = true;
+  if (unlocked) prefetch();
+}
+
+/** pick whichever source is actually deployed */
 async function loadManifest() {
-  for (const pack of PACKS) {
-    try {
-      const res = await fetch(new URL(`../../${pack.manifest}`, import.meta.url));
-      if (!res.ok) continue;
-      const data = await res.json();
-      // the CC0 pack ships a bare array of footstep names; the extracted pack
-      // ships the full cue map
-      manifest = Array.isArray(data) ? { step_walk: data, step_run: data, step_sprint: data } : data;
-      packDir = pack.dir;
-      packReady = true;
-      if (unlocked) prefetch();
-      return;
-    } catch { /* try the next pack */ }
-  }
+  if (await tryLoose(PACKS[0])) return;    // local extraction, if there is one
+  if (await trySealed()) return;           // what the repository ships
+  if (await tryLoose(PACKS[1])) return;    // CC0
   packReady = true;   // nothing to play; every cue becomes a no-op
+}
+
+/** a directory of loose ogg files next to its manifest */
+async function tryLoose(pack) {
+  try {
+    const res = await fetch(asset(pack.manifest));
+    if (!res.ok) return false;
+    const data = await res.json();
+    // the CC0 pack ships a bare array of footstep names; the extracted pack
+    // ships the full cue map
+    manifest = Array.isArray(data) ? { step_walk: data, step_run: data, step_sprint: data } : data;
+    packDir = pack.dir;
+    packLoaded();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One request for the sealed container, then unseal it in the background:
+ * PBKDF2 the deploy's key into an AES-256-GCM key, decrypt, inflate, and cut
+ * the result into one ogg per clip. Any missing piece - no key.json on a
+ * local checkout, an engine without DecompressionStream - just falls through
+ * to the next source.
+ */
+async function trySealed() {
+  if (!window.crypto?.subtle || typeof DecompressionStream !== 'function') return false;
+  try {
+    const [keyRes, packRes] = await Promise.all([
+      fetch(asset(SEALED.key)),
+      fetch(asset(SEALED.blob)),
+    ]);
+    if (!keyRes.ok || !packRes.ok) return false;
+    const passphrase = (await keyRes.json()).key;
+    if (!passphrase) return false;
+
+    const bytes = new Uint8Array(await packRes.arrayBuffer());
+    if (new TextDecoder().decode(bytes.subarray(0, SEALED_MAGIC.length)) !== SEALED_MAGIC) return false;
+
+    let at = SEALED_MAGIC.length;
+    const salt = bytes.subarray(at, (at += SEALED_SALT));
+    const iv = bytes.subarray(at, (at += SEALED_IV));
+
+    const material = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey'],
+    );
+    const key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: PBKDF2_ROUNDS, hash: 'SHA-256' },
+      material, { name: 'AES-GCM', length: 256 }, false, ['decrypt'],
+    );
+    const squeezed = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, bytes.subarray(at));
+
+    const inflated = new Response(
+      new Blob([squeezed]).stream().pipeThrough(new DecompressionStream('deflate-raw')),
+    );
+    const raw = new Uint8Array(await inflated.arrayBuffer());
+
+    const headLen = new DataView(raw.buffer, raw.byteOffset, 4).getUint32(0, true);
+    const header = JSON.parse(new TextDecoder().decode(raw.subarray(4, 4 + headLen)));
+    const body = raw.subarray(4 + headLen);
+    for (const f of header.files) packBlobs.set(f.name, body.slice(f.off, f.off + f.len));
+
+    manifest = header.manifest;
+    packDir = PACKS[0].dir;
+    packLoaded();
+    return true;
+  } catch {
+    return false;   // wrong key, damaged pack, no pack at all
+  }
 }
 
 /** warm the cues that must not be late the first time they fire */
@@ -195,8 +281,13 @@ function load(name) {
   if (buffers.has(name)) return;
   if (!ensure()) return;
   buffers.set(name, 'pending');
-  fetch(new URL(`../../${packDir}${name}.ogg`, import.meta.url))
-    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+  const sealed = packBlobs.get(name);
+  // decodeAudioData detaches what it is given, so hand it a copy and keep ours
+  const bytes = sealed
+    ? Promise.resolve(sealed.slice().buffer)
+    : fetch(asset(`${packDir}${name}.ogg`))
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))));
+  bytes
     .then((ab) => ctx.decodeAudioData(ab))
     .then((buf) => buffers.set(name, buf))
     .catch(() => buffers.set(name, 'failed'));
@@ -214,7 +305,9 @@ export function setVolume(v) {
   persist();
 }
 export function audioState() { return { enabled, volume }; }
-export function audioPack() { return { dir: packDir, cues: Object.keys(manifest).length }; }
+export function audioPack() {
+  return { dir: packDir, cues: Object.keys(manifest).length, sealed: packBlobs.size > 0 };
+}
 function persist() {
   try { localStorage.setItem('escape2d.audio', JSON.stringify({ enabled, volume })); } catch { /* ignore */ }
 }

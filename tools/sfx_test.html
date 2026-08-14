@@ -20,22 +20,73 @@ const check = (name, cond, extra = '') => {
 const note = (t) => line('  ..    ' + t, 'dim');
 
 // ---------------------------------------------------------
-// Which pack is deployed? The extracted EFT set is gitignored, so a clean
-// checkout only has the CC0 fallback and the coverage checks are skipped.
+// Which source is deployed? Same order as src/core/audio.js: the loose
+// extracted clips, then the sealed container, then CC0. Both of the first two
+// are the EFT set, so either one enables the coverage checks; a checkout with
+// no key.json only has the fallback and they are skipped.
 head('sound pack');
-let pack = null, manifest = null;
-for (const dir of ['../assets/sfx-eft/', '../assets/sfx/']) {
+let pack = null, manifest = null, source = null;
+/** base name -> Uint8Array, only when the sealed container is what answered */
+let blobs = null;
+
+/** mirror of tools/pack_sfx.py: magic | salt(16) | iv(12) | ciphertext+tag */
+async function unseal() {
+  if (!window.crypto?.subtle || typeof DecompressionStream !== 'function') return false;
+  const [keyRes, packRes] = await Promise.all([
+    fetch('../assets/sfx-eft/key.json'), fetch('../assets/sfx-eft/pack.bin'),
+  ]);
+  if (!keyRes.ok || !packRes.ok) return false;
+  const passphrase = (await keyRes.json()).key;
+  const bytes = new Uint8Array(await packRes.arrayBuffer());
+  if (new TextDecoder().decode(bytes.subarray(0, 6)) !== 'E2SFX1') return false;
+
+  const material = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: bytes.subarray(6, 22), iterations: 200000, hash: 'SHA-256' },
+    material, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const plain = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: bytes.subarray(22, 34) }, key, bytes.subarray(34));
+
+  const raw = new Uint8Array(await new Response(new Blob([plain]).stream()
+    .pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+  const headLen = new DataView(raw.buffer, raw.byteOffset, 4).getUint32(0, true);
+  const header = JSON.parse(new TextDecoder().decode(raw.subarray(4, 4 + headLen)));
+  const body = raw.subarray(4 + headLen);
+
+  blobs = new Map(header.files.map((f) => [f.name, body.subarray(f.off, f.off + f.len)]));
+  manifest = header.manifest;
+  return true;
+}
+
+async function tryLoose(dir, label) {
   try {
     const res = await fetch(dir + 'manifest.json');
-    if (!res.ok) continue;
+    if (!res.ok) return false;
     manifest = await res.json();
     pack = dir;
-    break;
-  } catch { /* next */ }
+    source = label;
+    return true;
+  } catch { return false; }
 }
+async function trySealed() {
+  try {
+    if (!await unseal()) return false;
+  } catch (e) {
+    note('pack.bin is there but would not unseal: ' + e);
+    return false;
+  }
+  pack = '../assets/sfx-eft/';
+  source = 'sealed pack.bin, unsealed with key.json';
+  return true;
+}
+
+await tryLoose('../assets/sfx-eft/', 'loose clips from a local EFT install')
+  || await trySealed()
+  || await tryLoose('../assets/sfx/', 'CC0 fallback');
 check('a sound pack is present', !!pack, 'none found');
 const extracted = pack === '../assets/sfx-eft/';
-note(`pack: ${pack}  (${extracted ? 'extracted from a local EFT install' : 'CC0 fallback'})`);
+note(`pack: ${pack}  (${source})`);
 
 if (Array.isArray(manifest)) {
   // the CC0 pack is a bare list of footstep files
@@ -51,18 +102,32 @@ if (Array.isArray(manifest)) {
 head('files');
 const files = [...new Set(Object.values(manifest).flat())];
 note(`${Object.keys(manifest).length} cues over ${files.length} files`);
+const isOgg = (b) => b.length > 500 && b[0] === 0x4f && b[1] === 0x67 && b[2] === 0x67 && b[3] === 0x53;
 let badFiles = [];
 for (const name of files) {
-  const res = await fetch(`${pack}${name}.ogg`);
-  let good = false;
-  if (res.ok) {
-    const ab = await res.arrayBuffer();
-    const h = new Uint8Array(ab, 0, 4);
-    good = h[0] === 0x4f && h[1] === 0x67 && h[2] === 0x67 && h[3] === 0x53 && ab.byteLength > 500;
+  let bytes = null;
+  if (blobs) {
+    bytes = blobs.get(name);
+  } else {
+    const res = await fetch(`${pack}${name}.ogg`);
+    if (res.ok) bytes = new Uint8Array(await res.arrayBuffer());
   }
-  if (!good) badFiles.push(name);
+  if (!bytes || !isOgg(bytes)) badFiles.push(name);
 }
 check('every manifest file is a valid Ogg', badFiles.length === 0, badFiles.slice(0, 8).join(','));
+
+if (blobs) {
+  // the container is only useful if what comes out of it actually decodes
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  let decoded = 0, failed = [];
+  for (const name of files.slice(0, 8)) {
+    try { await ctx.decodeAudioData(blobs.get(name).slice().buffer); decoded++; }
+    catch { failed.push(name); }
+  }
+  check('unsealed clips decode as audio', failed.length === 0, failed.join(','));
+  note(`${decoded} of 8 sampled clips decoded`);
+  ctx.close();
+}
 
 // ---------------------------------------------------------
 head('audio surface');

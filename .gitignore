@@ -17,10 +17,14 @@ tools/cache/sfx/
 # local verification captures
 logs/
 
-# audio extracted from a local Escape From Tarkov install (tools/extract_tarkov_sfx.py).
-# Battlestate Games' copyright: fine to use locally from a copy you own,
-# not ours to redistribute. The public build falls back to assets/sfx.
-assets/sfx-eft/
-
 # python bytecode
 tools/__pycache__/
+
+# Audio extracted from a local Escape From Tarkov install
+# (tools/extract_tarkov_sfx.py). Battlestate Games' copyright: fine to use
+# locally from a copy you own, not ours to hand out as playable files. Only
+# the sealed container is tracked - tools/pack_sfx.py builds it, and the
+# passphrase it needs arrives at deploy time from a repository secret.
+assets/sfx-eft/*
+!assets/sfx-eft/pack.bin
+assets/sfx-eft/key.json
