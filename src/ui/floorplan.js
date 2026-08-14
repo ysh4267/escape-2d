@@ -13,6 +13,7 @@
 
 import { $, el } from '../core/util.js';
 import { areaAt } from '../data/maps.js';
+import { WALL_W } from '../raid/nav.js';
 
 const PAD = 3;                    // svg units of margin around the drawing
 
@@ -22,7 +23,8 @@ const PLAN = {
   floorEdge: '#5c7d86',
   solid: '#101c22',
   solidEdge: '#3d545d',
-  wall: '#9fc0c6',
+  wall: '#c3dde2',
+  wallCase: '#050b0e',
   stairs: '#d9a441',
   grid: 'rgba(159,192,198,.07)',
   text: '#8fa9ae',
@@ -169,14 +171,18 @@ function bake(level, scale) {
     g.strokeStyle = PLAN.stairs; g.lineWidth = 1; g.stroke();
   }
 
-  g.strokeStyle = PLAN.wall;
-  g.lineWidth = Math.max(1.4, 0.42 * scale);
-  g.lineCap = 'round';
+  // the real wall thickness, with butt caps so the doorways between them stay
+  // the width they are instead of being capped shut
+  g.lineCap = 'butt';
   g.lineJoin = 'round';
-  for (const line of L.walls || []) {
-    g.beginPath();
-    line.forEach((p, i) => (i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))));
-    g.stroke();
+  for (const [width, colour] of [[WALL_W + 0.18, PLAN.wallCase], [WALL_W, PLAN.wall]]) {
+    g.strokeStyle = colour;
+    g.lineWidth = Math.max(width === WALL_W ? 1.2 : 1.8, width * scale);
+    for (const line of L.walls || []) {
+      g.beginPath();
+      line.forEach((p, i) => (i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))));
+      g.stroke();
+    }
   }
 
   // area names, so the plan reads as places rather than shapes

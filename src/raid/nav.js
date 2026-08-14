@@ -9,7 +9,13 @@
 // =========================================================
 
 export const CELL = 0.35;         // svg units per nav cell
-const WALL_HALF = 0.22;           // half thickness stamped for wall centrelines
+/**
+ * How thick a wall is. This is the one number for it: the nav grid stamps it,
+ * the renderer draws it, and the floor plan draws it, so what blocks the
+ * player and what the player sees are the same wall.
+ */
+export const WALL_W = 0.44;
+const WALL_HALF = WALL_W / 2;     // half thickness stamped for wall centrelines
 const AGENT_PAD = 0.34;           // how far the player's centre stays off geometry
 
 export class NavGrid {

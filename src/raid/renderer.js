@@ -8,6 +8,7 @@
 // =========================================================
 
 import { clamp } from '../core/util.js';
+import { WALL_W } from './nav.js';
 
 const PAL = {
   void: '#05080a',
@@ -21,7 +22,7 @@ const PAL = {
   obstacleEdge: '#41565f',
   building: '#101b22',
   buildingEdge: '#6e8f92',
-  wall: '#7f9aa3',
+  wall: '#a7c6cd',
   outline: '#0b1114',
   grid: 'rgba(184,219,217,.045)',
   doorShut: '#c98f4a',
@@ -156,14 +157,26 @@ export class Renderer {
       g.strokeStyle = PAL.buildingEdge; g.lineWidth = 2.2; g.stroke();
     }
 
-    g.strokeStyle = PAL.wall;
-    g.lineWidth = 0.9 * s;
-    g.lineCap = 'round';
+    // Walls, drawn as thick as they actually are and no thicker.
+    //
+    // Two things used to make the plant unreadable. The stroke was 0.9 units
+    // where the nav grid only blocks 0.44, so every wall was drawn at double
+    // its real thickness; and a round cap adds half a line width past each end
+    // of a polyline, which is 0.45 units of overshoot into the very gaps that
+    // are the doorways. A metre-wide door came out looking like a hairline.
+    //
+    // So: butt caps, the real thickness, and the contrast made up with a dark
+    // casing under a bright core rather than with bulk.
+    g.lineCap = 'butt';
     g.lineJoin = 'round';
-    for (const line of L.walls || []) {
-      g.beginPath();
-      line.forEach((p, i) => (i ? g.lineTo(p[0] * s, p[1] * s) : g.moveTo(p[0] * s, p[1] * s)));
-      g.stroke();
+    for (const [width, colour] of [[WALL_W + 0.2, PAL.outline], [WALL_W, PAL.wall]]) {
+      g.strokeStyle = colour;
+      g.lineWidth = width * s;
+      for (const line of L.walls || []) {
+        g.beginPath();
+        line.forEach((p, i) => (i ? g.lineTo(p[0] * s, p[1] * s) : g.moveTo(p[0] * s, p[1] * s)));
+        g.stroke();
+      }
     }
 
     // persistent fog: black everywhere, punched out as the player sees places
