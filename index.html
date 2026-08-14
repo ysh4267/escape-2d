@@ -117,17 +117,37 @@
         <div class="trade">
           <div class="trade__tabs" id="trader-tabs"></div>
           <div class="trade__bar" id="trader-bar"></div>
+          <!-- three columns, as in the real screen: showcase | trading table |
+               stash. The table is a full-height middle column, not a strip
+               under the shelf. -->
           <div class="trade__body">
-            <div class="trade__left">
-              <div class="trade__modes">
-                <button class="seg is-active" data-mode="buy">BUY</button>
-                <button class="seg" data-mode="sell">SELL</button>
+            <div class="trade__col trade__col--shop">
+              <div class="col-head">
+                <span class="col-head__tab">SHOWCASE</span>
+                <div class="col-head__right" id="assort-tools"></div>
               </div>
               <div class="trade__content" id="trader-content"></div>
             </div>
-            <aside class="panel trade__stash">
-              <div class="panel__head"><h2>STASH</h2><span class="panel__sub" id="trade-stash-note"></span></div>
-              <div class="panel__body panel__body--scroll" id="trade-stash-host"></div>
+
+            <div class="trade__col trade__col--table">
+              <div class="col-head">
+                <div class="trade__modes">
+                  <button class="seg is-active" data-mode="buy">BUY</button>
+                  <button class="seg" data-mode="sell">SELL</button>
+                </div>
+                <button class="btn btn--icon col-head__clear" id="btn-trade-clear" title="Clear the table">
+                  <svg class="ico"><use href="#i-discard"/></svg>
+                </button>
+              </div>
+              <div class="deal-col" id="trade-table-host"></div>
+            </div>
+
+            <aside class="trade__col trade__col--stash">
+              <div class="col-head">
+                <span class="col-head__tab">STASH</span>
+                <span class="col-head__right muted" id="trade-stash-note"></span>
+              </div>
+              <div class="trade__content trade__content--scroll" id="trade-stash-host"></div>
             </aside>
           </div>
         </div>

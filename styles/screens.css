@@ -122,13 +122,42 @@
 .wallet-chip.is-active { border-color: var(--line-3); color: var(--white); }
 .wallet-chip__sym { color: var(--rare); font-weight: 700; }
 
-/* body: trader pane left, stash docked right */
-.trade__body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr minmax(330px, 400px); gap: 12px; }
-.trade__left { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.trade__modes { display: flex; gap: 4px; margin-bottom: 8px; border-bottom: 1px solid var(--line-1); }
+/* Body: three columns, showcase | trading table | stash, all starting and
+   ending at the same y. Measured off the real screen at roughly 35 / 27 / 34
+   with thin gutters, so the flanking grids are near-equal and the table is
+   about three quarters their width. */
+.trade__body {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: 35fr 27fr 34fr; gap: 12px;
+}
+.trade__col { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+
+/* each column is titled by a slanted tab, the way the real headers read */
+.col-head { display: flex; align-items: center; gap: 8px; height: 26px; margin-bottom: 6px; }
+.col-head__tab {
+  padding: 3px 16px 3px 10px;
+  background: rgba(22,32,37,.95); border: 1px solid var(--line-1);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  color: var(--white); font-size: 11px; letter-spacing: .2em;
+}
+.col-head__right { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 10px; }
+.col-head__clear { margin-left: auto; }
+.btn--icon { padding: 4px 6px; }
+
+.trade__modes { display: flex; gap: 3px; }
 .trade__content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.trade__stash { min-height: 0; }
+.trade__content--scroll { overflow: auto; }
 .panel__sub { margin-left: auto; color: var(--tx-dim); font-size: 10px; letter-spacing: .08em; }
+
+/* BUY / SELL are chunky angled tabs over the middle column, active in light
+   silver with dark text — not underlined text links */
+.trade__modes .seg {
+  padding: 4px 18px 4px 12px; border: 1px solid var(--line-1);
+  background: rgba(14,21,25,.95); color: var(--tx-2);
+  font-size: 11px; letter-spacing: .18em;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+.trade__modes .seg.is-active { background: #cfcbb0; border-color: #cfcbb0; color: #10161a; font-weight: 700; }
 
 /* BUY: the assortment shelf */
 .assort-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -141,19 +170,21 @@
 .assort-grid .item { cursor: default; }
 .assort-grid .toffer--buyable { cursor: pointer; }
 .assort-grid .toffer--buyable:hover { outline: 1px solid var(--line-3); outline-offset: -1px; }
+/* the real cell puts the price TOP-LEFT in white with an oversized currency
+   glyph, and the stock BOTTOM-RIGHT in grey — the clone had them swapped */
 .toffer__price {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
-  padding: 1px 4px 2px;
-  background: linear-gradient(0deg, rgba(0,0,0,.88) 55%, transparent);
-  color: var(--rare); font-size: 10px; font-weight: 700; letter-spacing: .04em;
-  font-variant-numeric: tabular-nums; text-align: right;
+  position: absolute; left: 0; top: 0; z-index: 4;
+  padding: 1px 5px 2px 3px;
+  background: linear-gradient(180deg, rgba(0,0,0,.85) 55%, transparent);
+  color: #fff; font-size: 10px; font-weight: 600; letter-spacing: .02em;
+  font-variant-numeric: tabular-nums; text-align: left;
   pointer-events: none;
 }
+.toffer__price em { font-style: normal; font-size: 13px; font-weight: 700; margin-right: 1px; }
 .toffer__stock {
-  position: absolute; left: 2px; top: 2px; z-index: 4;
-  padding: 0 4px;
-  background: rgba(0,0,0,.8); border: 1px solid var(--line-2);
-  color: var(--tx-2); font-size: 9px; font-variant-numeric: tabular-nums;
+  position: absolute; right: 3px; bottom: 2px; z-index: 4;
+  color: var(--tx-3); font-size: 9px; letter-spacing: .04em;
+  font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000;
   pointer-events: none;
 }
 .toffer__stock.is-out { color: var(--danger); border-color: var(--danger-dk); }
@@ -221,72 +252,96 @@
 .table-foot__total b { color: var(--rare); font-size: 19px; font-variant-numeric: tabular-nums; }
 .btn--deal { min-width: 130px; justify-content: center; letter-spacing: .24em; }
 
-/* BUY: the trading table an offer is staged on before the deal commits */
+/* The middle column: a black bordered panel running the full body height,
+   with the deal bar pinned to the top and the transaction stack centred
+   under it — the lower part of the column is meant to stay empty. */
+.deal-col {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  background: #000; border: 1px solid #8a8a82;
+}
+
+/* DEAL! is one gold bar at the TOP carrying the keybind, the label and the
+   running total — not a button at the bottom with the total spelled out above */
+.deal-bar {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 6px 8px; border: 0; border-bottom: 1px solid #0d0c02;
+  background: linear-gradient(90deg, #1a1801, #8a7d2c 50%, #1a1801);
+  color: #ffffeb; font-size: 12px; letter-spacing: .22em; font-weight: 700;
+}
+.deal-bar:disabled { background: linear-gradient(90deg, #14160f, #2c2f22 50%, #14160f); color: var(--tx-dim); }
+.deal-bar__key {
+  padding: 1px 7px; background: #cfcbb0; color: #10161a;
+  font-size: 9.5px; letter-spacing: .12em; font-weight: 700;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+}
+.deal-bar__label { margin: 0 auto; }
+.deal-bar__sum { font-variant-numeric: tabular-nums; letter-spacing: .08em; }
+
 .deal-wrap {
-  display: flex; flex-direction: column; gap: 6px;
-  margin-top: 8px; padding: 10px 12px;
-  border: 1px solid var(--line-1); border-radius: var(--r-sm);
-  background: linear-gradient(180deg, rgba(22,32,37,.9), rgba(8,12,14,.9));
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 10px; overflow: auto; align-items: center; text-align: center;
 }
 .deal-head {
   display: flex; align-items: center; gap: 12px;
-  font-size: 11px; letter-spacing: .2em; color: var(--pale);
+  font-size: 11px; letter-spacing: .14em; color: var(--tx-2);
 }
-.deal-head .btn { margin-left: auto; }
-.deal-rows { display: flex; flex-direction: column; gap: 4px; max-height: 190px; overflow: auto; }
+.deal-rows { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .deal-empty {
   display: flex; flex-direction: column; align-items: center; gap: 4px;
   padding: 14px; color: var(--tx-dim); font-size: 11px; letter-spacing: .18em;
 }
 .deal-empty small { font-size: 10px; letter-spacing: .08em; }
+/* a staged line: the item cell, then "X" and a typed quantity box, the way
+   the real transaction area reads — no +/- steppers there */
 .deal-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 5px 8px; border: 1px solid var(--line-1); border-radius: var(--r-sm);
-  background: rgba(5,9,11,.6);
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 6px 4px;
 }
 .deal-row__art {
-  width: 42px; height: 42px; flex: none; display: grid; place-items: center;
-  background: rgba(0,0,0,.35); border: 1px solid var(--line-1); border-radius: 2px;
+  width: 46px; height: 46px; flex: none; display: grid; place-items: center;
+  background: rgba(0,0,0,.35); border: 1px solid #6f6f68;
 }
 .deal-row__art img { max-width: 100%; max-height: 100%; }
-.deal-row__info { min-width: 0; flex: 1; }
-.deal-row__name { color: var(--tx-1); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.deal-row__meta { color: var(--tx-dim); font-size: 10px; letter-spacing: .04em; }
-.deal-row__qtybox { display: flex; align-items: center; gap: 3px; flex: none; }
+.deal-row__x { color: var(--tx-3); font-size: 12px; }
 .deal-row__qty {
   width: 54px; text-align: center; font-variant-numeric: tabular-nums;
-  background: rgba(0,0,0,.4); border: 1px solid var(--line-2); border-radius: 2px;
-  color: var(--white); font: inherit; font-size: 12px; padding: 3px 4px;
+  background: rgba(0,0,0,.5); border: 1px solid #6f6f68;
+  color: var(--white); font: inherit; font-size: 12px; padding: 4px;
 }
-.deal-row__sum { flex: none; min-width: 96px; text-align: right; color: var(--rare); font-variant-numeric: tabular-nums; }
-
-.deal-total {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  padding-top: 6px; border-top: 1px solid var(--line-1);
-  font-size: 11px; letter-spacing: .12em;
+/* the chevrons point at the columns the goods come from and go to */
+.deal-row__chev, .deal-slot__chev { color: #4a4a44; font-size: 20px; line-height: 1; }
+.deal-row__drop {
+  border: 0; background: none; color: var(--tx-dim);
+  font-size: 15px; line-height: 1; padding: 2px 5px;
 }
-.deal-total b { color: var(--rare); font-size: 19px; font-variant-numeric: tabular-nums; }
-.deal-total b.is-broke { color: var(--danger); }
+.deal-row__drop:hover { color: var(--danger); }
 
-/* the requirement slot: what has to be handed over, empty until allocated */
-.deal-slot {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 10px;
-  border: 1px dashed var(--line-2); border-radius: var(--r-sm);
-  background: rgba(0,0,0,.25);
-  font-size: 11px; letter-spacing: .1em;
+.deal-need { color: var(--tx-2); font-size: 11px; letter-spacing: .06em; margin-top: 4px; }
+
+/* the payment slot, with the n/n progress the real one shows */
+.deal-slot { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.deal-slot__cell {
+  position: relative; width: 46px; height: 46px; display: grid; place-items: center;
+  border: 1px solid #6f6f68; background: rgba(0,0,0,.5);
+  color: var(--tx-1); font-size: 18px;
 }
-.deal-slot b { color: var(--tx-1); font-variant-numeric: tabular-nums; }
-.deal-slot__state { margin-left: auto; color: var(--tx-dim); font-size: 10px; letter-spacing: .16em; }
-.deal-slot.is-filled { border-style: solid; border-color: var(--ok, #7fb39a); background: rgba(127,179,154,.09); }
-.deal-slot.is-filled b { color: var(--ok, #7fb39a); }
-.deal-slot.is-filled .deal-slot__state { color: var(--ok, #7fb39a); }
-.deal-slot.is-short { border-color: var(--danger); background: rgba(194,96,79,.09); }
-.deal-slot.is-short b, .deal-slot.is-short .deal-slot__state { color: var(--danger); }
+.deal-slot__tick {
+  position: absolute; right: -5px; top: -5px;
+  width: 15px; height: 15px; display: grid; place-items: center;
+  background: #2f7d4f; color: #eaffea; font-size: 10px; line-height: 1;
+  box-shadow: 0 0 6px rgba(80,220,130,.75);
+}
+.deal-slot__ratio { color: var(--tx-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.deal-slot.is-filled .deal-slot__ratio { color: #7fdc9a; }
+.deal-slot.is-short .deal-slot__cell { border-color: var(--danger); }
+.deal-slot.is-short .deal-slot__ratio { color: var(--danger); }
 
-.deal-foot { display: flex; align-items: center; gap: 8px; }
-.deal-foot .btn--deal { margin-left: auto; }
-.deal-warn { color: var(--danger); font-size: 10.5px; letter-spacing: .1em; text-align: right; }
+.deal-foot { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.deal-warn { color: var(--danger); font-size: 10.5px; letter-spacing: .06em; }
+
+/* the sell table lives in the same middle column */
+.deal-wrap .table-zone { width: 100%; border: 1px dashed #3a3a34; background: rgba(0,0,0,.4); }
+.deal-wrap .table-grid { margin: 0 auto; }
 
 /* an offer already sitting on the table */
 .assort-grid .toffer--staged { outline: 1px solid var(--rare); outline-offset: -1px; }

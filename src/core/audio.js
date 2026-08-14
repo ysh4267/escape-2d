@@ -63,12 +63,82 @@ const CUE_MIX = {
   trade_click: { bus: 'ui', gain: 0.45 },
   trade_buy: { bus: 'ui', gain: 0.5 },
   trade_deal: { bus: 'ui', gain: 0.6 },
-  fire_pistol: { bus: 'sfx', gain: 0.5 },
-  fire_rifle: { bus: 'sfx', gain: 0.5 },
-  fire_shotgun: { bus: 'sfx', gain: 0.5 },
-  fire_smg: { bus: 'sfx', gain: 0.5 },
+  hit_body: { bus: 'sfx', gain: 0.65 },
+  hit_armor: { bus: 'sfx', gain: 0.6 },
+  hit_helmet: { bus: 'sfx', gain: 0.6 },
+  impact_metal: { bus: 'sfx', gain: 0.4 },
+  impact_wood: { bus: 'sfx', gain: 0.4 },
+  impact_concrete: { bus: 'sfx', gain: 0.4 },
+  ricochet: { bus: 'sfx', gain: 0.4 },
 };
 const DEFAULT_MIX = { bus: 'sfx', gain: 0.6, limit: 55 };
+
+/**
+ * Weapon template -> which bank backs it. Every gun in the game has its own
+ * recording rather than sharing one of four class sounds, so an AKS-74U barks
+ * shorter than an AK-74N and the Kedr-B is the suppressed bank rather than the
+ * bare one. The VPO-136 is an AKM-pattern carbine in the same 7.62x39, so it
+ * borrows that bank - it is the one deliberate reuse here.
+ */
+const WEAPON_CUE = {
+  '5644bd2b4bdc2d3b4c8b4572': 'ak74',   // AK-74N
+  '57dc2fa62459775949412633': 'aksu',   // AKS-74U
+  '59d6088586f774275f37482f': 'akm',    // AKM
+  '59e6152586f77473dc057aa1': 'akm',    // VPO-136 Vepr-KM
+  '57d14d2524597714373db789': 'kedr',   // PP-91 Kedr
+  '57f3c6bd24597738e730fa2f': 'kedrb',  // PP-91-01 Kedr-B, suppressed
+  '5448bd6b4bdc2dfc2f8b4569': 'pm',     // Makarov PM
+  '56e0598dd2720bb5668b45a6': 'pb',     // PB, suppressed
+  '571a12c42459771f627b58a0': 'tt',     // TT-33
+  '54491c4f4bdc2db1078b4568': 'mp133',  // MP-133
+  '56dee2bdd2720bc8328b4567': 'mp153',  // MP-153
+  '576165642459773c7a400233': 'saiga',  // Saiga-12K
+};
+
+/** every bank the pack carries, so a bad name cannot select a missing cue */
+const BANKS = new Set(['ak74', 'aksu', 'akm', 'kedr', 'kedrb', 'pm', 'pb', 'tt',
+  'mp133', 'mp153', 'saiga']);
+
+/**
+ * Resolve whatever the caller has into a bank name. Takes a weapon template,
+ * or a bare bank name for the scavs, which carry no weapon item.
+ *
+ * Falls back by calibre when a template is not in the table - a new gun still
+ * makes a plausible noise instead of going silent.
+ */
+function weaponBank(tpl) {
+  if (typeof tpl === 'string') return BANKS.has(tpl) ? tpl : 'akm';
+  const known = WEAPON_CUE[tpl?.id];
+  if (known) return known;
+  const cal = tpl?.cal || '';
+  if (cal.startsWith('12')) return 'mp133';
+  if (tpl?.cat === 'pistol') return cal.startsWith('7.62') ? 'tt' : 'pm';
+  if (cal.startsWith('9x')) return 'kedr';
+  return cal.startsWith('7.62') ? 'akm' : 'ak74';
+}
+
+/**
+ * Container type -> the lid it opens with. The rummage loops below are split
+ * ten ways by material; this used to be a four-way guess that gave wooden
+ * crates a plastic lid and corpses a lid at all. sharedassets8 carries the
+ * furniture's own opens, so the two now agree: what rustles like a coat also
+ * opens like one.
+ *
+ * A type absent from this table opens silently, which is deliberate - that is
+ * how bodies are handled.
+ */
+const OPEN_CUE = {
+  crate: 'open_wood', ammobox: 'open_wood', weaponbox: 'open_wood',
+  weaponbox6: 'open_wood', grenadebox: 'open_wood', rationcrate: 'open_wood',
+  toolbox: 'open_case', suitcase: 'open_case', medcase: 'open_case',
+  medcrate: 'open_case', pcblock: 'open_case', techcrate: 'open_case',
+  safe: 'open_metal', banksafe: 'open_metal',
+  drawer: 'open_drawer', filecab: 'open_locker',
+  jacket: 'open_jacket',
+  sportbag: 'open_bag', duffle: 'open_bag', medbag: 'open_bag',
+  cashreg: 'open_cash',
+  // deadscav and pmcbody are intentionally absent - a corpse has no lid
+};
 
 /**
  * Fallback foley family, by gameplay category.
@@ -492,13 +562,11 @@ export const sfx = {
     } catch { /* already stopped */ }
   },
 
-  /** a container lid, picked from the container's material */
+  /** a container lid, picked from what the thing is actually made of */
   openContainer(type) {
-    const cue = type === 'safe' || type === 'banksafe' || type === 'filecab' ? 'open_metal'
-      : type === 'suitcase' || type === 'medcase' ? 'open_case'
-        : type === 'jacket' || type === 'sportbag' || type === 'duffle' ? 'open_pouch'
-          : 'open_plastic';
-    play(cue, { gain: 0.5 });
+    const cue = OPEN_CUE[type];
+    if (!cue) return;   // corpses, and anything else with nothing to open
+    play(cue, { gain: 0.5, rate: [0.97, 1.04] });
   },
 
   /**
@@ -514,14 +582,44 @@ export const sfx = {
     play(hasCue(cue) ? cue : `item_${cls}_pickup`);
   },
 
-  /** weapon report, chosen from the weapon's own class */
+  /**
+   * The player's own weapon, from that weapon's own bank.
+   *
+   * `limit` is a real cap here rather than 0. The Kedr runs at 900rpm, so an
+   * uncapped cue stacked fifteen voices a second and the reports smeared into
+   * one another; 45ms lets every shot through up to ~1300rpm and drops only
+   * what would have overlapped inaudibly anyway.
+   */
   fire(tpl) {
-    const cal = tpl?.cal || '';
-    const cue = tpl?.cat === 'pistol' ? 'fire_pistol'
-      : cal.startsWith('12') ? 'fire_shotgun'
-        : cal.startsWith('9x') ? 'fire_smg'
-          : 'fire_rifle';
-    play(cue, { rate: [0.96, 1.05], limit: 0 });
+    play(`fire_${weaponBank(tpl)}`, { rate: [0.97, 1.04], limit: 45 });
+  },
+
+  /**
+   * Someone else shooting. Same bank, `_distant` variants, quieter - which is
+   * what makes a scav firing across the hall read as coming from over there.
+   * Until this existed hostile fire made no sound at all.
+   */
+  hostileFire(tpl) {
+    play(`fire_${weaponBank(tpl)}_far`, { rate: [0.96, 1.05], limit: 45 });
+  },
+
+  /**
+   * A round landing on someone. `armor` and `helmet` are the deflections,
+   * which ring rather than thump, so the player can tell a stopped round from
+   * one that went through.
+   */
+  hit(kind = 'body') {
+    play(kind === 'helmet' ? 'hit_helmet' : kind === 'armor' ? 'hit_armor' : 'hit_body',
+      { rate: [0.94, 1.07], limit: 40 });
+  },
+
+  /** a round landing on the map instead of a person */
+  impact(surface = 'concrete') {
+    const cue = surface === 'metal' ? 'impact_metal'
+      : surface === 'wood' ? 'impact_wood'
+        : surface === 'ricochet' ? 'ricochet'
+          : 'impact_concrete';
+    play(cue, { rate: [0.93, 1.08], limit: 40 });
   },
 
   death() { play('death'); },

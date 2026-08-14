@@ -7,6 +7,7 @@
 // =========================================================
 
 import { dist, clamp, uid } from '../core/util.js';
+import { sfx } from '../core/audio.js';
 
 export const SCAV_STATE = { PATROL: 'patrol', ALERT: 'alert', ENGAGE: 'engage', DEAD: 'dead' };
 
@@ -14,6 +15,18 @@ const PATROL_SPEED = 3.1;
 const CHASE_SPEED = 5.2;
 const FIRE_RANGE = 20;
 const KEEP_DISTANCE = 8;
+
+/**
+ * What a scav is carrying, for the sake of the noise it makes. They have no
+ * weapon item - damage comes off the tier - but a shot still has to sound like
+ * something, and picking once at spawn means a given scav keeps its voice
+ * instead of changing gun between rounds. Scrappier guns at the low tiers.
+ */
+const SCAV_BANKS = [
+  ['mp133', 'akm', 'kedr'],
+  ['akm', 'aksu', 'kedr', 'mp153'],
+  ['ak74', 'aksu', 'akm', 'saiga'],
+];
 
 export class Scav {
   constructor({ x, y, rng, tier = 1 }) {
@@ -31,6 +44,7 @@ export class Scav {
     this.fireDelay = 1.5 - tier * 0.25;
     this.accuracy = 0.34 + tier * 0.09;
     this.cooldown = rng.float(0, 1.2);
+    this.bank = rng.pick(SCAV_BANKS[clamp(tier - 1, 0, SCAV_BANKS.length - 1)]);
     this.path = [];
     this.alertTimer = 0;
     this.lastSeen = null;
@@ -133,6 +147,7 @@ export class Scav {
     this.muzzle = 1;
     const falloff = clamp(1 - (d / FIRE_RANGE) * 0.65, 0.2, 1);
     const hit = raid.rng.chance(this.accuracy * falloff);
+    sfx.hostileFire(this.bank);
     raid.registerShot({ from: [this.x, this.y], to: [raid.player.x, raid.player.y], hostile: true, hit });
     if (hit) raid.damagePlayer(this.damage * raid.rng.float(0.75, 1.25), this);
     else raid.onNearMiss();

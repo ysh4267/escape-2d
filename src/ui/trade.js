@@ -261,13 +261,35 @@ export function renderTrade() {
     seg.classList.toggle('is-active', seg.dataset.mode === mode);
   }
 
+  // left column is the shelf, middle column is the table; in sell mode the
+  // shelf is idle and the table is what the stash drops onto
   const content = $('#trader-content');
+  const table = $('#trade-table-host');
   content.replaceChildren();
-  if (mode === 'buy') renderBuy(t, content);
-  else renderSell(t, content);
+  table.replaceChildren();
+  if (mode === 'buy') { renderBuy(t, content); renderBuyTable(t, table); }
+  else { renderShowcaseIdle(t, content); renderSell(t, table); }
+
+  const clear = $('#btn-trade-clear');
+  if (clear) {
+    clear.disabled = mode === 'buy' ? !basket.length : !tradeTable.count;
+    clear.onclick = () => {
+      if (mode === 'buy') clearBasket();
+      else returnTableItems();
+      sfx.trade('click');
+      renderTrade();
+      emit(EV.INVENTORY_CHANGED);
+      saveSoon();
+    };
+  }
 
   renderDockedStash(t);
   refreshContainerWindows();
+}
+
+/** in sell mode the showcase still shows what the trader stocks, unclickable */
+function renderShowcaseIdle(t, host) {
+  renderBuy(t, host, true);
 }
 
 function renderTabs(host) {
@@ -336,7 +358,7 @@ function renderBar(host, t) {
 // ---------------------------------------------------------
 // BUY
 // ---------------------------------------------------------
-function renderBuy(t, host) {
+function renderBuy(t, host, idle = false) {
   const ll = loyaltyLevel(t);
   const offers = t.assort.length ? t.assort : randomFenceStock();
 
@@ -351,8 +373,10 @@ function renderBuy(t, host) {
         toast('Fence found new stock', 'ok');
         renderTrade(); refreshTopbar(); saveSoon();
       },
-    }, icon('rotate'), `UPDATE ASSORTMENT — ${fmtNum(FENCE_REFRESH_COST)}₽`);
-    wrap.append(el('div', { class: 'assort-tools' }, btn));
+    }, icon('rotate'), 'REFRESH STORE');
+    btn.title = `Fence finds new stock — ${fmtNum(FENCE_REFRESH_COST)}₽`;
+    const tools = $('#assort-tools');
+    if (tools) { tools.replaceChildren(); tools.append(btn); }
   }
 
   if (!offers.length) {
@@ -404,13 +428,14 @@ function renderBuy(t, host) {
     const locked = off.ll > ll;
     const out = off.stock <= 0;
 
+    // price top-left with an oversized currency glyph, stock bottom-right —
+    // the way the real showcase cell reads
     tile.append(el('div', { class: 'toffer__price' },
-      `${fmtNum(buyPrice(t, tpl, FX, off))} ${CUR_SYM[buyCurrency(t, tpl, off)]}`));
+      el('em', {}, CUR_SYM[buyCurrency(t, tpl, off)]),
+      fmtNum(buyPrice(t, tpl, FX, off))));
 
-    if (off.base != null && off.base < 1000) {
-      tile.append(el('div', { class: `toffer__stock${out ? ' is-out' : ''}` },
-        `${off.stock}/${off.base}`));
-    }
+    tile.append(el('div', { class: `toffer__stock${out ? ' is-out' : ''}` },
+      off.base == null || off.base >= 1000 ? 'A LOT' : String(off.stock)));
     if (locked) {
       tile.classList.add('toffer--locked');
       tile.append(el('div', { class: 'toffer__lock' },
@@ -420,13 +445,15 @@ function renderBuy(t, host) {
       tile.append(el('div', { class: 'toffer__out' }, 'OUT OF STOCK'));
     } else {
       // clicking an offer puts it on the trading table; it does not buy it
-      tile.classList.add('toffer--buyable');
-      tile.title = 'Click to put on the trading table';
-      tile.addEventListener('click', (ev) => {
-        // a drag that ends on the tile must not also count as a pick
-        if (ev.detail === 0) return;
-        stageOffer(t, off);
-      });
+      if (!idle) {
+        tile.classList.add('toffer--buyable');
+        tile.title = 'Click to put on the trading table';
+        tile.addEventListener('click', (ev) => {
+          // a drag that ends on the tile must not also count as a pick
+          if (ev.detail === 0) return;
+          stageOffer(t, off);
+        });
+      }
       if (basket.some((e) => e.off === off)) tile.classList.add('toffer--staged');
     }
   }
@@ -435,7 +462,6 @@ function renderBuy(t, host) {
   scroll.append(gridEl);
   wrap.append(scroll);
   host.append(wrap);
-  renderBuyTable(t, host);
 }
 
 /**
@@ -487,15 +513,21 @@ function dealBlocker(t) {
 function renderBuyTable(t, host) {
   const cur = basketCurrency(t);
   const total = basketTotal(t);
-  const wrap = el('div', { class: 'deal-wrap' });
+  const blocker = dealBlocker(t);
 
-  const head = el('div', { class: 'deal-head' }, el('span', {}, 'Item to purchase'));
-  if (basket.length) {
-    head.append(el('button', {
-      class: 'btn btn--sm', onclick: () => { clearBasket(); sfx.trade('click'); renderTrade(); },
-    }, 'CLEAR'));
-  }
-  wrap.append(head);
+  // the deal bar sits at the top of the column and carries the total itself
+  const dealBtn = el('button', { class: 'deal-bar', disabled: !!blocker, dataset: { sfx: 'own' } },
+    el('span', { class: 'deal-bar__key' }, 'SPACE'),
+    el('span', { class: 'deal-bar__label' }, 'DEAL!'),
+    el('span', { class: 'deal-bar__sum' }, `${CUR_SYM[cur]} ${fmtNum(total)}`));
+  dealBtn.addEventListener('click', () => doBuyBasket(t));
+  host.append(dealBtn);
+
+  const wrap = el('div', { class: 'deal-wrap' });
+  wrap.append(el('div', { class: 'deal-head' },
+    basket.length === 1
+      ? `Item to purchase: ${basket[0].tpl.name}`
+      : 'Item to purchase'));
 
   const rows = el('div', { class: 'deal-rows' });
   if (!basket.length) {
@@ -512,6 +544,7 @@ function renderBuyTable(t, host) {
 
     const qtyEl = el('input', {
       class: 'deal-row__qty', type: 'number', min: '1', max: String(cap), value: String(e.qty),
+      title: `${fmtNum(unit)} ${CUR_SYM[cur]} each · ${e.off.stock >= 1000 ? 'plenty' : e.off.stock} in stock`,
     });
     qtyEl.addEventListener('change', () => {
       e.qty = clamp(Math.round(Number(qtyEl.value) || 1), 1, cap);
@@ -519,59 +552,39 @@ function renderBuyTable(t, host) {
       renderTrade();
     });
 
-    const step = (d) => () => {
-      const next = clamp(e.qty + d, 0, cap);
-      if (next <= 0) basket = basket.filter((x) => x !== e);
-      else e.qty = next;
-      filled = false;
-      sfx.trade('click');
-      renderTrade();
-    };
-
-    rows.append(el('div', { class: 'deal-row' }, art,
-      el('div', { class: 'deal-row__info' },
-        el('div', { class: 'deal-row__name' }, e.tpl.name),
-        el('div', { class: 'deal-row__meta' },
-          `${fmtNum(unit)} ${CUR_SYM[cur]} each · ${e.off.stock >= 1000 ? 'plenty' : e.off.stock} in stock`)),
-      el('div', { class: 'deal-row__qtybox' },
-        el('button', { class: 'btn btn--sm', onclick: step(-1) }, '−'),
-        qtyEl,
-        el('button', { class: 'btn btn--sm', onclick: step(1) }, '+'),
-        el('button', {
-          class: 'btn btn--sm',
-          onclick: () => { e.qty = cap; filled = false; sfx.trade('click'); renderTrade(); },
-        }, 'ALL')),
-      el('b', { class: 'deal-row__sum' }, `${fmtNum(unit * e.qty)} ${CUR_SYM[cur]}`)));
+    // the showcase is to the left, so the chevron points back at it
+    rows.append(el('div', { class: 'deal-row' },
+      el('span', { class: 'deal-row__chev' }, '\u203A'),
+      art,
+      el('span', { class: 'deal-row__x' }, 'X'),
+      qtyEl,
+      el('button', {
+        class: 'deal-row__drop', title: 'Take it back off the table',
+        onclick: () => { basket = basket.filter((x) => x !== e); filled = false; sfx.trade('click'); renderTrade(); },
+      }, '\u00D7')));
   }
   wrap.append(rows);
 
-  // the requirement slot: empty until the money is allocated
+  // what has to be handed over, with the same n/n progress the real slot shows
   const funds = countMoney(cur);
   const short = total > funds;
-  const slot = el('div', { class: `deal-slot${filled ? ' is-filled' : ''}${short ? ' is-short' : ''}` },
-    el('span', { class: 'muted' }, 'REQUIRED'),
-    el('b', {}, basket.length ? `${fmtNum(total)} ${CUR_SYM[cur]}` : '—'),
-    el('span', { class: 'deal-slot__state' },
-      !basket.length ? '' : short ? 'Not enough money' : filled ? 'PAID IN' : 'NOT ALLOCATED'));
+  if (basket.length) {
+    wrap.append(el('div', { class: 'deal-need' }, 'This item(s) is required from your stash:'));
+    const paid = filled ? total : Math.min(funds, total);
+    wrap.append(el('div', { class: `deal-slot${filled ? ' is-filled' : ''}${short ? ' is-short' : ''}` },
+      el('div', { class: 'deal-slot__cell' },
+        el('span', { class: 'deal-slot__sym' }, CUR_SYM[cur]),
+        filled ? el('span', { class: 'deal-slot__tick' }, '\u2713') : null),
+      el('span', { class: 'deal-slot__chev' }, '\u2039'),
+      el('div', { class: 'deal-slot__ratio' }, `${fmtNum(paid)}/${fmtNum(total)}`)));
+  }
 
   const fillBtn = el('button', {
     class: 'btn', disabled: !basket.length || short || filled,
     title: 'Select to auto-fill requirements',
     onclick: () => { filled = true; sfx.trade('buy'); renderTrade(); },
   }, 'Fill items');
-
-  const blocker = dealBlocker(t);
-  const dealBtn = el('button', {
-    class: 'btn btn--primary btn--deal', disabled: !!blocker, dataset: { sfx: 'own' },
-  }, 'DEAL!');
-  dealBtn.addEventListener('click', () => doBuyBasket(t));
-
-  wrap.append(
-    el('div', { class: 'deal-total' },
-      el('span', { class: 'muted' }, 'TOTAL SUM TO PAY:'),
-      el('b', { class: short ? 'is-broke' : '' }, `${fmtNum(total)} ${CUR_SYM[cur]}`)),
-    slot,
-    el('div', { class: 'deal-foot' }, fillBtn, dealBtn));
+  wrap.append(el('div', { class: 'deal-foot' }, fillBtn));
   if (blocker) wrap.append(el('div', { class: 'deal-warn' }, blocker));
 
   host.append(wrap);
@@ -629,19 +642,23 @@ function doBuyBasket(t) {
 // SELL
 // ---------------------------------------------------------
 function renderSell(t, host) {
-  const wrap = el('div', { class: 'table-wrap' });
+  let total = 0;
+  for (const it of tradeTable.items()) total += sellValue(t, it, FX);
 
-  const head = el('div', { class: 'table-head' },
-    el('span', {}, 'TO SELL'),
-    el('span', { class: 'table-head__hint' },
-      t.buysAll ? `${t.name} buys everything` : `${t.name} buys: ${t.buys.join(', ')}`));
-  if (tradeTable.count) {
-    head.append(el('button', {
-      class: 'btn btn--sm',
-      onclick: () => { returnTableItems(); sfx.trade('click'); dndContext.onChange(); },
-    }, 'CLEAR'));
-  }
-  wrap.append(head);
+  // the sell side mirrors the buy side: the same gold bar at the top of the
+  // middle column, carrying the sum the trader will pay
+  const dealBtn = el('button', {
+    class: 'deal-bar', disabled: !tradeTable.count, dataset: { sfx: 'own' },
+  },
+  el('span', { class: 'deal-bar__key' }, 'SPACE'),
+  el('span', { class: 'deal-bar__label' }, 'DEAL!'),
+  el('span', { class: 'deal-bar__sum' }, CUR_SYM[t.currency] + ' ' + fmtNum(total)));
+  dealBtn.addEventListener('click', () => doSell(t));
+  host.append(dealBtn);
+
+  const wrap = el('div', { class: 'deal-wrap' });
+  wrap.append(el('div', { class: 'deal-head' },
+    t.buysAll ? t.name + ' buys everything' : t.name + ' buys: ' + t.buys.join(', ')));
 
   const zone = el('div', { class: 'table-zone' });
   const gridEl = renderGrid(tradeTable);
@@ -655,25 +672,15 @@ function renderSell(t, host) {
 
   // what the trader pays for each staged item, on the item itself, so a bad
   // line is obvious before the deal rather than buried in the lump total
-  let total = 0;
   for (const it of tradeTable.items()) {
-    const value = sellValue(t, it, FX);
-    total += value;
-    const tile = gridEl.querySelector(`.item[data-uid="${it.uid}"]`);
-    if (tile) tile.append(el('div', { class: 'toffer__price' }, `${fmtNum(value)} ${CUR_SYM[t.currency]}`));
+    const tile = gridEl.querySelector('.item[data-uid="' + it.uid + '"]');
+    if (tile) {
+      tile.append(el('div', { class: 'toffer__price' },
+        fmtNum(sellValue(t, it, FX)) + ' ' + CUR_SYM[t.currency]));
+    }
   }
 
-  const dealBtn = el('button', {
-    class: 'btn btn--primary btn--deal', disabled: !tradeTable.count, dataset: { sfx: 'own' },
-  }, 'DEAL!');
-  dealBtn.addEventListener('click', () => doSell(t));
-  wrap.append(el('div', { class: 'table-foot' },
-    el('div', { class: 'table-foot__total' },
-      el('span', { class: 'muted' }, `${tradeTable.count} ITEM${tradeTable.count === 1 ? '' : 'S'} · TOTAL`),
-      el('b', {}, `${fmtNum(total)} ${CUR_SYM[t.currency]}`)),
-    dealBtn));
   if (!tradeTable.count) wrap.append(el('div', { class: 'deal-warn' }, 'No selected items'));
-
   host.append(wrap);
 }
 

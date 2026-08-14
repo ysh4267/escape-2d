@@ -541,6 +541,8 @@ export class Raid {
 
     if (!target) {
       this.registerShot({ from: [p.x, p.y], to: [tx, ty], hostile: false, hit: false });
+      // a round that hits nobody still lands on the plant somewhere
+      sfx.impact(this.rng.pick(['concrete', 'metal', 'wood', 'ricochet']));
       return 'miss';
     }
 
@@ -549,7 +551,11 @@ export class Raid {
     const chance = clamp(0.94 - d * 0.018 + (ergo - 40) * 0.004, 0.22, 0.96);
     const hit = this.rng.chance(chance);
     this.registerShot({ from: [p.x, p.y], to: [target.x, target.y], hostile: false, hit });
-    if (!hit) return 'miss';
+    if (!hit) {
+      sfx.impact(this.rng.pick(['concrete', 'metal', 'ricochet']));
+      return 'miss';
+    }
+    sfx.hit('body');
 
     const base = (weapon.tpl.dmg || 40) * (ammo ? (0.7 + (ammo.tpl.dmg || 40) / 120) : 1);
     const died = target.takeHit(base * this.rng.float(0.85, 1.15), this);
@@ -593,6 +599,8 @@ export class Raid {
   damagePlayer(amount, source) {
     const p = this.player;
     let dmg = amount;
+    // what the round actually landed on, so the cue matches the deflection
+    let struck = 'body';
 
     // body armor soaks a share of it and wears down
     const armor = game.equipment.item('armor') || game.equipment.item('rig');
@@ -600,12 +608,15 @@ export class Raid {
       const soak = clamp(armor.tpl.armorClass * 0.11, 0, 0.62);
       dmg *= 1 - soak;
       armor.dura = Math.max(0, armor.dura - amount * 0.09);
+      struck = 'armor';
     }
     const helmet = game.equipment.item('head');
     if (helmet && helmet.tpl.armorClass && helmet.dura > 0 && this.rng.chance(0.18)) {
       dmg *= 0.45;
       helmet.dura = Math.max(0, helmet.dura - amount * 0.12);
+      struck = 'helmet';
     }
+    sfx.hit(struck);
 
     p.hp = Math.max(0, p.hp - dmg);
     p.lastHitAt = this.time;

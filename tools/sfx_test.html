@@ -125,7 +125,7 @@ for (const fn of ['play', 'hasCue', 'setEnabled', 'setVolume', 'audioState', 'st
   check(`exports ${fn}`, typeof audio[fn] === 'function');
 }
 for (const m of ['footstep', 'halt', 'ui', 'trade', 'item', 'searchStart', 'searchStop',
-  'openContainer', 'use', 'fire', 'death', 'extract']) {
+  'openContainer', 'use', 'fire', 'hostileFire', 'hit', 'impact', 'death', 'extract']) {
   check(`sfx.${m} exists`, typeof audio.sfx[m] === 'function');
 }
 // a cue with no audio behind it must be a quiet no-op, never a throw
@@ -136,9 +136,26 @@ try {
   audio.sfx.searchStart('nonexistent_container');
   audio.sfx.searchStop();
   audio.sfx.fire(null);
+  audio.sfx.hostileFire(null);
   audio.sfx.ui('nope');
 } catch (e) { threw = e; }
 check('unknown cues are silent no-ops', !threw, threw && String(threw));
+
+// the combat surface is driven by values off templates and the AI, not by
+// literals, so exercise it the way the game does: a corpse opens silently, a
+// weapon with no entry still finds a bank, and every hit kind is a real cue
+let combatThrew = null;
+try {
+  audio.sfx.openContainer('deadscav');       // no lid, must not throw
+  audio.sfx.openContainer('crate');
+  audio.sfx.fire({ id: 'not-a-real-id', cat: 'weapon', cal: '7.62x39' });
+  audio.sfx.fire({ id: 'not-a-real-id', cat: 'pistol', cal: '9x18' });
+  audio.sfx.hostileFire('akm');
+  audio.sfx.hostileFire('garbage-bank');
+  for (const k of ['body', 'armor', 'helmet']) audio.sfx.hit(k);
+  for (const s of ['concrete', 'metal', 'wood', 'ricochet']) audio.sfx.impact(s);
+} catch (e) { combatThrew = e; }
+check('combat surface runs on real inputs', !combatThrew, combatThrew && String(combatThrew));
 
 // ---------------------------------------------------------
 // Every cue name the game asks for must exist in the pack, or it is a typo
@@ -163,14 +180,18 @@ if (pack) {
   check('every cue named in source exists in the pack', absent.length === 0, absent.join(','));
 
   // and the reverse: cues shipped but never asked for are dead weight.
-  // item_/search_/open_/use_/fire_/step_ are picked dynamically, so exempt.
-  const dynamic = /^(item_|search_|open_|use_|fire_|step_|amb_)/;
+  // These families are chosen at the call site rather than named in a literal
+  // play('...') - by container material, weapon bank, item ItemSound, or what
+  // the round landed on - so the scan above cannot see them.
+  const dynamic = /^(item_|search_|open_|fire_|step_|amb_|hit_|impact_|ricochet)/;
   const unused = Object.keys(manifest).filter((c) => !dynamic.test(c) && !wanted.has(c));
   check('no shipped cue is dead weight', unused.length === 0, unused.join(','));
 
   // the categories the user specifically asked to hear
   for (const cue of ['step_walk', 'step_run', 'step_sprint', 'search_wood', 'search_body',
-    'open_case', 'item_med_medkit_pickup', 'item_weap_ar_drop', 'amb_factory']) {
+    'open_case', 'item_med_medkit_pickup', 'item_weap_ar_drop', 'amb_factory',
+    'hit_body', 'hit_armor', 'hit_helmet',
+    'impact_metal', 'impact_wood', 'impact_concrete', 'ricochet']) {
     check(`cue present: ${cue}`, !!manifest[cue]);
   }
 
@@ -207,6 +228,34 @@ if (pack) {
     return !hit || !manifest[hit[1]];
   });
   check('every container type resolves to a real loop', unresolved.length === 0, unresolved.join(','));
+
+  // lids: every container that opens must name a cue the pack actually has.
+  // Bodies are deliberately absent from OPEN_CUE - a corpse has no lid - so
+  // this checks the entries that exist rather than demanding one per type.
+  const openBlock = audioSrc.match(/const OPEN_CUE = \{([\s\S]*?)\n\};/);
+  const openPairs = [...(openBlock ? openBlock[1] : '').matchAll(/(\w+):\s*'(open_[a-z]+)'/g)];
+  const badLid = openPairs.filter(([, , cue]) => !manifest[cue]).map(([, t]) => t);
+  check('every container lid resolves to a real cue', badLid.length === 0, badLid.join(','));
+  const lidded = new Set(openPairs.map((m) => m[1]));
+  const noLid = types.filter((t) => !lidded.has(t));
+  check('only corpses open silently', noLid.every((t) => /body|deadscav/.test(t)), noLid.join(','));
+
+  // weapons: each bank needs a player cue and a hostile one, and every weapon
+  // template must land on a bank that exists
+  const bankBlock = audioSrc.match(/const BANKS = new Set\(\[([\s\S]*?)\]\)/);
+  const banks = [...(bankBlock ? bankBlock[1] : '').matchAll(/'([a-z0-9]+)'/g)].map((m) => m[1]);
+  note(`${banks.length} weapon banks`);
+  const bankGaps = banks.filter((b) => !manifest[`fire_${b}`] || !manifest[`fire_${b}_far`]);
+  check('every weapon bank has a near and far cue', bankGaps.length === 0, bankGaps.join(','));
+  const guns = tpls.filter((t) => t.cat === 'weapon' || t.cat === 'pistol');
+  const wcue = audioSrc.match(/const WEAPON_CUE = \{([\s\S]*?)\n\};/);
+  const byId = new Map([...(wcue ? wcue[1] : '').matchAll(/'([0-9a-f]{24})':\s*'(\w+)'/g)]
+    .map((m) => [m[1], m[2]]));
+  const unbanked = guns.filter((g) => !byId.has(g.id));
+  check(`all ${guns.length} weapons have their own bank`, unbanked.length === 0,
+    unbanked.map((g) => g.name).join(','));
+  const badBank = [...byId.values()].filter((b) => !banks.includes(b));
+  check('no weapon points at a bank that does not exist', badBank.length === 0, badBank.join(','));
 } else {
   note('no pack answered — cue coverage cannot be checked');
 }
