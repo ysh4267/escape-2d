@@ -19,7 +19,7 @@
 // side pops a confirmation modal - staging is the confirmation.
 // =========================================================
 
-import { $, $$, el, icon, fmtNum, clamp, keepScroll } from '../core/util.js';
+import { $, $$, el, icon, fmtNum, clamp, keepScroll, debounce } from '../core/util.js';
 import { TRADERS, TRADER_BY_ID, loyaltyFor, canBuyFrom, sellValue, buyPrice, buyCurrency, LOYALTY_LEVELS } from '../data/traders.js';
 import { TPL, FX } from '../data/items.js';
 import { game, countMoney, addMoney, canAddMoney, takeMoney, traderState, saveSoon, addExp, registerSaveSection } from '../core/state.js';
@@ -43,8 +43,14 @@ const FENCE_REFRESH_COST = 5000;
 /** ceiling on one order, matching the three digits the quantity box takes */
 const MAX_BUY_QTY = 999;
 
-/** the sell zone: items dragged here are what the DEAL button will sell */
-export const tradeTable = new Grid(9, 6, { tag: 'tradeTable', label: 'TRADING TABLE' });
+/**
+ * The sell zone: items dragged here are what the DEAL button will sell. Its
+ * footprint is not fixed — fitTable() sizes it to the box the middle column
+ * has for it, so the whole table is on screen at once and never scrolls. This
+ * is only the floor it starts from and can never drop under.
+ */
+const TABLE_MIN = { w: 4, h: 4 };
+export const tradeTable = new Grid(TABLE_MIN.w, TABLE_MIN.h, { tag: 'tradeTable', label: 'TRADING TABLE' });
 tradeTable.mayAccept = (item) => sellableTo(TRADER_BY_ID[activeId], item);
 
 /**
@@ -123,6 +129,12 @@ export function initTrade() {
     if (tradeTable.count) returnTableItems();
   });
 
+  // the table is cut to the column's size, so a resized window (or a cell-size
+  // breakpoint) has to cut it again
+  window.addEventListener('resize', debounce(() => {
+    if (mode === 'sell' && tradeScreenActive()) renderTrade();
+  }, 160));
+
   // the deal bar advertises SPACE, so SPACE has to actually close the deal
   document.addEventListener('keydown', (e) => {
     if (e.key !== ' ' && e.code !== 'Space') return;
@@ -155,6 +167,9 @@ registerSaveSection('tradeTable', {
   roots: () => [tradeTable],
   dump: () => (tradeTable.count ? tradeTable.toJSON() : null),
   restore: (v) => {
+    // the table was as big as that window's column when it was saved; loadJSON
+    // drops whatever falls outside the current footprint, so match it first
+    if (v && v.w && v.h) tradeTable.resize(v.w, v.h);
     tradeTable.loadJSON(v);
     for (const it of tradeTable.items()) autoPlace(it, [game.stash]);
   },
@@ -787,6 +802,19 @@ function renderSell(t, host) {
     t.buysAll ? t.name + ' buys everything' : t.name + ' buys: ' + t.buys.join(', ')));
 
   const zone = el('div', { class: 'table-zone' });
+  wrap.append(zone);
+
+  // The warning line is always in the column, empty or not: the zone above it
+  // is cut into rows off its own height, and a line coming and going would
+  // have added and taken away a row of the table under the player's cursor.
+  const warn = !onIt.length ? 'No selected items'
+    : refused.length ? `${t.name} will not take ${refused.length} item${refused.length > 1 ? 's' : ''} on the table`
+      : '';
+  wrap.append(el('div', { class: 'deal-warn deal-warn--line' }, warn));
+  host.append(wrap);
+
+  // the zone has its box now — the table is cut to it before it is drawn
+  fitTable(zone);
   const gridEl = renderGrid(tradeTable);
   gridEl.classList.add('table-grid');
   zone.append(gridEl);
@@ -794,7 +822,6 @@ function renderSell(t, host) {
     zone.append(el('div', { class: 'table-empty' },
       'DRAG ITEMS HERE', el('small', {}, 'or right-click an item in the stash')));
   }
-  wrap.append(zone);
 
   // what the trader pays for each staged item, on the item itself, so a bad
   // line is obvious before the deal rather than buried in the lump total
@@ -812,13 +839,27 @@ function renderSell(t, host) {
       tile.append(el('div', { class: 'toffer__out' }, 'NOT BOUGHT'));
     }
   }
+}
 
-  if (!onIt.length) wrap.append(el('div', { class: 'deal-warn' }, 'No selected items'));
-  else if (refused.length) {
-    wrap.append(el('div', { class: 'deal-warn' },
-      `${t.name} will not take ${refused.length} item${refused.length > 1 ? 's' : ''} on the table`));
-  }
-  host.append(wrap);
+/**
+ * Cut the trading table to the box the zone actually has: as many cells
+ * across and down as fit at the current cell size, so the whole table is on
+ * screen at once and nothing scrolls. The zone is measured empty — the column
+ * sizes it, not what it holds — and only while the pane is laid out. It can
+ * never come out under TABLE_MIN, nor under what is already lying on it
+ * (Grid.resize sees to the latter).
+ */
+function fitTable(zone) {
+  const cs = getComputedStyle(zone);
+  const innerW = zone.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const innerH = zone.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  // nothing has a size while the pane is hidden: keep the last fit
+  if (innerW <= 0 || innerH <= 0) return;
+  const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) || 62;
+  // renderGrid draws a grid at cell * n plus a 1px border either side
+  const cols = Math.max(TABLE_MIN.w, Math.floor((innerW - 2) / cell));
+  const rows = Math.max(TABLE_MIN.h, Math.floor((innerH - 2) / cell));
+  tradeTable.resize(cols, rows);
 }
 
 function doSell(t) {
@@ -918,6 +959,9 @@ export function devTrade(kind) {
   const t = TRADER_BY_ID[activeId];
   if (kind === 'sell') {
     mode = 'sell';
+    // draw once so the table has been cut to the column before anything is
+    // put on it — the same order a real SELL click goes through
+    renderTrade();
     for (const it of game.stash.items()) {
       if (tradeTable.count >= 3) break;
       if (sellableTo(t, it)) autoPlace(it, [tradeTable]);

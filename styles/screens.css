@@ -348,8 +348,16 @@
 
 .deal-foot { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .deal-warn { color: var(--danger); font-size: 10.5px; letter-spacing: .06em; }
+/* the sell side's line holds its height with nothing in it: the table zone
+   above is cut into rows off whatever height it is left, and must not gain or
+   lose one as the message comes and goes */
+.deal-warn--line { line-height: 1.4; min-height: 1.4em; }
 
-/* the sell table lives in the same middle column */
+/* The sell table lives in the same middle column. The zone is the box the
+   table is cut to fit (fitTable in trade.js): it fills the column and the
+   grid inside is exactly as many cells as it has room for, so the scroll here
+   is only a safety net for a table something is still lying on after the
+   window shrank. */
 .deal-wrap .table-zone { width: 100%; border: 1px dashed #3a3a34; background: rgba(0,0,0,.4); }
 .deal-wrap .table-grid { margin: 0 auto; }
 

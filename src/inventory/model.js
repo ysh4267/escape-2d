@@ -317,6 +317,30 @@ export class Grid {
     return leftovers;
   }
 
+  /**
+   * Change the footprint, keeping every item exactly where it lies. The
+   * request is grown as far as it has to be to cover what is already placed,
+   * so nothing can ever be pushed off the edge.
+   */
+  resize(w, h) {
+    for (const it of this._items.values()) {
+      const p = this.posOf(it);
+      if (p) { w = Math.max(w, p.x + it.w); h = Math.max(h, p.y + it.h); }
+    }
+    if (w === this.w && h === this.h) return;
+    const cells = new Array(w * h).fill(null);
+    for (const it of this._items.values()) {
+      const p = this.posOf(it);
+      if (!p) continue;
+      for (let dy = 0; dy < it.h; dy++) {
+        for (let dx = 0; dx < it.w; dx++) cells[(p.y + dy) * w + (p.x + dx)] = it.uid;
+      }
+    }
+    this.w = w;
+    this.h = h;
+    this.cells = cells;
+  }
+
   toJSON() {
     const arr = [];
     for (const it of this._items.values()) {

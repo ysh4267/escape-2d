@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>frame</title>
+<!--
+  The game in a frame of an exact size, for headless captures.
+
+  A top-level `chrome --headless --screenshot --window-size=W,H` lays the page
+  out at a smaller default viewport first and only grows it to W x H right
+  before the capture, after the virtual time budget has run out — so anything
+  the page measured while laying itself out (the trading table is cut to its
+  column, for one) is stale in the picture. A frame with a fixed size gives
+  the page the real viewport from the first frame.
+
+    tools/frame.html?w=1920&h=1080&dev=trade-sell
+    chrome --headless=new --window-size=1936,1175 --virtual-time-budget=8000
+           --screenshot=out.png "http://localhost:8777/tools/frame.html?w=1920&h=1080&dev=trade-sell"
+
+  Anything but w/h is passed straight through to index.html.
+-->
+<style>html,body{margin:0;background:#000}iframe{display:block;border:0}</style>
+</head><body>
+<iframe id="fr"></iframe>
+<script>
+  const q = new URLSearchParams(location.search);
+  const w = parseInt(q.get('w') || '1920', 10), h = parseInt(q.get('h') || '1080', 10);
+  q.delete('w'); q.delete('h');
+  const fr = document.getElementById('fr');
+  fr.width = w; fr.height = h;
+  fr.src = '../index.html' + (q.toString() ? '?' + q.toString() : '');
+</script>
+</body></html>

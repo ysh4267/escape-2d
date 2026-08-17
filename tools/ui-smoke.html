@@ -212,6 +212,20 @@ try {
   await sleep(200);
   check('sell mode is up', !!$('.table-grid'));
 
+  // the table is cut to the box the column gives it: every cell is on screen
+  // and there is nothing to scroll to, in either direction
+  {
+    const zone = $('.table-zone'), grid = $('.table-grid');
+    const cell = parseFloat(getComputedStyle(D.documentElement).getPropertyValue('--cell'));
+    const pad = parseFloat(getComputedStyle(zone).paddingLeft) * 2;
+    check('the trading table does not overflow its zone',
+          zone.scrollWidth <= zone.clientWidth && zone.scrollHeight <= zone.clientHeight,
+          `${zone.scrollWidth}x${zone.scrollHeight} in ${zone.clientWidth}x${zone.clientHeight}`);
+    check('the trading table fills its zone to within one cell each way',
+          zone.clientWidth - grid.offsetWidth < cell + pad && zone.clientHeight - grid.offsetHeight < cell + pad,
+          `grid ${grid.offsetWidth}x${grid.offsetHeight} in zone ${zone.clientWidth}x${zone.clientHeight}`);
+  }
+
   // put an empty case on the table through the UI, which also hands us a live
   // reference to the trading table grid
   const bagTile = $$('#trade-stash-host .item').find((n) => n._item?.isContainer && n._item.isEmptyContainer);

@@ -186,7 +186,9 @@ click. Picking an offer *stages* it — several can sit on the table at once,
 each with its own quantity and line total — then the payment has to be
 allocated with **Fill items** before **DEAL!** commits the lot in one
 transaction. Selling mirrors it: drag items over, each carries what the trader
-will pay for it, then DEAL!. Neither side pops a confirmation; staging is the
+will pay for it, then DEAL!. The sell table is cut to whatever the middle
+column has room for — every cell on screen, nothing to scroll — and is cut
+again when the window changes. Neither side pops a confirmation; staging is the
 confirmation, which is how the real screen works. Unexamined items and
 non-empty containers are refused, what the trader will not buy is greyed out,
 and the blocked states use the game's own wording. Fence rerolls his stolen
