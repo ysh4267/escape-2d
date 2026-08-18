@@ -81,6 +81,46 @@ rig, backpack, secure container, on-sling, on-back, holster and sheath, plus
 **four independent 1×1 pockets** — the real base-PMC layout, so nothing larger
 than a single cell fits in a pocket and items never span two of them.
 
+**Weapons are built out of parts.** Every gun carries the real template's mod
+slots — gas block, handguard, muzzle, pistol grip, dust cover, rear sight,
+stock, magazine, charging handle, mounts — and every part that goes into any
+of them is in the game: 610 parts, 46 magazines and 61 cartridges, generated
+as the transitive closure of the twelve guns' `Slots` filters, so a dovetail
+mount brings the scopes that mount on it and the AK buffer-tube adapter brings
+the AR stocks. Slot filters, `ConflictingItems`, required (vital) parts and the
+`ExtraSize` each part adds to the gun's footprint are all the template's own; a
+built AK-74N is 5×2, strip the stock and it is 4×2, fold the AKS-74U and it is
+3×2, and every one of the twelve default builds lands on exactly the size of
+tarkov.dev's preset sprite. A gun that will not fit where it lies refuses the
+part. Guns bought or found come assembled to their default preset (globals.json
+`ItemPresets`), worn inside the template's spawn range and, often, part loaded.
+
+The modding screen (right-click → MODDING, or double-click a gun) is a floating
+panel: the assembled gun and its numbers on the left, the slot tree on the
+right. Slots are real drop targets, so a part is dragged out of the stash onto
+the slot it goes in; clicking an empty slot lists every compatible part you
+own; the cross beside a part takes it off. Ergonomics is the sum, recoil and
+muzzle velocity are percentage sums applied to the base, accuracy is
+`CenterOfImpact` turned into MOA (radius, the game's own quirk), sighting range
+comes off the best sight fitted. In raid, vital parts (`RaidModdable: false`)
+stay put.
+
+**Magazines hold cartridges.** A magazine is an ordered list of runs — the
+round loaded last comes out first, exactly as in the game — and it will only
+take what its `Cartridges` filter allows. Drag a stack of rounds onto a
+magazine (or onto a gun) to load it, right-click → LOAD AMMO to pick the round
+and the count, UNLOAD AMMO to get them back as stacks; a shotgun's tube is a
+magazine like any other. Guns with a chamber keep one round in it, and firing
+takes the chambered round first and cycles the next one in. Loaded magazines
+weigh what their rounds weigh and sell for what they are worth.
+
+Cartridges carry the full ballistic card — damage, penetration, armour damage,
+fragmentation, velocity, recoil and accuracy modifiers, bleed chances, tracer,
+misfire — read straight from the template. What those numbers do to a shot is
+the next pass; for now a round's own damage is what lands.
+
+![modding](docs/modding.png)
+
 **The plant, all four storeys of it.** Tunnels, ground floor, the locker level
 and the rafters, each with its own walls, walkable surface, machinery and
 staircases, lifted out of the four floor groups in tarkov.dev's vector map.
@@ -148,10 +188,13 @@ it — the rig, backpack and pouch come home loaded, and emptying them is the
 UNLOAD button in the stash rather than something the result screen does for
 you.
 
-**Sound.** 178 cues over three buses — world foley, interface, ambience —
+**Sound.** 210 cues over three buses — world foley, interface, ambience —
 covering footsteps by gait, per-material container rummaging, item handling
-keyed to what the item *is*, interface and trader clicks, weapon reports,
-extraction and death.
+keyed to what the item *is*, interface and trader clicks, weapon reports, and
+weapon handling: each family's own magazine seating and bolt (the AK's, the
+Makarov's slide, the MP-133's shells going into the tube), folding stocks, the
+cartridge presses of loading and unloading, and the modding screen's own
+install clicks split the way the game splits them (vital / functional / gear).
 
 The audio is third-party, so it ships sealed: a build step deflates the 195
 clips into a single AES-256-GCM container, and only that container is tracked —
@@ -215,6 +258,7 @@ python -m http.server 8777
 |---|---|
 | `tools/build_items.py` | builds `src/data/items-db.json` and downloads item artwork |
 | `tools/selection.py` | the curated item list the builder resolves |
+| `tools/weapons_expand.py` | expands the guns in the selection into every part, magazine and cartridge they can take, and reads the modding numbers, ballistics and default presets |
 | `tools/build_map.py` | extracts all four Factory storeys, finds every opening in them, derives the stairwell links, and folds in tarkov.dev's exits / locks / spawns / loot spots — all into `src/data/map-factory.json` |
 | `tools/pack_sfx.py` | compresses and seals the sound pack (and `--unpack` reverses it) |
 | `tools/sfx_picks.py` | which clip backs which cue |

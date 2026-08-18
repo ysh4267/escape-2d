@@ -204,6 +204,66 @@ for _w, (_close, _far) in WEAPON_FIRE.items():
     PICKS[f"fire_{_w}"] = {"clips": _close, "trim": [0, 1.6], "gain": -3}
     PICKS[f"fire_{_w}_far"] = {"clips": _far, "trim": [0, 1.8], "gain": -7}
 
+# ---------------- weapon handling ----------------
+# The assembly / magazine / cartridge cues. Handling clips are recorded per
+# weapon too, but far fewer weapons have them than have shot banks, so the
+# borrowing here is explicit (audio.js HANDLING mirrors it):
+#
+#   ak74     ak74_magin_plastic / ak74_magout_plastic / ak74_slider_*     ak74.bundle
+#   aksu     the AK-74's mag and slide, plus its own aksu_stock_open/close aksu.bundle
+#   akm      akm_magin_metal / akm_magout_metal (akm/instrumental.bundle),
+#            akms_slider_* (in ak74.bundle) and akms_stock_fold/unfold
+#   kedr     kedr_magin / kedr_magout / kedr_slider_*                      kedr.bundle
+#   pm       pm_mag_in / pm_mag_out / pm_slider_in|out                     pm.bundle
+#            (the TT and the PB have no handling of their own; they use these)
+#   mp133    mr133_shell_in_mag / mr133_shell_out_mag / mr133_pump_in|out  mr133.bundle
+#   mp153    mr153_slider_* for the bolt, the MP-133's shells for loading
+#   saiga    saiga_magin_plastic / saiga_magout_plastic / saiga_slider_*,
+#            saiga_stock_open/close                                       saiga12.bundle
+#
+# The generic ones are the interface's: menu_install_mod_* is what the modding
+# screen clicks when a part goes on (gear / vital / func are the game's own
+# three flavours), menu_install_mag when a magazine does, ammo_load1..7 and
+# ammo_unload1..7 the cartridge presses, menu_modding_open/close the screen.
+_HANDLING = {
+    "ak74":  {"magin": ["ak74_magin_plastic"], "magout": ["ak74_magout_plastic"],
+              "bolt": ["ak74_slider_up", "ak74_slider_down"]},
+    "aksu":  {"magin": ["ak74_magin_plastic"], "magout": ["ak74_magout_plastic"],
+              "bolt": ["ak74_slider_up", "ak74_slider_down"],
+              "fold_open": ["aksu_stock_open"], "fold_close": ["aksu_stock_close"]},
+    "akm":   {"magin": ["akm_magin_metal"], "magout": ["akm_magout_metal"],
+              "bolt": ["akms_slider_up", "akms_slider_down"],
+              "fold_open": ["akms_stock_unfold"], "fold_close": ["akms_stock_fold"]},
+    "kedr":  {"magin": ["kedr_magin"], "magout": ["kedr_magout"],
+              "bolt": ["kedr_slider_up", "kedr_slider_down"]},
+    "pm":    {"magin": ["pm_mag_in"], "magout": ["pm_mag_out"],
+              "bolt": ["pm_slider_out", "pm_slider_in"]},
+    "mp133": {"magin": ["mr133_shell_in_mag"], "magout": ["mr133_shell_out_mag"],
+              "bolt": ["mr133_pump_out", "mr133_pump_in"]},
+    "mp153": {"magin": ["mr133_shell_in_mag"], "magout": ["mr133_shell_out_mag"],
+              "bolt": ["mr153_slider_up", "mr153_slider_down"]},
+    "saiga": {"magin": ["saiga_magin_plastic"], "magout": ["saiga_magout_plastic"],
+              "bolt": ["saiga_slider_up", "saiga_slider_down"],
+              "fold_open": ["saiga_stock_open"], "fold_close": ["saiga_stock_close"]},
+}
+for _w, _cues in _HANDLING.items():
+    for _k, _names in _cues.items():
+        PICKS[f"{_k}_{_w}"] = {"clips": _names, "trim": [0, 1.2], "gain": -4}
+PICKS.update({
+    "modding_open": {"clips": ["menu_modding_open"], "trim": [0, 1.0]},
+    "modding_close": {"clips": ["menu_modding_close"], "trim": [0, 1.0]},
+    "mod_install_gear": {"clips": ["menu_install_mod_gear"], "trim": [0, 0.8]},
+    "mod_install_vital": {"clips": ["menu_install_mod_vital"], "trim": [0, 0.8]},
+    "mod_install_func": {"clips": ["menu_install_mod_func"], "trim": [0, 0.8]},
+    "mod_install_mag": {"clips": ["menu_install_mag"], "trim": [0, 0.8]},
+    "ammo_load": {"clips": [f"ammo_load{i}" for i in range(1, 8)], "trim": [0, 0.6]},
+    "ammo_unload": {"clips": [f"ammo_unload{i}" for i in range(1, 8)], "trim": [0, 0.6]},
+    # shotgun shells go into the tube with the MP-133's own press
+    "shell_load": {"clips": ["mr133_shell_in_mag", "mr133_shell_in_mag2", "mr133_shell_in_mag3"],
+                   "trim": [0, 1.0], "gain": -4},
+    "shell_unload": {"clips": ["mr133_shell_out_mag"], "trim": [0, 1.0], "gain": -4},
+})
+
 # ---------------- bullet impacts ----------------
 # sharedassets397 is the install's impact bank. Splitting hit feedback by what
 # the round actually landed on is the difference between "did I hit?" and a

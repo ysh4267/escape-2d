@@ -12,6 +12,9 @@ import { setContextProvider, splitDialog, inspectDialog, confirmDialog } from '.
 import { startExamine, examining, needsExamine, isKnown } from '../inventory/examine.js';
 import { paintExamine } from '../inventory/view.js';
 import { autoPlace, detach, moveToSlot, splitStack } from '../inventory/model.js';
+import { openModdingWindow, moddingContext } from '../inventory/modding.js';
+import { loadAmmoDialog, loadIntoDialog } from '../inventory/ammo-dialogs.js';
+import { unloadAmmo, toggleFold, canFold, magazineOf } from '../inventory/weapon.js';
 import { emit, EV } from '../core/events.js';
 import { toast } from './shell.js';
 
@@ -99,6 +102,7 @@ export function activateStashContext() {
   dndContext.onActivate = (item) => {
     if (needsExamine(item)) examineNow(item);
     else if (item.isContainer) openContainerWindow(item);
+    else if (item.isWeapon) openModdingWindow(item);
     else quickTransfer(item);
   };
   dndContext.onChange = () => {
@@ -107,6 +111,8 @@ export function activateStashContext() {
     saveSoon();
   };
   dndContext.canMove = () => true;
+  // parts come out of, and go back into, the stash and everything worn
+  moddingContext.sources = () => [game.stash, ...game.equipment.carryGrids(), ...game.equipment.nestedGrids()];
 
   setContextProvider((item) => buildMenu(item, 'stash'));
 }
@@ -190,6 +196,47 @@ export function buildMenu(item, where, extra = [], opts = {}) {
     }
 
     actions.push({ label: 'INSPECT', icon: 'info', run: () => inspectDialog(item) });
+
+    // ---- weapons, magazines, cartridges ----
+    // the same set the game offers on the right-click of each: a gun opens
+    // the modding screen and folds; anything with rounds in it loads and
+    // unloads; a stack of cartridges asks which magazine to go into
+    if (item.hasMods && (item.isWeapon || item.slots.length)) {
+      actions.push({ label: 'MODDING', icon: 'crosshair', key: 'DBL-CLICK', run: () => openModdingWindow(item) });
+    }
+    if (item.tpl.wpn?.fold) {
+      const cf = canFold(item);
+      actions.push({
+        label: item.folded ? 'UNFOLD STOCK' : 'FOLD STOCK', icon: 'rotate', disabled: !cf.ok,
+        run: () => {
+          const r = toggleFold(item);
+          if (!r.ok) toast(r.reason, 'warn');
+          dndContext.onChange();
+        },
+      });
+    }
+    const mag = magazineOf(item);
+    if (mag) {
+      actions.push({
+        label: item.isMag ? 'LOAD AMMO' : 'LOAD MAGAZINE', icon: 'cart', disabled: mag.ammoFree === 0,
+        run: () => loadAmmoDialog(mag, dndContext.quickTargets(item) || [], () => dndContext.onChange()),
+      });
+      actions.push({
+        label: 'UNLOAD AMMO', icon: 'sell', disabled: mag.ammoCount === 0,
+        run: () => {
+          const host = item.holder?.kind === 'grid' ? [item.holder.grid] : [];
+          const r = unloadAmmo(mag, [...host, ...(dndContext.quickTargets(item) || [])]);
+          if (!r.ok) toast(r.reason || 'No room for the rounds', 'warn');
+          dndContext.onChange();
+        },
+      });
+    }
+    if (item.cat === 'ammo') {
+      actions.push({
+        label: 'LOAD INTO MAGAZINE', icon: 'cart',
+        run: () => loadIntoDialog(item, moddingContext.sources(), () => dndContext.onChange()),
+      });
+    }
   }
 
   for (const a of extra) actions.push(a);

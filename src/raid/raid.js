@@ -3,6 +3,7 @@
 // =========================================================
 
 import { Grid, Item, autoPlace, detach } from '../inventory/model.js';
+import { takeRound, isFunctional } from '../inventory/weapon.js';
 import { CONTAINERS, poolsFor, EMPTY_CHANCE, POOLS } from '../data/loot.js';
 import { TPL, BY_ID } from '../data/items.js';
 import { areaAt, levelInfo } from '../data/maps.js';
@@ -558,6 +559,20 @@ export class Raid {
       const item = new Item(key, { stack: clamp(stack, 1, tpl.stack) });
       item.raidLoot = true;
       if (tpl.dura != null) item.dura = Math.round(tpl.dura * rng.float(0.3, 1));
+      // a found gun is worn inside its template's spawn range, and more often
+      // than not has something in the magazine; a loose magazine sometimes does
+      if (tpl.wpn?.maxDura) {
+        const r = tpl.wpn.spawnDura || [30, 90];
+        item.dura = Math.round(rng.float(r[0], r[1]));
+        const mag = item.magazine;
+        if (mag && rng.chance(0.6)) {
+          const a = tpl.wpn.defAmmo || mag.tpl.ammoFilter?.[0];
+          if (a) mag.rounds.push({ t: a, n: rng.int(1, mag.tpl.magSize) });
+        }
+      } else if (tpl.magSize && rng.chance(0.4)) {
+        const a = tpl.ammoFilter?.[0];
+        if (a) item.rounds.push({ t: a, n: rng.int(1, tpl.magSize) });
+      }
       if (tpl.res) item.res = Math.round(tpl.res.max * rng.float(0.35, 1));
       const spot = c.grid.findSpot(item);
       if (spot) c.grid.place(item, spot.x, spot.y, spot.rot);
@@ -883,10 +898,9 @@ export class Raid {
    * read, so a rifle parked there was dead weight.
    */
   activeWeapon() {
-    return game.equipment.item('primary')
-      || game.equipment.item('secondary')
-      || game.equipment.item('holster')
-      || null;
+    // a gun missing a vital part is not a gun: skip it for the next one
+    const cands = [game.equipment.item('primary'), game.equipment.item('secondary'), game.equipment.item('holster')];
+    return cands.find((w) => w && isFunctional(w)) || null;
   }
 
   /** a carried ammo stack matching the weapon's caliber */
@@ -914,13 +928,19 @@ export class Raid {
     if (!weapon) { emit(EV.RAID_TOAST, { kind: 'warn', text: 'No weapon equipped' }); return 'noweapon'; }
     if (this.playerCooldown > 0) return 'cooldown';
 
+    // the round comes out of the chamber / magazine of the gun; a gun with
+    // nothing in it draws a loose round of its calibre from the rig for now -
+    // the reload itself is combat work and comes with the shooting pass
     const cal = weapon.tpl.cal;
-    const ammo = cal ? this.findAmmo(cal) : null;
-    if (cal && !ammo) { emit(EV.RAID_TOAST, { kind: 'bad', text: `Out of ${cal}` }); return 'noammo'; }
-    if (ammo) {
+    let ammoTpl = takeRound(weapon);
+    if (!ammoTpl && cal) {
+      const ammo = this.findAmmo(cal);
+      if (!ammo) { emit(EV.RAID_TOAST, { kind: 'bad', text: `Out of ${cal}` }); return 'noammo'; }
+      ammoTpl = ammo.tpl;
       ammo.stack -= 1;
       if (ammo.stack <= 0) detach(ammo);
     }
+    const ammo = ammoTpl ? { tpl: ammoTpl } : null;
 
     const rpm = weapon.tpl.rpm || 400;
     this.playerCooldown = Math.max(0.09, 60 / rpm);
@@ -962,7 +982,10 @@ export class Raid {
     }
     sfx.hit('body');
 
-    const base = (weapon.tpl.dmg || 40) * (ammo ? (0.7 + (ammo.tpl.dmg || 40) / 120) : 1);
+    // the round's own damage; a shell's pellets are folded into one number
+    const a = ammo?.tpl.ammo || {};
+    const proj = a.proj || 1;
+    const base = ammo ? (a.dmg || ammo.tpl.dmg || 40) * (proj > 1 ? proj * 0.5 : 1) : 40;
     const died = target.takeHit(base * this.rng.float(0.85, 1.15), this);
     if (died) { this.killScav(target); return 'kill'; }
     return 'hit';

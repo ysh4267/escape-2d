@@ -56,6 +56,7 @@ SFX_PACK_KEY='aAzve0EY1zPMn9Z28Z-1rzq3hX_bh36z' python tools/pack_sfx.py
 | `resources.assets` | 인터페이스·거래 16큐 |
 | `sharedassets8.assets` | 가구 뚜껑 8큐 |
 | 무기 뱅크 11종 | 총성 22큐 |
+| 무기 뱅크 8종 + `resources.assets` | 무기 조작 30큐 (탄창 탈착·노리쇠·개머리판 접기·장전 압입·모딩 화면) |
 | `sharedassets537.assets` | Factory 앰비언스 |
 
 ---
@@ -304,3 +305,40 @@ SFX_PACK_KEY='aAzve0EY1zPMn9Z28Z-1rzq3hX_bh36z' python tools/pack_sfx.py
 인덱스(`tools/cache/`)와 추출본(`assets/sfx-eft/`)은 둘 다 gitignore다. 저장소가
 추적하는 건 봉인된 `pack.bin`뿐이다. 원본 오디오는 Battlestate Games의 저작물이며,
 소유한 사본에서 로컬로 쓰는 것과 재배포는 다른 문제다.
+
+
+---
+
+## 무기 조작 — 조립·탄창·장전 (2026-08-18 추가)
+
+총기 파츠·탄창·탄약 시스템이 들어오면서 발사 이외의 무기 소리를 같은 설치본에서
+뽑았다. 조작음은 총성보다 무기별 커버리지가 좁아서 **빌려 쓰는 관계를 명시**해 두었다
+(`audio.js`의 `HANDLING`, `sfx_picks.py`의 `_HANDLING`이 같은 표다).
+
+| 뱅크 | magin / magout | bolt | fold open / close | 출처 |
+|---|---|---|---|---|
+| `ak74` | `ak74_magin_plastic` / `ak74_magout_plastic` | `ak74_slider_up`, `ak74_slider_down` | — | `weapons/ak74.bundle` |
+| `aksu` | AK-74의 것 | AK-74의 것 | `aksu_stock_open` / `aksu_stock_close` | `weapons/aksu.bundle` |
+| `akm` | `akm_magin_metal` / `akm_magout_metal` | `akms_slider_up`, `akms_slider_down` (ak74.bundle 안) | `akms_stock_unfold` / `akms_stock_fold` | `weapons/akm/instrumental.bundle` |
+| `kedr` | `kedr_magin` / `kedr_magout` | `kedr_slider_up`, `kedr_slider_down` | — | `weapons/kedr.bundle` |
+| `pm` (PB·TT도 사용) | `pm_mag_in` / `pm_mag_out` | `pm_slider_out`, `pm_slider_in` | — | `weapons/pm.bundle` |
+| `mp133` | `mr133_shell_in_mag` / `mr133_shell_out_mag` | `mr133_pump_out`, `mr133_pump_in` | — | `weapons/mr133.bundle` |
+| `mp153` | MP-133의 셸 | `mr153_slider_up`, `mr153_slider_down` | — | `weapons/mr153.bundle` |
+| `saiga` | `saiga_magin_plastic` / `saiga_magout_plastic` | `saiga_slider_up`, `saiga_slider_down` | `saiga_stock_open` / `saiga_stock_close` | `weapons/saiga12.bundle` |
+
+TT와 PB는 설치본에 조작음이 아예 없다(총성만 있다) — Makarov의 것을 쓴다.
+
+| 큐 | 원본 클립 | 언제 |
+|---|---|---|
+| `modding_open` / `modding_close` | `menu_modding_open` / `menu_modding_close` | 모딩 창 열고 닫을 때 |
+| `mod_install_vital` / `_func` / `_gear` | `menu_install_mod_vital` / `_func` / `_gear` | 파츠 장착 — 필수 파츠 / 조준기·전술장비 / 나머지 (게임의 세 갈래 그대로) |
+| `mod_install_mag` | `menu_install_mag` | (예비) |
+| `ammo_load` / `ammo_unload` | `ammo_load1–7` / `ammo_unload1–7` | 탄창에 탄 넣고 뺄 때, 최대 4회 압입을 110ms 간격으로 |
+| `shell_load` / `shell_unload` | `mr133_shell_in_mag(1–3)` / `mr133_shell_out_mag` | 12게이지 탄창(튜브)일 때 위 대신 |
+| 탄창 장착·분리 | 위 표의 `magin_<뱅크>` / `magout_<뱅크>` | 모딩 창이나 드래그로 탄창을 끼우고 뺄 때 — 무기 뱅크로 고른다 |
+| 파츠 분리 | 파츠 자체의 `item_mod_pickup` | 탄창 이외의 파츠를 뺄 때 |
+
+`mod_pickup/drop`, `mag_plastic_*`, `magazine_metal_*`은 새 아이템들의 `ItemSound`에서
+**파생**되어 자동으로 팩에 들어왔다(`_item_cues`) — 하드코딩한 게 아니다.
+
+현재 **210개 큐 / 409개 파일**, `pack.bin` 2.8 MiB. `tools/smoke.html` 191개 통과.

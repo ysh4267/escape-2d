@@ -84,6 +84,8 @@ const P = {
     ['am_12buck', 8, [8, 20]], ['am_762tt', 8, [20, 50]],
   ],
   mags: [['mag_ak74', 8], ['mag_akm', 7], ['mag_pm', 8], ['mag_kedr', 6]],
+  // filled from the item database by buildLootPools()
+  mods: [],
   weapons_low: [['w_pm', 8], ['w_tt', 7], ['w_kedr', 5], ['w_mp133', 6], ['w_vpo136', 4]],
   weapons_mid: [
     ['w_aks74u', 5], ['w_akm', 3], ['w_ak74n', 3], ['w_saiga', 2], ['w_kedrb', 3],
@@ -110,15 +112,15 @@ const P = {
 
 /** container type -> weighted list of pools */
 export const LOOT_TABLES = {
-  crate:       [[P.junk, 26], [P.ammo, 16], [P.meds_low, 12], [P.grenades, 8], [P.mags, 10], [P.tools, 12], [P.electronics, 8], [P.weapons_low, 4], [P.money, 4]],
+  crate:       [[P.junk, 24], [P.ammo, 16], [P.meds_low, 12], [P.grenades, 8], [P.mags, 8], [P.mods, 6], [P.tools, 12], [P.electronics, 8], [P.weapons_low, 4], [P.money, 4]],
   ammobox:     [[P.ammo, 80], [P.mags, 20]],
   suitcase:    [[P.junk, 30], [P.food, 22], [P.drink, 14], [P.valuables, 10], [P.info, 8], [P.money, 10], [P.electronics, 6]],
-  weaponbox:   [[P.weapons_low, 26], [P.weapons_mid, 12], [P.mags, 26], [P.ammo, 22], [P.grenades, 8], [P.meds_low, 6]],
-  weaponbox6:  [[P.weapons_mid, 24], [P.weapons_low, 20], [P.mags, 24], [P.ammo, 20], [P.grenades, 12]],
+  weaponbox:   [[P.weapons_low, 22], [P.weapons_mid, 10], [P.mags, 20], [P.mods, 18], [P.ammo, 20], [P.grenades, 6], [P.meds_low, 4]],
+  weaponbox6:  [[P.weapons_mid, 20], [P.weapons_low, 16], [P.mags, 18], [P.mods, 24], [P.ammo, 16], [P.grenades, 6]],
   medbag:      [[P.meds_low, 58], [P.meds_mid, 34], [P.meds_high, 8]],
   medcase:     [[P.meds_low, 44], [P.meds_mid, 44], [P.meds_high, 12]],
   medcrate:    [[P.meds_mid, 46], [P.meds_high, 24], [P.meds_low, 30]],
-  toolbox:     [[P.tools, 66], [P.junk, 24], [P.electronics, 10]],
+  toolbox:     [[P.tools, 56], [P.junk, 22], [P.mods, 12], [P.electronics, 10]],
   jacket:      [[P.junk, 30], [P.money, 24], [P.keys, 16], [P.valuables, 10], [P.food, 12], [P.meds_low, 8]],
   sportbag:    [[P.junk, 26], [P.food, 20], [P.drink, 12], [P.meds_low, 16], [P.valuables, 10], [P.money, 8], [P.gear_misc, 8]],
   duffle:      [[P.junk, 24], [P.food, 16], [P.meds_low, 16], [P.mags, 12], [P.ammo, 12], [P.gear_misc, 10], [P.money, 10]],
@@ -136,7 +138,7 @@ export const LOOT_TABLES = {
   deadscav:    [[P.junk, 22], [P.ammo, 16], [P.meds_low, 16], [P.food, 12], [P.mags, 12], [P.money, 10], [P.gear_misc, 6], [P.valuables, 6]],
   // a dead PMC is the only place full gear drops: armor, helmets, rigs,
   // backpacks and blades all funnel through this table
-  pmcbody:     [[P.mags, 12], [P.ammo, 12], [P.meds_mid, 12], [P.gear_misc, 8], [P.money, 8],
+  pmcbody:     [[P.mags, 10], [P.ammo, 12], [P.mods, 8], [P.meds_mid, 12], [P.gear_misc, 8], [P.money, 8],
                 [P.valuables, 8], [P.cases, 4], [P.grenades, 5], [P.gear_armor, 8],
                 [P.gear_helmet, 7], [P.gear_rig, 7], [P.gear_backpack, 6], [P.melee, 3]],
 };
@@ -149,3 +151,33 @@ export const EMPTY_CHANCE = {
 
 export function poolsFor(type) { return LOOT_TABLES[type] || LOOT_TABLES.crate; }
 export const POOLS = P;
+
+/**
+ * The parts, magazines and cartridges are generated from the weapon templates
+ * (tools/weapons_expand.py), so the pools that carry them are filled here
+ * once the item database is loaded, in place — the tables above hold these
+ * arrays by reference. Cheap parts are common, the expensive ones rare, the
+ * way the loose loot on Factory actually skews.
+ */
+export function buildLootPools(TPL) {
+  const all = Object.values(TPL);
+  const rarity = (p) => (p < 4000 ? 8 : p < 12000 ? 5 : p < 30000 ? 3 : p < 80000 ? 1.5 : 0.6);
+  P.mods.length = 0;
+  for (const t of all) {
+    if (t.cat !== 'mod') continue;
+    P.mods.push([t.key, rarity(t.price)]);
+  }
+  const haveMag = new Set(P.mags.map((e) => e[0]));
+  for (const t of all) {
+    if (t.cat !== 'mag' || haveMag.has(t.key)) continue;
+    P.mags.push([t.key, Math.max(1, Math.round(rarity(t.price) * 0.6))]);
+  }
+  const haveAmmo = new Set(P.ammo.map((e) => e[0]));
+  for (const t of all) {
+    if (t.cat !== 'ammo' || haveAmmo.has(t.key)) continue;
+    const pen = t.ammo?.pen ?? t.pen ?? 0;
+    const w = pen < 20 ? 6 : pen < 30 ? 4 : pen < 40 ? 2 : 1;
+    const cap = Math.max(4, Math.round((t.stack || 20) * 0.6));
+    P.ammo.push([t.key, w, [Math.max(2, Math.round(cap / 3)), cap]]);
+  }
+}

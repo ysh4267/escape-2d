@@ -26,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from selection import SELECTION  # noqa: E402
+import weapons_expand as wx  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -39,6 +40,9 @@ OUT = os.path.join(ROOT, 'src', 'data', 'items-db.json')
 ITEMS_URL = 'https://raw.githubusercontent.com/sp-tarkov/server/3.10.1/project/assets/database/templates/items.json'
 LOCALE_URL = 'https://raw.githubusercontent.com/sp-tarkov/server/master/project/assets/database/locales/global/en.json'
 HANDBOOK_URL = 'https://raw.githubusercontent.com/sp-tarkov/server/master/project/assets/database/templates/handbook.json'
+# default weapon presets (ItemPresets) live in globals.json; the 3.10.1 tag is
+# a plain blob like items.json
+GLOBALS_URL = 'https://raw.githubusercontent.com/sp-tarkov/server/3.10.1/project/assets/database/globals.json'
 GRID_URL = 'https://assets.tarkov.dev/{id}-grid-image.webp'
 
 UA = {'User-Agent': 'escape2d-item-builder/1.0'}
@@ -99,6 +103,23 @@ def fetch(url, dest=None, binary=False, retries=3):
     return None
 
 
+def fetch_preset_image(preset_id, weapon_id):
+    """(filename, w, h) of the assembled-preset sprite, or None"""
+    fn = weapon_id + '-preset.webp'
+    dest = os.path.join(ASSETS, fn)
+    if os.path.exists(dest) and os.path.getsize(dest) > 500:
+        with open(dest, 'rb') as f:
+            data = f.read()
+    else:
+        data = fetch(GRID_URL.format(id=preset_id), dest=dest, binary=True)
+    size = webp_size(data) if data else None
+    if not size:
+        if os.path.exists(dest):
+            os.remove(dest)
+        return None
+    return fn, max(1, round((size[0] - 1) / 63)), max(1, round((size[1] - 1) / 63))
+
+
 def cached_json(url, name):
     path = os.path.join(CACHE, name)
     if os.path.exists(path) and os.path.getsize(path) > 1000:
@@ -137,6 +158,7 @@ def main():
     en = cached_json(LOCALE_URL, 'en.json')
     hb = cached_json(HANDBOOK_URL, 'handbook.json')
     raw_items = cached_json(ITEMS_URL, 'items_3101.json')
+    globals_db = cached_json(GLOBALS_URL, 'globals_3101.json')
 
     hb_items = {i['Id']: i for i in hb['Items']}
 
@@ -197,6 +219,22 @@ def main():
         print(f'      !! {len(misses)} unresolved:')
         for key, q in misses:
             print(f'         - {key}: "{q}"')
+
+    # --- weapon trees: every part, magazine and cartridge the guns can take ---
+    sel_ids = {r['id']: r['key'] for r in resolved}
+    expanded, ex_counts, tree_depth = wx.expand(raw_items, hb_items, en, sel_ids, seen_keys)
+    for rec in expanded:
+        resolved.append({'key': rec['key'], 'id': rec['id'], 'cat': rec['cat'], 'weight': 0.1,
+                         'stack': 1, 'extra': {}, 'query': rec['id'], 'how': 'tree',
+                         'modType': rec['modType']})
+        seen_ids[rec['id']] = rec['key']
+    print('      weapon trees: +%s' % ', '.join(f'{v} {k}' for k, v in sorted(ex_counts.items())))
+    key_of = lambda iid: seen_ids.get(iid)  # noqa: E731
+    presets = {}
+    for pr in globals_db.get('ItemPresets', {}).values():
+        enc = pr.get('_encyclopedia')
+        if enc and enc in seen_ids and enc not in presets:
+            presets[enc] = pr
 
     print(f'[3/5] fetching grid images for {len(resolved)} items')
     os.makedirs(ASSETS, exist_ok=True)
@@ -325,13 +363,71 @@ def main():
             tpl['ergo'] = int(props['Ergonomics'])
         if props.get('bFirerate'):
             tpl['rpm'] = int(props['bFirerate'])
-        cal = props.get('Caliber') or props.get('ammoCaliber')
+        cal = wx.caliber(props)
         if cal:
-            tpl['cal'] = str(cal).replace('Caliber', '')
+            tpl['cal'] = cal
         if props.get('speedPenaltyPercent'):
             tpl['speedPen'] = float(props['speedPenaltyPercent'])
         if props.get('ArmorMaterial'):
             tpl['armorMat'] = props['ArmorMaterial']
+
+        # --- weapon system: parts tree, ballistics, presets ---
+        kind = wx.kind_of(raw_items, iid)
+        if kind and props:
+            kcat, ktype = kind
+            slots = wx.slots_of(props, key_of)
+            if slots:
+                for sl in slots:
+                    sl['label'] = wx.slot_label(sl['n'])
+                tpl['slots'] = slots
+            conf = [key_of(c) for c in (props.get('ConflictingItems') or [])]
+            conf = sorted({c for c in conf if c})
+            if conf:
+                tpl['conflicts'] = conf
+            if kcat in ('weapon', 'pistol'):
+                tpl['wpn'] = wx.weapon_fields(props, key_of)
+                pr = presets.get(iid)
+                tree = wx.preset_tree(pr, key_of) if pr else None
+                if tree:
+                    tpl['preset'] = tree
+                    tpl['presetName'] = pr.get('_name')
+                    # tarkov.dev also draws the assembled default preset, under
+                    # the preset's own id; the bare receiver's sprite is only
+                    # the receiver. The assembled sprite is what a built gun
+                    # shows in the grid, and its size is the cross-check that
+                    # the footprint arithmetic (ExtraSize per part) is right.
+                    pimg = fetch_preset_image(pr['_id'], iid)
+                    if pimg:
+                        tpl['presetImg'] = pimg[0]
+                        tpl['presetSize'] = [pimg[1], pimg[2]]
+                if props.get('weapFireType'):
+                    tpl['fire'] = list(props['weapFireType'])
+            elif kcat == 'mag':
+                mg = wx.mag_fields(props, key_of)
+                tpl['magSize'] = mg.pop('size', 0)
+                tpl['ammoFilter'] = mg.pop('ammo', [])
+                tpl['mag'] = mg
+                mf = wx.mod_fields(props)
+                if mf:
+                    tpl['mod'] = mf
+                tpl['modType'] = 'magazine'
+                # the calibre is the one most of the rounds we carry are in: an
+                # AKM mag also lists .366 TKM for the VPO-209, and that must not
+                # relabel it
+                cal_votes = {}
+                for a in wx._filters((props.get('Cartridges') or [{}])[0]):
+                    if a in raw_items and key_of(a):
+                        c = wx.caliber(raw_items[a]['_props'])
+                        cal_votes[c] = cal_votes.get(c, 0) + 1
+                if cal_votes:
+                    tpl['cal'] = max(cal_votes, key=cal_votes.get)
+                if not tpl.get('price'):
+                    tpl['price'] = 1500
+            elif kcat == 'mod':
+                tpl['mod'] = wx.mod_fields(props)
+                tpl['modType'] = r.get('modType') or ktype
+        if r['cat'] == 'ammo' and props:
+            tpl['ammo'] = wx.ammo_fields(props)
 
         # authored overrides last: armor class and durability are no longer in
         # the template because armor moved to a plate-based system
@@ -377,6 +473,7 @@ def main():
         json.dump(out, f, ensure_ascii=False, separators=(',', ':'), sort_keys=True)
 
     used = {t['img'] for t in out.values() if 'img' in t}
+    used |= {t['presetImg'] for t in out.values() if 'presetImg' in t}
     for fn in os.listdir(ASSETS):
         if fn.endswith('.webp') and fn not in used:
             os.remove(os.path.join(ASSETS, fn))

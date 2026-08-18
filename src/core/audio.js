@@ -650,7 +650,78 @@ export const sfx = {
 
   death() { play('death'); },
   extract() { play('extract_done'); },
+
+  // ---- weapon handling: assembly, magazines, cartridges ----
+  //
+  // Per-weapon banks again, from the same install: the AK's own magazine
+  // seating and bolt, the Makarov's slide, the MP-133's shells going into the
+  // tube. A weapon without its own handling clips borrows the nearest one
+  // (the TT and PB use the PM's, the MP-153 the MP-133's) - see sfx_picks.py.
+
+  /** the modding screen opening and closing */
+  modding(open = true) { play(open ? 'modding_open' : 'modding_close'); },
+
+  /**
+   * A part going onto a gun. A magazine seats with the weapon's own mag-in;
+   * anything else clicks with the game's install cue, split the way the game
+   * splits it: a vital part (barrel, receiver, grip ...) is the heavier
+   * `vital` clip, a functional part (sight, tactical) the light `func` one and
+   * the rest are `gear`.
+   */
+  modInstall(slot, part) {
+    if (part?.isMag) { play(`magin_${handlingBank(slot.owner?.root?.tpl)}`, { rate: [0.97, 1.03] }); return; }
+    const t = part?.tpl?.modType;
+    const kind = slot?.required ? 'vital'
+      : (t === 'reflex' || t === 'scope' || t === 'ironsight' || t === 'tactical') ? 'func' : 'gear';
+    play(`mod_install_${kind}`);
+  },
+
+  /** a part coming off: a magazine drops with the mag-out, the rest with the part's own foley */
+  modRemove(slot, part) {
+    if (part?.isMag) { play(`magout_${handlingBank(slot.owner?.root?.tpl)}`, { rate: [0.97, 1.03] }); return; }
+    sfx.item(part?.tpl, 'pickup');
+  },
+
+  /**
+   * Cartridges going into a magazine: one press per round would be a
+   * machine-gun of clicks, so a burst of up to four presses is spread over a
+   * short beat, which is what the loading animation sounds like.
+   */
+  ammoLoad(magTpl, n = 1) {
+    const cue = magTpl?.cal?.startsWith('12') ? 'shell_load' : 'ammo_load';
+    const presses = Math.min(4, Math.max(1, n));
+    for (let i = 0; i < presses; i++) setTimeout(() => play(cue, { rate: [0.95, 1.06], limit: 0 }), i * 110);
+  },
+
+  ammoUnload(magTpl, n = 1) {
+    const cue = magTpl?.cal?.startsWith('12') ? 'shell_unload' : 'ammo_unload';
+    const presses = Math.min(4, Math.max(1, n));
+    for (let i = 0; i < presses; i++) setTimeout(() => play(cue, { rate: [0.95, 1.06], limit: 0 }), i * 90);
+  },
+
+  /** the bolt / slide / pump cycled by hand */
+  weaponBolt(tpl) { play(`bolt_${handlingBank(tpl)}`, { rate: [0.97, 1.03] }); },
+
+  /** a folding stock going in or out */
+  weaponFold(tpl, folded) {
+    play(`fold_${handlingBank(tpl)}_${folded ? 'close' : 'open'}`);
+  },
 };
+
+/**
+ * Handling clips are recorded per weapon family too, but the set is smaller
+ * than the shot banks: the AKM shares the AK-74's slide, the TT and PB have
+ * no handling of their own and borrow the Makarov's, the MP-153 has a slide
+ * but its shells go in like the MP-133's. `HANDLING` names the bank that
+ * actually has clips for each shot bank.
+ */
+const HANDLING = {
+  ak74: 'ak74', aksu: 'aksu', akm: 'akm', kedr: 'kedr', kedrb: 'kedr',
+  pm: 'pm', pb: 'pm', tt: 'pm', mp133: 'mp133', mp153: 'mp153', saiga: 'saiga',
+};
+function handlingBank(tpl) {
+  return HANDLING[weaponBank(tpl)] || 'ak74';
+}
 
 // ---------------------------------------------------------
 // ambience

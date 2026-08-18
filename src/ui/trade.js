@@ -489,16 +489,21 @@ function renderBuy(t, host, idle = false) {
     .sort((a, b) => (b.tpl.w * b.tpl.h) - (a.tpl.w * a.tpl.h));
 
   const COLS = 8;
-  const cells = entries.reduce((n, e) => n + e.tpl.w * e.tpl.h, 0);
+  // a gun on the shelf is the assembled preset, so it is measured assembled
+  for (const e of entries) {
+    e.disp = new Item(e.off.key, { examined: true });
+    e.disp.virtual = true;
+    e.disp.offer = e.off;
+  }
+  entries.sort((a, b) => (b.disp.fw * b.disp.fh) - (a.disp.fw * a.disp.fh));
+  const cells = entries.reduce((n, e) => n + e.disp.fw * e.disp.fh, 0);
   const shelf = new Grid(COLS, cells + 8, { tag: 'assort' });
   // display only: the player must never be able to drop real items in here
   shelf.mayAccept = (it) => !!it.virtual;
 
   const placed = [];
   for (const e of entries) {
-    const disp = new Item(e.off.key, { examined: true });
-    disp.virtual = true;
-    disp.offer = e.off;
+    const disp = e.disp;
     const spot = shelf.findSpot(disp);
     if (!spot) continue;
     shelf.place(disp, spot.x, spot.y, spot.rot);

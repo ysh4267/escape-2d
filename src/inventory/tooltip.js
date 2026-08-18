@@ -5,6 +5,7 @@
 import { $, el, icon, fmtNum, fmtWeight } from '../core/util.js';
 import { catLabel } from './view.js';
 import { isKnown } from './examine.js';
+import { statRows } from './statrows.js';
 import { on, EV } from '../core/events.js';
 
 let node = null;
@@ -88,7 +89,7 @@ function show(item) {
 
   const head = el('div', { class: 'tooltip__head' },
     el('div', { class: 'tooltip__name' }, tpl.name),
-    el('div', { class: 'tooltip__short' }, `${catLabel(tpl.cat)} · ${tpl.w}x${tpl.h}`));
+    el('div', { class: 'tooltip__short' }, `${catLabel(tpl.cat)} · ${item.fw}x${item.fh}`));
   node.append(head);
 
   const body = el('div', { class: 'tooltip__body' });
@@ -102,11 +103,14 @@ function show(item) {
   if (tpl.armorClass) row(dl, 'ARMOR CLASS', String(tpl.armorClass));
   if (tpl.armorMat) row(dl, 'MATERIAL', tpl.armorMat);
   if (tpl.heal) row(dl, 'HEAL RATE', `${tpl.heal} hp`);
-  if (tpl.dmg) row(dl, 'DAMAGE', String(tpl.dmg));
-  if (tpl.pen) row(dl, 'PENETRATION', String(tpl.pen));
-  if (tpl.ergo) row(dl, 'ERGONOMICS', String(tpl.ergo));
-  if (tpl.rpm) row(dl, 'FIRE RATE', `${tpl.rpm} rpm`);
-  if (tpl.cal) row(dl, 'CALIBER', tpl.cal);
+  // guns, parts, magazines and cartridges have their own rows
+  if (!statRows(item, (k, v) => row(dl, k, v))) {
+    if (tpl.dmg) row(dl, 'DAMAGE', String(tpl.dmg));
+    if (tpl.pen) row(dl, 'PENETRATION', String(tpl.pen));
+    if (tpl.ergo) row(dl, 'ERGONOMICS', String(tpl.ergo));
+    if (tpl.rpm) row(dl, 'FIRE RATE', `${tpl.rpm} rpm`);
+    if (tpl.cal) row(dl, 'CALIBER', tpl.cal);
+  }
   if (tpl.uses) row(dl, 'USES LEFT', `${item.res ?? tpl.uses} / ${tpl.uses}`);
   if (tpl.speedPen) row(dl, 'SPEED', `${tpl.speedPen}%`);
   if (item.isContainer) {

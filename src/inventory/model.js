@@ -9,6 +9,12 @@
 //  - containers own their own grids; a container may not be placed inside
 //    itself or any of its own descendants, and nesting depth is capped
 //  - equipment slots accept a category whitelist
+//  - weapons and weapon parts carry mod slots (Slots in the template): a part
+//    goes into a slot whose filter names its template, conflicts are checked
+//    against every part already on the gun, and the gun's footprint grows with
+//    what is hung off it (ExtraSize* on the parts, folded stocks excepted)
+//  - magazines hold cartridges as an ordered list of runs, last loaded on top;
+//    weapons with a chamber hold one round in it
 // =========================================================
 
 import { uid, clamp } from '../core/util.js';
@@ -40,8 +46,22 @@ export class Item {
     this.fir = opts.fir ?? false;
     this.examined = opts.examined ?? !!(tpl.known || tpl.alwaysExamined);
     this.res = opts.res ?? (tpl.res ? tpl.res.max : null);
-    this.dura = opts.dura ?? (tpl.dura != null ? tpl.dura : null);
-    this.ammo = opts.ammo ?? (tpl.magSize != null ? 0 : null);
+    this.dura = opts.dura ?? (tpl.dura != null ? tpl.dura : (tpl.wpn?.maxDura ?? null));
+    /**
+     * cartridges in a magazine (or the internal tube of a shotgun): runs of
+     * {t: ammo template key, n: count}, the LAST run is the top of the stack
+     * @type {{t:string,n:number}[]|null}
+     */
+    this.rounds = tpl.magSize != null ? [] : null;
+    /** the round(s) in the chamber(s) of a weapon: ammo template keys */
+    this.chamber = tpl.wpn?.chambers ? [] : null;
+    /** a foldable stock folded */
+    this.folded = !!opts.folded;
+    /**
+     * mod slots, in template order — every weapon and every part with Slots
+     * @type {ModSlot[]|null}
+     */
+    this.slots = tpl.slots ? tpl.slots.map((d) => new ModSlot(this, d)) : null;
     /** @type {Grid[]|null} */
     this.grids = null;
     if (tpl.container) {
@@ -52,45 +72,117 @@ export class Item {
       });
     }
     /** where this item currently lives */
-    this.holder = null; // { kind:'grid', grid, x, y } | { kind:'slot', slot }
+    this.holder = null; // { kind:'grid', grid, x, y } | { kind:'slot', slot } | { kind:'mod', slot }
+
+    // a weapon is born assembled the way the game's default preset assembles
+    // it, unless the caller is restoring one from a save (bare:true) or wants
+    // the stripped receiver on purpose
+    if (tpl.preset && !opts.bare) applyPreset(this, tpl.preset);
   }
 
   get tpl() { return getTpl(this.tplId); }
   get name() { return this.tpl.name; }
   get short() { return this.tpl.short || this.tpl.name; }
   get cat() { return this.tpl.cat; }
-  get w() { return this.rot ? this.tpl.h : this.tpl.w; }
-  get h() { return this.rot ? this.tpl.w : this.tpl.h; }
-  get canRotate() { return this.tpl.w !== this.tpl.h; }
+  /**
+   * Unrotated footprint. A bare template is tpl.w x tpl.h; a weapon grows by
+   * the ExtraSize of what is attached — the largest overhang on each side, or
+   * the sum where a part says ExtraSizeForceAdd — and a folded stock counts
+   * for nothing (SizeReduceRight comes off as well).
+   */
+  get fw() { return footprint(this).w; }
+  get fh() { return footprint(this).h; }
+  get w() { return this.rot ? this.fh : this.fw; }
+  get h() { return this.rot ? this.fw : this.fh; }
+  get canRotate() { return this.fw !== this.fh; }
   get isContainer() { return !!this.grids; }
+  get isWeapon() { return !!this.tpl.wpn; }
+  get isMag() { return this.rounds != null; }
+  get hasMods() { return !!this.slots; }
 
-  /** weight of this item alone (stack included) */
-  get selfWeight() { return (this.tpl.weight || 0) * this.stack; }
+  /** installed parts, in slot order */
+  *mods() {
+    if (!this.slots) return;
+    for (const s of this.slots) if (s.item) yield s.item;
+  }
 
-  /** weight including everything stored inside */
-  get weight() {
-    let w = this.selfWeight;
-    if (this.grids) for (const g of this.grids) for (const it of g.items()) w += it.weight;
+  /** installed parts and everything hanging off them */
+  *allMods() {
+    for (const m of this.mods()) { yield m; yield* m.allMods(); }
+  }
+
+  modSlot(name) { return this.slots ? this.slots.find((s) => s.name === name) || null : null; }
+  mod(name) { return this.modSlot(name)?.item || null; }
+
+  /** the weapon (or part) this part is attached to, if any */
+  get parentMod() { return this.holder?.kind === 'mod' ? this.holder.slot.owner : null; }
+
+  /** the top of the mod tree this item belongs to */
+  get root() {
+    let cur = this;
+    let guard = 0;
+    while (cur.parentMod && guard++ < 24) cur = cur.parentMod;
+    return cur;
+  }
+
+  /** the magazine feeding this weapon, whether a detachable box or a fixed tube */
+  get magazine() { return this.mod('mod_magazine'); }
+
+  /** rounds in a magazine */
+  get ammoCount() {
+    if (!this.rounds) return 0;
+    let n = 0;
+    for (const r of this.rounds) n += r.n;
+    return n;
+  }
+  get ammoFree() { return Math.max(0, (this.tpl.magSize || 0) - this.ammoCount); }
+  /** template key of the round on top of the magazine, or null */
+  get topRound() { return this.rounds && this.rounds.length ? this.rounds[this.rounds.length - 1].t : null; }
+
+  /** weight of this item alone (stack included), plus the cartridges in a magazine */
+  get selfWeight() {
+    let w = (this.tpl.weight || 0) * this.stack;
+    if (this.rounds) for (const r of this.rounds) w += (getTpl(r.t)?.weight || 0) * r.n;
+    if (this.chamber) for (const t of this.chamber) w += getTpl(t)?.weight || 0;
     return w;
   }
 
-  /** base value of this item alone */
-  get selfValue() { return (this.tpl.price || 0) * this.stack; }
+  /** weight including everything stored inside and everything attached */
+  get weight() {
+    let w = this.selfWeight;
+    if (this.grids) for (const g of this.grids) for (const it of g.items()) w += it.weight;
+    for (const m of this.mods()) w += m.weight;
+    return w;
+  }
+
+  /** base value of this item alone, cartridges included */
+  get selfValue() {
+    let v = (this.tpl.price || 0) * this.stack;
+    if (this.rounds) for (const r of this.rounds) v += (getTpl(r.t)?.price || 0) * r.n;
+    if (this.chamber) for (const t of this.chamber) v += getTpl(t)?.price || 0;
+    return v;
+  }
 
   get value() {
     let v = this.selfValue;
     if (this.grids) for (const g of this.grids) for (const it of g.items()) v += it.value;
+    for (const m of this.mods()) v += m.value;
     return v;
   }
 
-  /** every item stored inside this one, recursively */
+  /** every item stored inside or attached to this one, recursively */
   *descendants() {
-    if (!this.grids) return;
-    for (const g of this.grids) {
-      for (const it of g.items()) {
-        yield it;
-        yield* it.descendants();
+    if (this.grids) {
+      for (const g of this.grids) {
+        for (const it of g.items()) {
+          yield it;
+          yield* it.descendants();
+        }
       }
+    }
+    for (const m of this.mods()) {
+      yield m;
+      yield* m.descendants();
     }
   }
 
@@ -104,6 +196,7 @@ export class Item {
     let d = 0, cur = this.holder;
     while (cur) {
       if (cur.kind === 'grid' && cur.grid.owner) { d++; cur = cur.grid.owner.holder; }
+      else if (cur.kind === 'mod') cur = cur.slot.owner.holder;   // parts ride with the gun
       else break;
     }
     return d;
@@ -135,20 +228,204 @@ export class Item {
     if (this.examined) o.e = 1;
     if (this.res != null) o.res = this.res;
     if (this.dura != null) o.d = this.dura;
-    if (this.ammo != null) o.a = this.ammo;
+    if (this.folded) o.fd = 1;
+    if (this.rounds && this.rounds.length) o.rd = this.rounds.map((r) => [r.t, r.n]);
+    if (this.chamber && this.chamber.length) o.ch = this.chamber.slice();
     if (this.grids) o.g = this.grids.map((g) => g.toJSON());
+    if (this.slots) {
+      const m = {};
+      let any = false;
+      for (const sl of this.slots) if (sl.item) { m[sl.name] = sl.item.toJSON(); any = true; }
+      if (any) o.m = m;
+    }
     return o;
   }
 
   static fromJSON(o) {
     const it = new Item(o.t, {
       uid: o.uid, rot: o.r, stack: o.s, fir: o.f, examined: o.e,
-      res: o.res, dura: o.d, ammo: o.a,
+      res: o.res, dura: o.d, folded: o.fd, bare: true,
     });
     if (o.g && it.grids) {
       o.g.forEach((gj, i) => { if (it.grids[i]) it.grids[i].loadJSON(gj); });
     }
+    if (o.rd && it.rounds) {
+      for (const [t, n] of o.rd) if (getTpl(t) && n > 0) it.rounds.push({ t, n });
+      // a save from before the round cap changed must not overfill the magazine
+      let over = it.ammoCount - (it.tpl.magSize || 0);
+      while (over > 0 && it.rounds.length) {
+        const top = it.rounds[it.rounds.length - 1];
+        const take = Math.min(top.n, over);
+        top.n -= take; over -= take;
+        if (top.n <= 0) it.rounds.pop();
+      }
+    }
+    if (o.ch && it.chamber) {
+      for (const t of o.ch) if (getTpl(t) && it.chamber.length < (it.tpl.wpn?.chambers || 1)) it.chamber.push(t);
+    }
+    if (o.m && it.slots) {
+      for (const sl of it.slots) {
+        const mj = o.m[sl.name];
+        if (!mj) continue;
+        let part;
+        try { part = Item.fromJSON(mj); } catch { continue; }
+        // one stale part must not void the whole gun; the filter is re-checked
+        // so a template that stopped fitting is dropped rather than kept
+        if (sl.def.f.includes(part.tplId)) sl.set(part);
+      }
+    }
+    // an old save carried the loaded count as a bare number
+    if (o.a && it.rounds && !it.rounds.length && o.a > 0) {
+      const def = it.tpl.ammoFilter?.[0];
+      if (def) it.rounds.push({ t: def, n: Math.min(o.a, it.tpl.magSize || o.a) });
+    }
     return it;
+  }
+}
+
+// ---------------------------------------------------------
+// ModSlot — one attachment point on a weapon or a part
+// ---------------------------------------------------------
+export class ModSlot {
+  constructor(owner, def) {
+    this.id = uid('m');
+    this.owner = owner;          // the Item this slot belongs to
+    this.def = def;              // { n, label, req, f:[keys], merge }
+    this.name = def.n;
+    this.key = def.n;
+    this.label = def.label || def.n;
+    this.required = !!def.req;
+    this.item = null;
+  }
+
+  /** template-level fit: is this part on the slot's filter list */
+  fits(item) { return !!item && this.def.f.includes(item.tplId); }
+
+  /**
+   * Full legality: filter, conflicts with everything on the gun, and the
+   * assembled gun still fitting wherever it is lying. `why` collects the
+   * reason for the UI.
+   */
+  canAccept(item, why = null) {
+    const res = canInstall(this, item);
+    if (!res.ok && why) why.reason = res.reason;
+    return res.ok;
+  }
+
+  set(item) {
+    this.item = item;
+    if (item) {
+      item.rot = 0;
+      item.holder = { kind: 'mod', slot: this };
+    }
+    return true;
+  }
+
+  clear() {
+    if (this.item && this.item.holder && this.item.holder.slot === this) this.item.holder = null;
+    const old = this.item;
+    this.item = null;
+    return old;
+  }
+
+  toJSON() { return this.item ? this.item.toJSON() : null; }
+}
+
+/** why a part will not go on: {ok, reason} */
+export function canInstall(slot, item) {
+  if (!item) return { ok: false, reason: 'nothing to install' };
+  if (!slot.fits(item)) return { ok: false, reason: 'does not fit this slot' };
+  const root = slot.owner.root;
+  if (item === root || item.contains?.(root) || [...item.allMods()].includes(root)) {
+    return { ok: false, reason: 'cannot attach a gun to its own part' };
+  }
+  if (item.rounds && item.ammoCount && item.tpl.ammoFilter && slot.owner.tpl.cal
+      && item.tpl.cal && item.tpl.cal !== slot.owner.tpl.cal) {
+    return { ok: false, reason: 'wrong calibre' };
+  }
+  // conflicts run both ways: the new part lists what it excludes, and every
+  // part already on the gun lists what it excludes
+  const conflicts = item.tpl.conflicts || [];
+  const installed = [root, ...root.allMods()].filter((m) => m !== slot.item);
+  for (const m of installed) {
+    if (conflicts.includes(m.tplId)) return { ok: false, reason: `conflicts with ${m.tpl.short || m.tpl.name}` };
+    if ((m.tpl.conflicts || []).includes(item.tplId)) return { ok: false, reason: `${m.tpl.short || m.tpl.name} conflicts with it` };
+  }
+  // the parts hanging under the slot's current occupant would be lost by a
+  // swap: refuse rather than silently destroy them
+  if (slot.item && slot.item !== item && [...slot.item.allMods()].length) {
+    return { ok: false, reason: 'remove the parts on the current one first' };
+  }
+  // the assembled gun must still fit where it lies
+  if (!fitsAfter(root, () => {
+    const prev = slot.item;
+    slot.item = item;
+    return () => { slot.item = prev; };
+  })) return { ok: false, reason: 'the gun would no longer fit where it lies' };
+  return { ok: true, reason: null };
+}
+
+/**
+ * Apply a temporary change (returned undo fn), measure the root's footprint
+ * against its holder, undo, report. A gun in a slot always fits; one lying in
+ * a grid has to re-place at its own top-left with the new size.
+ */
+export function fitsAfter(root, apply) {
+  const h = root.holder;
+  if (!h || h.kind !== 'grid') return true;
+  const undo = apply();
+  let ok;
+  try {
+    ok = h.grid.canPlace(root, h.x, h.y, root.rot, { ignore: root });
+  } finally { undo(); }
+  return ok;
+}
+
+// ---------------------------------------------------------
+// footprint
+// ---------------------------------------------------------
+function footprint(item) {
+  const tpl = item.tpl;
+  const base = { w: tpl.w, h: tpl.h };
+  if (!item.slots) return base;
+  const max = [0, 0, 0, 0];   // left, right, up, down
+  const add = [0, 0, 0, 0];
+  const foldSlot = item.folded ? (tpl.wpn?.foldSlot || tpl.mod?.foldSlot) : null;
+  const walk = (node, skip) => {
+    if (!node.slots) return;
+    for (const sl of node.slots) {
+      const m = sl.item;
+      if (!m) continue;
+      if (skip && sl.name === skip) continue;
+      const xs = m.tpl.mod?.xs;
+      if (xs) {
+        if (m.tpl.mod.xsAdd) for (let i = 0; i < 4; i++) add[i] += xs[i];
+        else for (let i = 0; i < 4; i++) max[i] = Math.max(max[i], xs[i]);
+      }
+      // a folded part under this one hides its own tail
+      walk(m, m.folded ? m.tpl.mod?.foldSlot : null);
+    }
+  };
+  walk(item, foldSlot);
+  let w = tpl.w + max[0] + max[1] + add[0] + add[1];
+  const h = tpl.h + max[2] + max[3] + add[2] + add[3];
+  if (item.folded) w -= (tpl.wpn?.sizeReduceR || tpl.mod?.sizeReduceR || 0);
+  return { w: Math.max(1, w), h: Math.max(1, h) };
+}
+
+// ---------------------------------------------------------
+// presets
+// ---------------------------------------------------------
+/** hang the default parts on a freshly made weapon: {slot: {t, s:{...}}} */
+export function applyPreset(item, tree) {
+  if (!item.slots || !tree) return;
+  for (const sl of item.slots) {
+    const rec = tree[sl.name];
+    if (!rec || !getTpl(rec.t) || !sl.def.f.includes(rec.t)) continue;
+    let part;
+    try { part = new Item(rec.t, { bare: true }); } catch { continue; }
+    sl.set(part);
+    if (rec.s) applyPreset(part, rec.s);
   }
 }
 
@@ -212,8 +489,8 @@ export class Grid {
    * `rot` overrides item.rot when provided.
    */
   canPlace(item, x, y, rot = item.rot, opts = {}) {
-    const w = rot ? item.tpl.h : item.tpl.w;
-    const h = rot ? item.tpl.w : item.tpl.h;
+    const w = rot ? item.fh : item.fw;
+    const h = rot ? item.fw : item.fh;
     if (x < 0 || y < 0 || x + w > this.w || y + h > this.h) return false;
     if (!this.accepts(item)) return false;
     if (!canNest(item, this)) return false;
@@ -262,8 +539,8 @@ export class Grid {
   findSpot(item, opts = {}) {
     const rots = item.canRotate ? (opts.preferRot ? [1, 0] : [0, 1]) : [0];
     for (const rot of rots) {
-      const w = rot ? item.tpl.h : item.tpl.w;
-      const h = rot ? item.tpl.w : item.tpl.h;
+      const w = rot ? item.fh : item.fw;
+      const h = rot ? item.fw : item.fh;
       if (w > this.w || h > this.h) continue;
       for (let y = 0; y <= this.h - h; y++) {
         for (let x = 0; x <= this.w - w; x++) {
@@ -276,8 +553,8 @@ export class Grid {
 
   /** the item that would be displaced by a drop, or null / 'many' */
   overlapping(item, x, y, rot = item.rot, ignore = null) {
-    const w = rot ? item.tpl.h : item.tpl.w;
-    const h = rot ? item.tpl.w : item.tpl.h;
+    const w = rot ? item.fh : item.fw;
+    const h = rot ? item.fw : item.fh;
     const hit = new Set();
     for (let dy = 0; dy < h; dy++) {
       for (let dx = 0; dx < w; dx++) {
@@ -458,7 +735,7 @@ export function detach(item) {
   const h = item.holder;
   if (!h) return;
   if (h.kind === 'grid') h.grid.remove(item);
-  else if (h.kind === 'slot') h.slot.clear();
+  else if (h.kind === 'slot' || h.kind === 'mod') h.slot.clear();
   item.holder = null;
 }
 
@@ -507,7 +784,7 @@ export function moveToSlot(item, slot) {
   detach(item);
   if (prev) {
     slot.clear();
-    if (from && from.kind === 'slot' && from.slot.canAccept(prev)) {
+    if (from && (from.kind === 'slot' || from.kind === 'mod') && from.slot.canAccept(prev)) {
       // slot-to-slot: the displaced item takes the vacated slot
       from.slot.set(prev);
     } else if (from && from.kind === 'grid' && from.grid.canPlace(prev, from.x, from.y, prev.rot)) {
@@ -531,7 +808,7 @@ function restore(item, from) {
       const spot = from.grid.findSpot(item);
       if (spot) from.grid.place(item, spot.x, spot.y, spot.rot);
     }
-  } else if (from.kind === 'slot') {
+  } else if (from.kind === 'slot' || from.kind === 'mod') {
     from.slot.set(item);
   }
 }

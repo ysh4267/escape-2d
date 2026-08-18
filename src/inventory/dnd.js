@@ -10,6 +10,7 @@
 import { $, el } from '../core/util.js';
 import { renderItem, gridCellAt } from './view.js';
 import { moveToGrid, moveToSlot, autoPlace, detach, splitStack } from './model.js';
+import { canLoad, loadAmmo, installMod, magazineOf } from './weapon.js';
 import { sfx } from '../core/audio.js';
 import { emit, on, EV } from '../core/events.js';
 
@@ -198,8 +199,8 @@ function rebuildGhost() {
   item.rot = prevRot;
 
   const wrap = el('div', { class: 'drag-item' });
-  wrap.style.width = `${drag.cw * (drag.rot ? item.tpl.h : item.tpl.w)}px`;
-  wrap.style.height = `${drag.ch * (drag.rot ? item.tpl.w : item.tpl.h)}px`;
+  wrap.style.width = `${drag.cw * (drag.rot ? item.fh : item.fw)}px`;
+  wrap.style.height = `${drag.ch * (drag.rot ? item.fw : item.fh)}px`;
   tile.style.width = '100%';
   tile.style.height = '100%';
   wrap.append(tile);
@@ -231,10 +232,22 @@ function updateDrag(x, y) {
     const mergeable = model.accepts(item)
       && blocking && blocking !== 'many' && blocking.canStackWith(item);
     const splitting = drag.ctrl && item.stack > 1 && fits && !!dndContext.requestSplit;
+    // cartridges dropped on a magazine (or on a gun with one) load it, the way
+    // the game lets you drag a stack straight onto the mag
+    const loading = item.cat === 'ammo' && blocking && blocking !== 'many'
+      && !fits && canLoad(blocking, item).ok;
     let kind = 'is-bad';
     if (splitting) kind = 'is-swap';
     else if (fits || mergeable) kind = 'is-ok';
+    else if (loading) kind = 'is-swap';
 
+    if (loading) {
+      // the whole tile of the magazine lights up rather than the ghost cell
+      const p = model.posOf(blocking);
+      showGhostSlot(gridEl, p.x, p.y, 0, kind, blocking.w, blocking.h);
+      drag.target = { kind: 'load', into: blocking, ok: true };
+      return;
+    }
     showGhostSlot(gridEl, tx, ty, drag.rot, kind);
     drag.target = { kind: 'grid', grid: model, x: tx, y: ty, ok: kind !== 'is-bad', split: splitting };
     return;
@@ -242,17 +255,25 @@ function updateDrag(x, y) {
 
   const slotEl = under.closest('.slot');
   if (slotEl && slotEl._slot) {
-    const ok = slotEl._slot.canAccept(drag.item);
+    const slot = slotEl._slot;
+    // ammo onto an occupied magazine slot loads that magazine
+    if (drag.item.cat === 'ammo' && slot.item && canLoad(magazineOf(slot.item) || slot.item, drag.item).ok) {
+      slotEl.classList.add('is-ok');
+      drag.target = { kind: 'load', into: magazineOf(slot.item) || slot.item, ok: true };
+      return;
+    }
+    const why = {};
+    const ok = slot.canAccept(drag.item, why);
     slotEl.classList.add(ok ? 'is-ok' : 'is-bad');
-    drag.target = { kind: 'slot', slot: slotEl._slot, el: slotEl, ok };
+    drag.target = { kind: 'slot', slot, el: slotEl, ok, why: why.reason };
   }
 }
 
-function showGhostSlot(gridEl, x, y, rot, kind) {
+function showGhostSlot(gridEl, x, y, rot, kind, forceW = 0, forceH = 0) {
   if (!ghostSlot) ghostSlot = el('div', { class: 'ghost-slot' });
   const item = drag.item;
-  const w = rot ? item.tpl.h : item.tpl.w;
-  const h = rot ? item.tpl.w : item.tpl.h;
+  const w = forceW || (rot ? item.fh : item.fw);
+  const h = forceH || (rot ? item.fw : item.fh);
   ghostSlot.className = `ghost-slot ${kind}`;
   ghostSlot.style.left = `calc(var(--cell) * ${x})`;
   ghostSlot.style.top = `calc(var(--cell) * ${y})`;
@@ -312,14 +333,24 @@ function commitDrag(e) {
       changed = res.ok;
       if (res.ok) sfx.item(item.tpl, 'drop');
       else if (!sameStore(from, target.grid)) emit(EV.TOAST, { kind: 'warn', text: 'No room there' });
+    } else if (target.kind === 'slot' && target.slot.owner) {
+      // a mod slot on a weapon: install, homing whatever it replaces
+      const res = installMod(target.slot, item, dndContext.quickTargets(item) || []);
+      changed = res.ok;
+      if (!res.ok) emit(EV.TOAST, { kind: 'warn', text: capital(res.reason) || 'Does not fit' });
     } else if (target.kind === 'slot') {
       const res = moveToSlot(item, target.slot);
       changed = res.ok;
       if (res.ok) sfx.ui('equip');
       else emit(EV.TOAST, { kind: 'warn', text: 'Slot is not empty' });
+    } else if (target.kind === 'load') {
+      const res = loadAmmo(target.into, item, item.stack);
+      changed = res.ok;
+      if (res.ok) emit(EV.TOAST, { kind: 'ok', text: `Loaded ${res.loaded} rounds` });
+      else emit(EV.TOAST, { kind: 'warn', text: capital(res.reason) || 'Cannot load' });
     }
   } else if (target && !target.ok) {
-    if (target.kind === 'slot') emit(EV.TOAST, { kind: 'warn', text: 'Wrong slot' });
+    if (target.kind === 'slot') emit(EV.TOAST, { kind: 'warn', text: capital(target.why) || 'Wrong slot' });
     else if (!sameStore(from, target.grid)) emit(EV.TOAST, { kind: 'warn', text: 'Blocked' });
   }
 
@@ -328,6 +359,8 @@ function commitDrag(e) {
 }
 
 function cancelDrag() { endDrag(); }
+
+function capital(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : t; }
 
 function endDrag() {
   clearHighlights();

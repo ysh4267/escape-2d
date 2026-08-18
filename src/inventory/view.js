@@ -39,9 +39,11 @@ export function renderItem(item, opts = {}) {
   node.style.width = `calc(var(--cell) * ${item.w})`;
   node.style.height = `calc(var(--cell) * ${item.h})`;
 
-  if (tpl.imgUrl) {
+  // a gun with parts on it is drawn assembled; the bare sprite is the receiver
+  const src = (item.isWeapon && tpl.presetImgUrl && item.slots?.some((s) => s.item)) ? tpl.presetImgUrl : tpl.imgUrl;
+  if (src) {
     const img = el('img', {
-      class: 'item__img', src: tpl.imgUrl, alt: '', draggable: 'false', loading: 'lazy',
+      class: 'item__img', src, alt: '', draggable: 'false', loading: 'lazy',
     });
     if (item.rot) {
       // The sprite is drawn for the unrotated footprint, so give the element the
@@ -50,8 +52,8 @@ export function renderItem(item, opts = {}) {
       // `inset` must be cleared BEFORE left/top, or the shorthand wipes them.
       img.classList.add('is-rot');
       img.style.inset = 'auto';
-      img.style.width = `calc(var(--cell) * ${tpl.w})`;
-      img.style.height = `calc(var(--cell) * ${tpl.h})`;
+      img.style.width = `calc(var(--cell) * ${item.fw})`;
+      img.style.height = `calc(var(--cell) * ${item.fh})`;
       img.style.left = '50%';
       img.style.top = '50%';
       img.style.transform = 'translate(-50%, -50%) rotate(90deg)';
@@ -88,6 +90,23 @@ export function renderItem(item, opts = {}) {
   // resource / durability bar
   const bar = resourceBar(item);
   if (bar) node.append(bar);
+
+  // rounds in a magazine, or in the magazine of a gun
+  if (item.isMag || (item.isWeapon && item.magazine)) {
+    const mag = item.isMag ? item : item.magazine;
+    const n = mag.ammoCount + (item.chamber?.length || 0);
+    const cap = mag.tpl.magSize || 0;
+    const badge = el('div', { class: 'item__ammo' }, `${n}/${cap}`);
+    if (n === 0) badge.classList.add('is-dry');
+    node.append(badge);
+  } else if (item.isWeapon && item.slots?.some((sl) => sl.name === 'mod_magazine')) {
+    node.append(el('div', { class: 'item__ammo is-dry' }, 'no mag'));
+  }
+  // a gun missing a vital part is not a gun yet
+  if (item.isWeapon && item.slots?.some((sl) => sl.required && !sl.item)) {
+    node.classList.add('item--incomplete');
+  }
+  if (item.folded) node.classList.add('item--folded');
 
   // container fill badge
   if (item.isContainer) {

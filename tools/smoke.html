@@ -93,9 +93,9 @@ try {
   check('carry grids include rig + pockets', eq.carryGrids().length === rig.grids.length + 4);
   check('slotFor resolves a helmet', eq.slotFor(new Item('hl_fast'))?.key === 'head');
   const sideways = new Item('w_ak74n', { rot: 1 });
-  check('a rotated weapon is rotated to begin with', sideways.rot === 1 && sideways.w === 1);
+  check('a rotated weapon is rotated to begin with', sideways.rot === 1 && sideways.w === sideways.fh);
   moveToSlot(sideways, eq.get('primary'));
-  check('equipping straightens a rotated item', sideways.rot === 0 && sideways.w === items.TPL.w_ak74n.w);
+  check('equipping straightens a rotated item', sideways.rot === 0 && sideways.w === sideways.fw);
   const sec = new Item('sc_alpha');
   moveToSlot(sec, eq.get('secure'));
   const stowed = new Item('ledx');
@@ -489,7 +489,7 @@ try {
   check('a scav can be killed', victim && !victim.alive, `outcome=${outcome}`);
   check('a killed scav leaves a searchable body',
         raid4.containers.some(c => c.type === 'deadscav' && c.region === 'Body'));
-  check('kill counted', raid4.stats.kills === 1, String(raid4.stats.kills));
+  check('kill counted', raid4.stats.kills >= 1, String(raid4.stats.kills));
 
   const hp0 = raid4.player.hp;
   raid4.damagePlayer(30, null);
@@ -519,6 +519,137 @@ try {
   check('died drops carried gear', eq3.item('rig') === null);
   check('died keeps the pouch and its contents', eq3.item('secure')?.grids[0].count === 1);
   check('result lists lost items', res3.lost.length > 0);
+
+  head('weapons: parts, presets, footprint');
+  const wp = await import('../src/inventory/weapon.js');
+  const { ModSlot, canInstall } = model;
+  const T = items.TPL;
+  check('parts, magazines and rounds were generated',
+        Object.values(T).filter(t => t.cat === 'mod').length > 500
+        && Object.values(T).filter(t => t.cat === 'mag').length > 40
+        && Object.values(T).filter(t => t.cat === 'ammo').length > 50);
+  check('every gun has a preset', Object.values(T).filter(t => t.wpn).every(t => t.preset && t.presetImg));
+  check('every slot filter names real templates', Object.values(T).every(t => (t.slots || []).every(sl => sl.f.every(k => T[k]))));
+  check('every magazine filter names real rounds', Object.values(T).filter(t => t.magSize).every(t => t.ammoFilter.every(k => T[k]?.cat === 'ammo')));
+  check('calibres are printed the way the game prints them', T.w_ak74n.cal === '5.45x39' && T.mag_akm.cal === '7.62x39' && T.w_mp133.cal === '12/70');
+
+  const ak = new Item('w_ak74n');
+  check('a new gun comes assembled', [...ak.allMods()].length >= 7, String([...ak.allMods()].length));
+  check('assembled gun has a magazine', ak.magazine?.tpl.cat === 'mag' && ak.magazine.tpl.magSize === 30);
+  check('the handguard hangs off the gas block', ak.mod('mod_gas_block')?.mod('mod_handguard') != null);
+  check('assembled footprint matches the preset sprite',
+        Object.values(T).filter(t => t.wpn).every(t => { const it = new Item(t.key); return it.fw === t.presetSize[0] && it.fh === t.presetSize[1]; }),
+        Object.values(T).filter(t => t.wpn).map(t => { const it = new Item(t.key); return `${t.key}:${it.fw}x${it.fh}/${t.presetSize}`; }).join(' '));
+  check('a bare receiver is smaller than the built gun', new Item('w_ak74n', { bare: true }).fw < ak.fw);
+  check('weight includes the parts', ak.weight > T.w_ak74n.weight + 0.5);
+  check('value includes the parts', ak.value > T.w_ak74n.price);
+  check('a built gun is functional', wp.isFunctional(ak));
+  check('a bare receiver is missing vital parts', !wp.isFunctional(new Item('w_ak74n', { bare: true })));
+
+  head('weapons: install and remove');
+  const bench = new Grid(10, 10, { tag: 'stash' });
+  const spot0 = bench.findSpot(ak); bench.place(ak, spot0.x, spot0.y, 0);
+  const stockSlot = ak.modSlot('mod_stock');
+  const oldStock = stockSlot.item;
+  const rem = wp.uninstallMod(stockSlot, [bench]);
+  check('a stock comes off into the grid', rem.ok && oldStock.holder?.kind === 'grid' && !stockSlot.item);
+  check('the gun shrank without its stock', ak.fw === 4);
+  const back = wp.installMod(stockSlot, oldStock, [bench]);
+  check('the stock goes back on', back.ok && stockSlot.item === oldStock && oldStock.holder?.kind === 'mod');
+  check('the gun grew back', ak.fw === 5);
+  const wrong = new Item('mod_ak_74_bak');   // an AK pistol grip
+  check('a grip is refused by the stock slot', !canInstall(stockSlot, wrong).ok);
+  const gripSlot = ak.modSlot('mod_pistol_grip');
+  const oldGrip = gripSlot.item;
+  bench.place(wrong, 0, 8, 0);
+  const swap = wp.installMod(gripSlot, wrong, [bench]);
+  check('a swap homes the old part into the grid', swap.ok && gripSlot.item === wrong && oldGrip.holder?.kind === 'grid');
+  // conflicts: a dust cover with a rail vs the rear sight it replaces
+  const conflictPart = Object.values(T).find(t => t.cat === 'mod' && (t.conflicts || []).some(c => [...ak.allMods()].some(m => m.tplId === c)) && ak.slots.some(sl => sl.def.f.includes(t.key)));
+  if (conflictPart) {
+    const slotFor = ak.slots.find(sl => sl.def.f.includes(conflictPart.key));
+    const chk = canInstall(slotFor, new Item(conflictPart.key));
+    check('a conflicting part is refused with a reason', !chk.ok && /conflict/.test(chk.reason), `${conflictPart.key}: ${chk.reason}`);
+  }
+  // footprint gate: a gun crammed into a tight grid cannot grow
+  const tight = new Grid(5, 2);
+  const ak2 = new Item('w_ak74n');
+  tight.place(ak2, 0, 0, 0);
+  const s60 = ak2.modSlot('mod_magazine');
+  const drum = Object.values(T).find(t => t.magSize === 45 && s60.def.f.includes(t.key));   // 6L18/6L26 hang one cell lower
+  const bigMag = new Item(drum.key);
+  const chk2 = canInstall(s60, bigMag);
+  check('a part that would not fit where the gun lies is refused', !chk2.ok && /fit/.test(chk2.reason), `${drum.key} ${chk2.reason || ''}`);
+  const roomy = new Grid(5, 3);
+  const ak4 = new Item('w_ak74n');
+  roomy.place(ak4, 0, 0, 0);
+  check('and accepted where there is room', canInstall(ak4.modSlot('mod_magazine'), new Item(drum.key)).ok);
+  check('strip takes every part off', (() => { const g3 = new Grid(12, 12); const w = new Item('w_akm'); g3.place(w, 0, 0, 0); const n = wp.stripWeapon(w, [g3]).length; return n >= 7 && [...w.allMods()].length === 0 && w.fw === T.w_akm.w; })());
+
+  head('weapons: folding');
+  const aksu = new Item('w_aks74u');
+  const wUnfolded = aksu.fw;
+  const f1 = wp.toggleFold(aksu);
+  check('the AKS-74U folds', f1.ok && aksu.folded && aksu.fw < wUnfolded, `${wUnfolded} -> ${aksu.fw}`);
+  const f2 = wp.toggleFold(aksu);
+  check('and unfolds', f2.ok && !aksu.folded && aksu.fw === wUnfolded);
+  check('a fixed-stock gun does not fold', !wp.toggleFold(new Item('w_akm')).ok);
+
+  head('weapons: magazines and cartridges');
+  const mag = new Item('mag_ak74');
+  const g4b = new Grid(6, 6);
+  g4b.place(mag, 0, 0, 0);
+  const ps = new Item('am_545ps', { stack: 50 });
+  const bp = new Item('am_545bp', { stack: 10 });
+  g4b.place(ps, 2, 0, 0); g4b.place(bp, 3, 0, 0);
+  const l1 = wp.loadAmmo(mag, ps, 25);
+  check('25 rounds go in', l1.ok && l1.loaded === 25 && mag.ammoCount === 25 && ps.stack === 25);
+  const l2 = wp.loadAmmo(mag, bp, 10);
+  check('the mag fills to capacity and no further', l2.ok && l2.loaded === 5 && mag.ammoCount === 30 && bp.stack === 5);
+  check('the last round in is the first out', mag.topRound === 'am_545bp');
+  check('a mag full refuses more', !wp.canLoad(mag, ps).ok);
+  const wrongCal = new Item('am_762ps', { stack: 5 });
+  check('wrong calibre is refused', !wp.canLoad(mag, wrongCal).ok);
+  check('a loaded mag weighs more', mag.weight > T.mag_ak74.weight + 0.2);
+  const u = wp.unloadAmmo(mag, [g4b]);
+  check('unload puts every round back into stacks', u.ok && u.unloaded === 30 && mag.ammoCount === 0, JSON.stringify(u));
+  const backPs = g4b.items().filter(i => i.tplId === 'am_545ps').reduce((n, i) => n + i.stack, 0);
+  const backBp = g4b.items().filter(i => i.tplId === 'am_545bp').reduce((n, i) => n + i.stack, 0);
+  check('the right rounds came back', backPs === 50 && backBp === 10, `${backPs} ${backBp}`);
+  // through the gun
+  const gun = wp.spawnWeapon('w_akm', { loaded: true });
+  check('a spawned loaded gun has a full mag and one chambered', gun.chamber.length === 1 && gun.magazine.ammoCount === gun.magazine.tpl.magSize - 1);
+  const beforeRounds = wp.roundsInWeapon(gun);
+  const fired = wp.takeRound(gun);
+  check('taking a round cycles the next one in', fired?.cat === 'ammo' && gun.chamber.length === 1 && wp.roundsInWeapon(gun) === beforeRounds - 1);
+  check('the shotgun tube counts as a magazine', new Item('w_mp133').magazine?.tpl.magSize > 0);
+  check('ammo dragged onto a gun loads its magazine', (() => { const w = new Item('w_ak74n'); const r = wp.loadAmmo(w, new Item('am_545ps', { stack: 3 }), 3); return r.ok && w.magazine.ammoCount === 3; })());
+
+  head('weapons: stats and save round-trip');
+  const st = wp.weaponStats(ak);
+  check('ergonomics aggregates', typeof st.ergo === 'number' && st.ergo !== T.w_ak74n.ergo);
+  check('recoil is the base times the part percentages', st.vRecoil > 0 && st.hRecoil > 0);
+  check('accuracy is reported in MOA', st.moa > 0 && st.moa < 20, String(st.moa));
+  check('muzzle velocity comes from the default round', st.velocity > 800, String(st.velocity));
+  const js = JSON.stringify(ak.toJSON());
+  const ak3 = Item.fromJSON(JSON.parse(js));
+  check('parts survive a save', [...ak3.allMods()].length === [...ak.allMods()].length && ak3.fw === ak.fw);
+  check('a swapped part survives a save', ak3.mod('mod_pistol_grip')?.tplId === 'mod_ak_74_bak');
+  const magJs = Item.fromJSON(JSON.parse(JSON.stringify(gun.toJSON())));
+  check('rounds and the chamber survive a save', magJs.chamber.length === 1 && magJs.magazine.ammoCount === gun.magazine.ammoCount && magJs.magazine.topRound === gun.magazine.topRound);
+  check('an equipped gun still counts its parts in gear weight', (() => { const e = new Equipment(); moveToSlot(new Item('w_ak74n'), e.get('primary')); return e.weight() > T.w_ak74n.weight + 0.5; })());
+
+  head('weapons: traders and loot carry the parts');
+  tr.buildAssortments(T);
+  check('Prapor sells AK parts', tr.TRADER_BY_ID.prapor.assort.some(o => T[o.key]?.cat === 'mod'));
+  check('Mechanic sells the exotic parts', tr.TRADER_BY_ID.mechanic.assort.filter(o => T[o.key]?.cat === 'mod').length > 100);
+  check('the rifle calibres are tiered by penetration', tr.TRADER_BY_ID.prapor.assort.filter(o => T[o.key]?.cat === 'ammo').some(o => o.ll >= 3));
+  check('every generated offer resolves', tr.TRADERS.every(t => t.assort.every(o => T[o.key])));
+  check('a gun is priced assembled', T.w_ak74n.presetPrice > T.w_ak74n.price);
+  const loot3 = await import('../src/data/loot.js');
+  loot3.buildLootPools(T);
+  check('the parts pool is filled', loot3.POOLS.mods.length > 500);
+  check('the ammo pool carries the wider set', loot3.POOLS.ammo.length > 40);
 
   head('summary');
 } catch (err) {

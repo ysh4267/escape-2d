@@ -165,7 +165,8 @@ const SRC = [
   'src/core/audio.js', 'src/core/state.js', 'src/raid/raid.js', 'src/raid/ai.js',
   'src/ui/raid-ui.js', 'src/ui/trade.js', 'src/ui/shell.js', 'src/ui/stash.js',
   'src/ui/deploy.js', 'src/main.js', 'src/inventory/dnd.js', 'src/inventory/window.js',
-  'src/inventory/dialogs.js', 'src/inventory/examine.js',
+  'src/inventory/dialogs.js', 'src/inventory/examine.js', 'src/inventory/weapon.js',
+  'src/inventory/modding.js',
 ];
 const wanted = new Set();
 for (const f of SRC) {
@@ -183,7 +184,7 @@ if (pack) {
   // These families are chosen at the call site rather than named in a literal
   // play('...') - by container material, weapon bank, item ItemSound, or what
   // the round landed on - so the scan above cannot see them.
-  const dynamic = /^(item_|search_|open_|fire_|step_|amb_|hit_|impact_|ricochet)/;
+  const dynamic = /^(item_|search_|open_|fire_|step_|amb_|hit_|impact_|ricochet|magin_|magout_|bolt_|fold_|mod_install_|modding_|ammo_load|ammo_unload|shell_load|shell_unload)/;
   const unused = Object.keys(manifest).filter((c) => !dynamic.test(c) && !wanted.has(c));
   check('no shipped cue is dead weight', unused.length === 0, unused.join(','));
 

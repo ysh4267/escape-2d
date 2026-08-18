@@ -102,13 +102,20 @@ function isLive(item) {
   return false;
 }
 
+/** other floating panels (the modding screen) hook in here to re-render with the rest */
+const refreshers = new Set();
+export function registerWindowRefresher(fn) { refreshers.add(fn); return () => refreshers.delete(fn); }
+
 /** re-render every open window; windows whose item has vanished close themselves */
 export function refreshContainerWindows() {
   for (const [uid, rec] of Array.from(open.entries())) {
     if (!isLive(rec.item)) { rec.node.remove(); open.delete(uid); continue; }
     renderOne(rec.item, rec.node, rec.body);
   }
+  for (const fn of refreshers) fn();
 }
+
+export { isLive, makeDraggable, bringToFront, ensureHost, flash };
 
 function renderOne(item, node, body) {
   body.replaceChildren();

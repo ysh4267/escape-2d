@@ -17,7 +17,7 @@ export const ITEM_ASSET_DIR = 'assets/items/';
 export const CATEGORIES = [
   'money', 'meds', 'food', 'drink', 'barter', 'electronics', 'valuables', 'info',
   'key', 'container', 'secure', 'backpack', 'rig', 'armor', 'helmet', 'headset',
-  'glasses', 'facecover', 'armband', 'weapon', 'pistol', 'melee', 'grenade', 'mag', 'ammo',
+  'glasses', 'facecover', 'armband', 'weapon', 'pistol', 'melee', 'grenade', 'mag', 'ammo', 'mod',
 ];
 
 export const CAT_LABEL = {
@@ -27,7 +27,28 @@ export const CAT_LABEL = {
   rig: 'Tactical rig', armor: 'Body armor', helmet: 'Headwear', headset: 'Headset',
   glasses: 'Eyewear', facecover: 'Face cover', armband: 'Armband', weapon: 'Weapon',
   pistol: 'Pistol', melee: 'Melee', grenade: 'Throwable', mag: 'Magazine', ammo: 'Ammo',
+  mod: 'Weapon part',
 };
+
+/** modType -> label, for parts (the handbook's own families) */
+export const MOD_TYPE_LABEL = {
+  barrel: 'Barrel', handguard: 'Handguard', gasblock: 'Gas block',
+  muzzle: 'Muzzle device', suppressor: 'Suppressor', grip: 'Pistol grip',
+  foregrip: 'Foregrip', stock: 'Stock', receiver: 'Receiver',
+  mount: 'Mount', ironsight: 'Iron sight', reflex: 'Reflex sight',
+  scope: 'Scope', tactical: 'Tactical device', charge: 'Charging handle',
+  aux: 'Auxiliary part', bipod: 'Bipod', magazine: 'Magazine',
+};
+
+/** the fire modes as the game prints them on the weapon card */
+export const FIRE_MODE_LABEL = {
+  single: 'Single', fullauto: 'Full auto', burst: 'Burst', doublet: 'Doublet',
+  doubleaction: 'Double action', semiauto: 'Semi',
+};
+
+export function modTypeLabel(tpl) {
+  return MOD_TYPE_LABEL[tpl?.modType] || CAT_LABEL[tpl?.cat] || 'Part';
+}
 
 /** how "interesting" a category is -> tile tint 0..5 */
 const VALUE_TIERS = [0, 12000, 45000, 120000, 400000, 900000];
@@ -47,6 +68,7 @@ export async function loadItems() {
     tpl.key = key;
     tpl.tier = valueTier(tpl);
     tpl.imgUrl = tpl.img ? ITEM_ASSET_DIR + tpl.img : null;
+    tpl.presetImgUrl = tpl.presetImg ? ITEM_ASSET_DIR + tpl.presetImg : null;
     TPL[key] = tpl;
     BY_ID[tpl.id] = tpl;
   }

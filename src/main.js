@@ -6,9 +6,12 @@ import { $, el, fmtNum } from './core/util.js';
 import { on, emit, EV } from './core/events.js';
 import { loadItems, TPL } from './data/items.js';
 import { MAPS } from './data/maps.js';
+import { buildAssortments } from './data/traders.js';
+import { buildLootPools } from './data/loot.js';
 import { loadGeometry } from './raid/nav.js';
 import { game, initState, load, save, saveSoon, addMoney, netWorthRub, wipe } from './core/state.js';
 import { Item, autoPlace, moveToSlot } from './inventory/model.js';
+import { spawnWeapon } from './inventory/weapon.js';
 import { initDnd, isDragging } from './inventory/dnd.js';
 import { initTooltip } from './inventory/tooltip.js';
 import { initContextMenu, confirmDialog } from './inventory/dialogs.js';
@@ -56,6 +59,8 @@ async function boot() {
   installErrorReporter();
   bootProgress(0.08, 'loading item templates');
   await loadItems();
+  buildAssortments(TPL);
+  buildLootPools(TPL);
 
   bootProgress(0.42, 'loading map geometry');
   geo = await loadGeometry(MAPS.factory.geometry);
@@ -137,7 +142,8 @@ function seedNewProfile() {
   equip('m_bayonet', 'scabbard');
   equip('hl_ushanka', 'head');
 
-  const pistol = new Item('w_pm', { examined: true });
+  // the sidearm comes with a full magazine and one up the spout
+  const pistol = spawnWeapon('w_pm', { loaded: true, examined: true });
   moveToSlot(pistol, eq.get('holster'));
 
   // a small kit in the rig
@@ -230,6 +236,22 @@ function runDevHooks() {
     const bag = game.stash.items().find((i) => i.isContainer)
       || game.equipment.item('rig');
     if (bag) import('./inventory/window.js').then((m) => m.openContainerWindow(bag));
+    return;
+  }
+  if (mode === 'modding') {
+    // an assembled rifle, a bag of parts that fit it and a few that do not,
+    // and the modding screen open on it - the whole system in one capture
+    import('./inventory/weapon.js').then(async (wp) => {
+      const gun = wp.spawnWeapon(arg || 'w_ak74n', { loaded: 20, examined: true });
+      autoPlace(gun, [game.stash]);
+      for (const key of ['mod_b_33', 'mod_pk_06', 'mod_ekp_8_02_dt', 'mag_6l31', 'mag_6l26', 'mod_pbs_4',
+        'mod_ak_74_poly', 'mod_dtk_1', 'mod_rp_1', 'mod_moe_ak', 'mod_b_10', 'mod_b_30_b_31s', 'mod_klesch_2p', 'am_545bp']) {
+        if (TPL[key]) autoPlace(new Item(key, { examined: true, stack: TPL[key].cat === 'ammo' ? 60 : 1 }), [game.stash]);
+      }
+      renderStash();
+      const m = await import('./inventory/modding.js');
+      m.openModdingWindow(gun);
+    });
     return;
   }
   if (mode === 'selftest') { runSelfTest(); return; }

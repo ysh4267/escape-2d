@@ -6,6 +6,7 @@ import { $, el, icon, clamp, fmtNum, fmtWeight } from '../core/util.js';
 import { hide as hideTooltip } from './tooltip.js';
 import { catLabel } from './view.js';
 import { isKnown } from './examine.js';
+import { statRows } from './statrows.js';
 import { isDragging } from './dnd.js';
 import { sfx } from '../core/audio.js';
 import { on, EV } from '../core/events.js';
@@ -190,16 +191,18 @@ export function inspectDialog(item) {
     const dl = el('dl', { class: 'tooltip__rows' });
     const row = (k, v) => dl.append(el('dt', {}, k), el('dd', {}, v));
     row('CATEGORY', catLabel(tpl.cat));
-    row('SIZE', `${tpl.w} x ${tpl.h}`);
+    row('SIZE', `${item.fw} x ${item.fh}`);
     row('WEIGHT', `${fmtWeight(item.weight)} kg`);
     row('BASE VALUE', `${fmtNum(tpl.price)} ₽`);
     if (item.stack > 1) row('STACK', `${fmtNum(item.stack)} / ${fmtNum(tpl.stack)}`);
     if (tpl.res && item.res != null) row('RESOURCE', `${Math.round(item.res)} / ${tpl.res.max}`);
     if (tpl.dura != null && item.dura != null) row('DURABILITY', `${Math.round(item.dura)} / ${tpl.dura}`);
     if (tpl.armorClass) row('ARMOR CLASS', String(tpl.armorClass));
-    if (tpl.dmg) row('DAMAGE', String(tpl.dmg));
-    if (tpl.pen) row('PENETRATION', String(tpl.pen));
-    if (tpl.cal) row('CALIBER', tpl.cal);
+    if (!statRows(item, row)) {
+      if (tpl.dmg) row('DAMAGE', String(tpl.dmg));
+      if (tpl.pen) row('PENETRATION', String(tpl.pen));
+      if (tpl.cal) row('CALIBER', tpl.cal);
+    }
     row('FOUND IN RAID', item.fir ? 'yes' : 'no');
 
     box.append(

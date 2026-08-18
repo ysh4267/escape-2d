@@ -13,6 +13,9 @@ import { game, saveSoon, registerSaveSection } from '../core/state.js';
 import { renderGrid, renderItem } from '../inventory/view.js';
 import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
 import { openContainerWindow, refreshContainerWindows, closeAllContainerWindows } from '../inventory/window.js';
+import { openModdingWindow, closeAllModdingWindows, moddingContext } from '../inventory/modding.js';
+import { loadAmmoDialog, loadIntoDialog } from '../inventory/ammo-dialogs.js';
+import { unloadAmmo, toggleFold, canFold, magazineOf, roundsInWeapon, setInRaid } from '../inventory/weapon.js';
 import { sfx, startAmbient, stopAmbient } from '../core/audio.js';
 import { dndContext, quickTransfer, isDragging } from '../inventory/dnd.js';
 import { setContextProvider, splitDialog, inspectDialog, confirmDialog } from '../inventory/dialogs.js';
@@ -62,6 +65,7 @@ export function startRaid({ mapDef, geo, onFinish }) {
   attachRaid(raid);
   buildFloorStrip();
   closeAllContainerWindows();
+  closeAllModdingWindows();
   startAmbient();
   $('#btn-hud-sprint').classList.remove('is-on');
   raidToast(`Inserted — ${raid.player.spawnName}`, 'ok', 3400);
@@ -186,9 +190,14 @@ function drawHud() {
   const ammoRow = $('#ammo-count').parentElement;
   if (weapon) {
     $('#ammo-weapon').textContent = weapon.tpl.short || weapon.tpl.name;
-    const n = weapon.tpl.cal ? raid.ammoCount(weapon.tpl.cal) : 0;
-    $('#ammo-count').textContent = weapon.tpl.cal ? String(n) : '—';
-    ammoRow.classList.toggle('is-dry', !!weapon.tpl.cal && n === 0);
+    // rounds in the gun, and the loose ones of its calibre in the rig
+    const inGun = roundsInWeapon(weapon);
+    const cap = weapon.magazine?.tpl.magSize || 0;
+    const reserve = weapon.tpl.cal ? raid.ammoCount(weapon.tpl.cal) : 0;
+    $('#ammo-count').textContent = weapon.tpl.cal
+      ? (cap ? `${inGun}/${cap} · ${reserve}` : String(reserve))
+      : '—';
+    ammoRow.classList.toggle('is-dry', !!weapon.tpl.cal && inGun === 0 && reserve === 0);
   } else {
     $('#ammo-weapon').textContent = 'unarmed';
     $('#ammo-count').textContent = '—';
@@ -528,8 +537,12 @@ function activateRaidContext() {
   dndContext.onActivate = (item) => {
     if (needsExamine(item)) examineNow(item);
     else if (item.isContainer) openContainerWindow(item);
+    else if (item.isWeapon) openModdingWindow(item);
     else quickTransfer(item);
   };
+  // in raid, parts come out of and go back into what is carried
+  moddingContext.sources = () => [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()];
+  setInRaid(true);
   // loot that has not been uncovered yet cannot be touched
   dndContext.canMove = (item) => (raid ? raid.isRevealed(item) : true);
   dndContext.onChange = () => {
@@ -589,6 +602,40 @@ function activateRaidContext() {
     }
     actions.push({ label: 'TAKE / STOW', icon: 'sell', key: 'CTRL+CLICK', run: () => quickTransfer(item) });
     actions.push({ label: 'INSPECT', icon: 'info', run: () => inspectDialog(item) });
+    // guns, magazines and cartridges get the same handling as in the stash;
+    // vital parts stay put in the field (weapon.js enforces it)
+    if (item.hasMods && (item.isWeapon || item.slots.length)) {
+      actions.push({ label: 'MODDING', icon: 'crosshair', key: 'DBL-CLICK', run: () => openModdingWindow(item) });
+    }
+    if (tpl.wpn?.fold) {
+      const cf = canFold(item);
+      actions.push({
+        label: item.folded ? 'UNFOLD STOCK' : 'FOLD STOCK', icon: 'rotate', disabled: !cf.ok,
+        run: () => { const r = toggleFold(item); if (!r.ok) raidToast(r.reason, 'warn'); dndContext.onChange(); },
+      });
+    }
+    const mag = magazineOf(item);
+    if (mag) {
+      actions.push({
+        label: item.isMag ? 'LOAD AMMO' : 'LOAD MAGAZINE', icon: 'cart', disabled: mag.ammoFree === 0,
+        run: () => loadAmmoDialog(mag, [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()], () => dndContext.onChange()),
+      });
+      actions.push({
+        label: 'UNLOAD AMMO', icon: 'sell', disabled: mag.ammoCount === 0,
+        run: () => {
+          const host = item.holder?.kind === 'grid' ? [item.holder.grid] : [];
+          const r = unloadAmmo(mag, [...host, ...game.equipment.carryGrids(), ...game.equipment.nestedGrids()]);
+          if (!r.ok) raidToast(r.reason || 'No room for the rounds', 'warn');
+          dndContext.onChange();
+        },
+      });
+    }
+    if (tpl.cat === 'ammo') {
+      actions.push({
+        label: 'LOAD INTO MAGAZINE', icon: 'cart',
+        run: () => loadIntoDialog(item, [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()], () => dndContext.onChange()),
+      });
+    }
     actions.push('-');
     actions.push({
       label: 'DROP', icon: 'discard', danger: true,
@@ -607,6 +654,8 @@ on(EV.RAID_END, (result) => {
   closeFloorplan();
   closeOverlay();
   closeAllContainerWindows();
+  closeAllModdingWindows();
+  setInRaid(false);
   stopAmbient();
   showResult(result);
 });
