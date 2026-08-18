@@ -96,6 +96,7 @@ function isLive(item) {
     const h = cur.holder;
     if (!h) return false;
     if (h.kind === 'slot') return true;
+    if (h.kind === 'mod') { cur = h.slot.owner; continue; }   // a part rides with its gun
     if (!h.grid.owner) return true;   // stash / pocket / loot / trading table
     cur = h.grid.owner;
   }

@@ -25,7 +25,10 @@ export const TRADERS = [
     tag: 'Ex-warrant officer · surplus arms',
     currency: 'RUB',
     buyMult: 0.40,
-    buys: ['weapon', 'pistol', 'mag', 'ammo', 'mod', 'grenade', 'armor', 'meds', 'barter', 'key'],
+    buys: ['weapon', 'pistol', 'mag', 'ammo', 'ammobox', 'mod', 'grenade', 'armor', 'meds', 'barter', 'key'],
+    // mends guns cheaply and roughly: repair_price_coef per loyalty level and
+    // the wear multiplier `quality`, both from the trader's base.json
+    repair: { quality: 1.2, coef: [80, 90, 95, 100] },
     // the Kalashnikov quartermaster: every part an AK ships with, the Soviet
     // magazines and the two rifle calibres, tiered by penetration
     rules: [
@@ -34,6 +37,7 @@ export const TRADERS = [
       { kind: 'fits', of: ['w_ak74n', 'w_aks74u', 'w_akm', 'w_vpo136'], types: ['magazine'], ll: 3, stock: 3 },
       { kind: 'fits', of: ['w_ak74n', 'w_aks74u', 'w_akm', 'w_vpo136'], types: ['muzzle', 'suppressor', 'stock', 'handguard', 'gasblock', 'receiver', 'grip', 'ironsight', 'charge'], maxPrice: 12000, ll: 2, stock: 4 },
       { kind: 'ammo', cal: ['5.45x39', '7.62x39'], stock: 600 },
+      { kind: 'ammobox', cal: ['5.45x39', '7.62x39'], stock: 20 },
     ],
     assort: [
       { key: 'w_vpo136', ll: 1, stock: 3 }, { key: 'w_aks74u', ll: 1, stock: 2 },
@@ -80,15 +84,18 @@ export const TRADERS = [
     tag: 'Smuggler · the source of euros',
     currency: 'RUB',
     buyMult: 0.39,
-    buys: ['rig', 'weapon', 'pistol', 'mag', 'ammo', 'mod', 'grenade', 'electronics', 'valuables', 'barter'],
+    buys: ['rig', 'weapon', 'pistol', 'mag', 'ammo', 'ammobox', 'mod', 'grenade', 'electronics', 'valuables', 'barter', 'container'],
+    repair: { quality: 1.0, coef: [110, 120, 130, 140] },
     // pistol and shotgun parts, and the odd smuggled European fitting
     rules: [
       { kind: 'preset', of: ['w_tt', 'w_pb', 'w_saiga', 'w_mp153'], ll: 1, stock: 5 },
       { kind: 'fits', of: ['w_tt', 'w_pm', 'w_pb', 'w_saiga', 'w_mp153'], types: ['magazine'], ll: 1, stock: 8 },
       { kind: 'fits', of: ['w_tt', 'w_pm', 'w_pb', 'w_saiga', 'w_mp153', 'w_mp133'], types: ['muzzle', 'suppressor', 'stock', 'handguard', 'grip', 'receiver', 'mount', 'ironsight', 'charge', 'foregrip'], ll: 2, stock: 3 },
       { kind: 'ammo', cal: ['7.62x25', '12/70', '9x18'], stock: 400 },
+      { kind: 'ammobox', cal: ['7.62x25', '12/70', '9x18'], stock: 16 },
     ],
     assort: [
+      { key: 'weaponcase', ll: 3, stock: 1 }, { key: 'thiccweaponcase', ll: 4, stock: 1 },
       { key: 'w_tt', ll: 1, stock: 5 },
       // his smuggled European stock is priced in the euros he sells
       { key: 'w_pb', ll: 3, stock: 2, cur: 'EUR' },
@@ -107,7 +114,7 @@ export const TRADERS = [
     tag: 'UN contingent quartermaster',
     currency: 'USD',
     buyMult: 0.36,
-    buys: ['weapon', 'pistol', 'mag', 'ammo', 'mod', 'armor', 'info', 'electronics', 'valuables', 'key'],
+    buys: ['weapon', 'pistol', 'mag', 'ammo', 'ammobox', 'mod', 'armor', 'info', 'electronics', 'valuables', 'key'],
     // Western optics, lights, foregrips and the adapters that put them on
     rules: [
       { kind: 'type', types: ['reflex', 'scope', 'tactical', 'foregrip', 'bipod'], minPrice: 12000, ll: 2, stock: 3 },
@@ -129,7 +136,9 @@ export const TRADERS = [
     tag: 'Gunsmith · parts and keys',
     currency: 'RUB',
     buyMult: 0.45,
-    buys: ['weapon', 'pistol', 'mag', 'ammo', 'mod', 'electronics', 'barter', 'key'],
+    buys: ['weapon', 'pistol', 'mag', 'ammo', 'ammobox', 'mod', 'electronics', 'barter', 'key'],
+    // the careful one: dearest repairs, least wear
+    repair: { quality: 0.7, coef: [175, 180, 185, 195] },
     // the gunsmith: everything that is not a factory part, tiered by price
     rules: [
       { kind: 'preset', of: ['w_kedr', 'w_kedrb', 'w_pm', 'w_mp133'], ll: 1, stock: 5 },
@@ -140,8 +149,10 @@ export const TRADERS = [
       { kind: 'type', types: ['mount', 'reflex', 'ironsight', 'foregrip', 'grip', 'stock', 'handguard', 'receiver', 'gasblock', 'charge', 'aux', 'muzzle', 'suppressor', 'tactical', 'scope', 'bipod', 'barrel'], minPrice: 60000, ll: 4, stock: 1 },
       { kind: 'type', types: ['magazine'], minPrice: 6000, ll: 2, stock: 3 },
       { kind: 'ammo', cal: ['9x18'], stock: 400 },
+      { kind: 'ammobox', cal: ['9x18'], stock: 16 },
     ],
     assort: [
+      { key: 'weaprepkit', ll: 3, stock: 1 },
       { key: 'w_kedr', ll: 1, stock: 3 }, { key: 'w_kedrb', ll: 2, stock: 2 },
       { key: 'w_pm', ll: 1, stock: 6 },
       { key: 'mag_kedr', ll: 1, stock: 10 }, { key: 'am_9x18pst', ll: 1, stock: 400 },
@@ -288,6 +299,14 @@ export function buildAssortments(TPL) {
         for (const tpl of all) {
           if (tpl.cat !== 'ammo' || !r.cal.includes(tpl.cal)) continue;
           add(tpl.key, r.ll || ammoTier(tpl), r.stock, r.cur);
+        }
+      } else if (r.kind === 'ammobox') {
+        // a pack is tiered like the round inside it
+        for (const tpl of all) {
+          if (tpl.cat !== 'ammobox' || !r.cal.includes(tpl.cal)) continue;
+          const inner = TPL[tpl.box?.t];
+          if (!inner) continue;
+          add(tpl.key, r.ll || ammoTier(inner), r.stock, r.cur);
         }
       }
     }

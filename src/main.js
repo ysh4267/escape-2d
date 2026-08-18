@@ -215,9 +215,30 @@ function runDevHooks() {
   if (!raw) return;
   const [mode, arg] = raw.split(':');
   if (mode === 'traders') { showPane('traders'); return; }
-  if (raw === 'trade-sell' || raw === 'trade-dialog') {
+  if (raw === 'trade-sell' || raw === 'trade-dialog' || raw === 'trade-repair') {
     showPane('traders');
     import('./ui/trade.js').then((m) => m.devTrade(raw.slice(6)));
+    return;
+  }
+  if (mode === 'builds' || mode === 'chart' || mode === 'repairkit' || mode === 'pick') {
+    // the weapon builds panel, the calibre chart, the repair-kit dialog
+    import('./inventory/weapon.js').then(async (wp) => {
+      const gun = wp.spawnWeapon(arg && TPL[arg] ? arg : 'w_akm', { loaded: 20, examined: true });
+      autoPlace(gun, [game.stash]);
+      for (const key of ['mod_akm_wood', 'mod_akm_bak', 'mod_pbs_1', 'mag_ak55', 'mod_akmb_rs', 'weaprepkit', 'box_ps_120', 'am_762bp']) {
+        if (TPL[key]) autoPlace(new Item(key, { examined: true, stack: TPL[key].cat === 'ammo' ? 40 : 1 }), [game.stash]);
+      }
+      renderStash();
+      if (mode === 'builds') { const m = await import('./inventory/modding.js'); m.openModdingWindow(gun, { builds: true }); }
+      if (mode === 'pick') { const m = await import('./inventory/modding.js'); m.devModding('pick', 'mod_muzzle'); }
+      if (mode === 'chart') { const m = await import('./inventory/ammo-chart.js'); m.openAmmoChart('7.62x39', 'am_762bp'); }
+      if (mode === 'repairkit') {
+        gun.dura = 37;
+        const rd = await import('./inventory/repair-dialogs.js');
+        const kits = game.stash.items().filter((i) => i.tpl.repairKit);
+        rd.repairKitDialog(gun, kits, () => renderStash());
+      }
+    });
     return;
   }
   if (mode === 'deploy') { showPane('raid'); return; }

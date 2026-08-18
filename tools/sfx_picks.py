@@ -197,12 +197,49 @@ WEAPON_FIRE = {
     # 12ga
     "mp133": (["mr133_fire_indoor_close"], ["mr133_fire_indoor_distant"]),
     "mp153": (["mr153_fire_indoor_close"], ["mr153_fire_indoor_distant"]),
-    "saiga": (["saiga_indoor_close1"], ["saiga_outdoor_distant1"]),
+    # the Saiga has no indoor_distant; saiga_indoor_far1 is its only indoor
+    # "away from you" recording, and it keeps the indoor policy the rest of
+    # the far cues follow (the outdoor_distant clip used to stand in here)
+    "saiga": (["saiga_indoor_close1"], ["saiga_indoor_far1"]),
 }
 
 for _w, (_close, _far) in WEAPON_FIRE.items():
     PICKS[f"fire_{_w}"] = {"clips": _close, "trim": [0, 1.6], "gain": -3}
     PICKS[f"fire_{_w}_far"] = {"clips": _far, "trim": [0, 1.8], "gain": -7}
+
+# ---------------- suppressed shots ----------------
+# `fire_<bank>_sil` / `_sil_far`: the same banks with a can on. audio.js picks
+# these when the caller says the weapon is suppressed and the cue exists,
+# so a bank without one (pm - it cannot mount a suppressor; kedr - the Kedr-B
+# *is* the suppressed bank, `fire_kedrb`) simply keeps its bare report.
+#
+# The install spells "silenced" into the name three different ways, and the
+# AK-74's close and distant clips do not even agree with each other:
+#
+#   ak74_indoor_silenced_close_01     ak74_indoor_distant_silenced_01
+#   aksu_indoor_close_silenced_01     aksu_indoor_distant_silenced_01
+#   akm_close_indoor_silenced_01      akm_distant_indoor_silenced_01
+#   mr133_fire_silenced_indoor_close  mr133_fire_silenced_indoor_distant
+#
+# The TT is the one borrow: no tt_*silenced* clip exists although the game
+# lets it mount a can, so it takes the PB's - the nearest Soviet pistol and
+# already suppressed.
+WEAPON_FIRE_SIL = {
+    "ak74": (_seq("ak74_indoor_silenced_close_"), _seq("ak74_indoor_distant_silenced_")),
+    "aksu": (_seq("aksu_indoor_close_silenced_"), _seq("aksu_indoor_distant_silenced_")),
+    "akm": (_seq("akm_close_indoor_silenced_"), _seq("akm_distant_indoor_silenced_")),
+    "mp133": (["mr133_fire_silenced_indoor_close"], ["mr133_fire_silenced_indoor_distant"]),
+    "mp153": (["mr153_fire_silenced_indoor_close"], ["mr153_fire_silenced_indoor_distant"]),
+    "saiga": (["saiga_fire_silenced_indoor_close"], ["saiga_fire_silenced_indoor_distant"]),
+    "tt": (["pb_silenced_indoor_close1"], ["pb_silenced_indoor_distant1"]),
+}
+for _w, (_close, _far) in WEAPON_FIRE_SIL.items():
+    PICKS[f"fire_{_w}_sil"] = {"clips": _close, "trim": [0, 1.6], "gain": -3}
+    PICKS[f"fire_{_w}_sil_far"] = {"clips": _far, "trim": [0, 1.8], "gain": -7}
+# and the reverse: the PB is recorded suppressed (that is `fire_pb`), but its
+# can comes off in the game, so the bare barrel is a cue of its own
+PICKS["fire_pb_unsil"] = {"clips": ["pb_indoor_close1"], "trim": [0, 1.6], "gain": -3}
+PICKS["fire_pb_unsil_far"] = {"clips": ["pb_indoor_distant1"], "trim": [0, 1.8], "gain": -7}
 
 # ---------------- weapon handling ----------------
 # The assembly / magazine / cartridge cues. Handling clips are recorded per
@@ -214,6 +251,8 @@ for _w, (_close, _far) in WEAPON_FIRE.items():
 #   akm      akm_magin_metal / akm_magout_metal (akm/instrumental.bundle),
 #            akms_slider_* (in ak74.bundle) and akms_stock_fold/unfold
 #   kedr     kedr_magin / kedr_magout / kedr_slider_*                      kedr.bundle
+#            (its stock folds but kedr.bundle has no stock clip: the 9A-91's
+#            9A91_stock_fold/unfold in ak74.bundle stand in - another top-folder)
 #   pm       pm_mag_in / pm_mag_out / pm_slider_in|out                     pm.bundle
 #            (the TT and the PB have no handling of their own; they use these)
 #   mp133    mr133_shell_in_mag / mr133_shell_out_mag / mr133_pump_in|out  mr133.bundle
@@ -235,7 +274,8 @@ _HANDLING = {
               "bolt": ["akms_slider_up", "akms_slider_down"],
               "fold_open": ["akms_stock_unfold"], "fold_close": ["akms_stock_fold"]},
     "kedr":  {"magin": ["kedr_magin"], "magout": ["kedr_magout"],
-              "bolt": ["kedr_slider_up", "kedr_slider_down"]},
+              "bolt": ["kedr_slider_up", "kedr_slider_down"],
+              "fold_open": ["9A91_stock_unfold"], "fold_close": ["9A91_stock_fold"]},
     "pm":    {"magin": ["pm_mag_in"], "magout": ["pm_mag_out"],
               "bolt": ["pm_slider_out", "pm_slider_in"]},
     "mp133": {"magin": ["mr133_shell_in_mag"], "magout": ["mr133_shell_out_mag"],
@@ -249,6 +289,83 @@ _HANDLING = {
 for _w, _cues in _HANDLING.items():
     for _k, _names in _cues.items():
         PICKS[f"{_k}_{_w}"] = {"clips": _names, "trim": [0, 1.2], "gain": -4}
+
+# ---------------- weapon actions ----------------
+# The rest of what a hand does to a gun, per handling bank, same
+# `<kind>_<bank>` naming and the same trim/gain as above:
+#
+#   dry           trigger on an empty chamber
+#   selector      the fire selector thrown - only the banks that have one
+#                 (the pistols, shotguns and VPO-136 are single-fire)
+#   magcheck      pulling the magazine part way to look at it
+#   chambercheck  easing the bolt back to see if there is a round in
+#   chamber       a round put into the chamber by hand / unchamber taken out
+#   jam           the bolt catching on a stoppage
+#
+# The install has far fewer of these than shot banks, so most of the table
+# is borrows, and they are spelled out here rather than guessed at:
+#
+#   dry     ak74_trigger_empty is the only AK click (aksu/akm borrow it);
+#           mr133_trigger is the one trigger clip in either shotgun bank
+#   select  ak74_fireselector_* for every AK, kedr_fireselector_* for the Kedr
+#   magch   only the PM has a slow pull (pm_mag_pullout - it is a 1.6s clip,
+#           so it gets a longer trim; the matching pm_mag_pullin is dropped
+#           because the extractor mixes layers, it does not concatenate them).
+#           Every other bank re-uses its own magout; the shotguns rattle the
+#           tube cap (mr133_magcover)
+#   chamch  saiga_slider_check is the only `_check` slide in the twelve banks,
+#           so the AKs borrow it; the Kedr has slow slides of its own, the PM
+#           its slide catch, the shotguns half a pump
+#   chamber ak74/kedr/saiga have real round_in_chamber / round_out clips; the
+#           shotguns drop a shell straight into the port and pick it out; the
+#           PM has none, so its slide going in/out stands for it
+#   jam     ak74/kedr/saiga slider_jam, the PM's jammed slide + shell; the
+#           shotguns have no jam clip and borrow the Saiga's
+_ACTIONS = {
+    "ak74":  {"dry": ["ak74_trigger_empty"],
+              "selector": ["ak74_fireselector_up", "ak74_fireselector_down"],
+              "magcheck": ["ak74_magout_plastic"], "chambercheck": ["saiga_slider_check"],
+              "chamber": ["ak74_round_in_chamber"], "unchamber": ["ak74_round_out"],
+              "jam": ["ak74_slider_jam"]},
+    "aksu":  {"dry": ["ak74_trigger_empty"],
+              "selector": ["ak74_fireselector_up", "ak74_fireselector_down"],
+              "magcheck": ["ak74_magout_plastic"], "chambercheck": ["saiga_slider_check"],
+              "chamber": ["ak74_round_in_chamber"], "unchamber": ["ak74_round_out"],
+              "jam": ["ak74_slider_jam"]},
+    "akm":   {"dry": ["ak74_trigger_empty"],
+              "selector": ["ak74_fireselector_up", "ak74_fireselector_down"],
+              "magcheck": ["akm_magout_metal"], "chambercheck": ["saiga_slider_check"],
+              "chamber": ["ak74_round_in_chamber"], "unchamber": ["ak74_round_out"],
+              "jam": ["ak74_slider_jam"]},
+    "kedr":  {"dry": ["kedr_trigger_empty"],
+              "selector": ["kedr_fireselector_up", "kedr_fireselector_down"],
+              "magcheck": ["kedr_magout"],
+              "chambercheck": ["kedr_slider_up_slow", "kedr_slider_down_slow"],
+              "chamber": ["kedr_round_in_chamber"], "unchamber": ["kedr_round_out"],
+              "jam": ["kedr_slider_jam"]},
+    "pm":    {"dry": ["pm_trigger_empty"],
+              "magcheck": ["pm_mag_pullout"], "chambercheck": ["pm_catch_slider"],
+              "chamber": ["pm_slider_in"], "unchamber": ["pm_slider_out"],
+              "jam": ["pm_slider_jammed", "pm_shell_jammed"]},
+    "mp133": {"dry": ["mr133_trigger"],
+              "magcheck": ["mr133_magcover"], "chambercheck": ["mr133_pump_out"],
+              "chamber": ["mr133_shell_in_port"], "unchamber": ["mr133_shell_pickup"],
+              "jam": ["saiga_slider_jam"]},
+    "mp153": {"dry": ["mr133_trigger"],
+              "magcheck": ["mr133_magcover"], "chambercheck": ["mr133_pump_out"],
+              "chamber": ["mr133_shell_in_port"], "unchamber": ["mr133_shell_pickup"],
+              "jam": ["saiga_slider_jam"]},
+    "saiga": {"dry": ["saiga_trigger_empty"],
+              "magcheck": ["saiga_magout_plastic"], "chambercheck": ["saiga_slider_check"],
+              "chamber": ["saiga_round_in_chamber"], "unchamber": ["saiga_round_out"],
+              "jam": ["saiga_slider_jam"]},
+}
+for _w, _cues in _ACTIONS.items():
+    for _k, _names in _cues.items():
+        PICKS[f"{_k}_{_w}"] = {"clips": _names, "trim": [0, 1.2], "gain": -4}
+PICKS["magcheck_pm"]["trim"] = [0, 1.8]   # the slow pull runs 1.6s
+# the malfunction being looked at - the game's own "examined" sting
+PICKS["jam_examined"] = {"clips": ["battle_malfunction_examined"], "trim": [0, 1.5]}
 PICKS.update({
     "modding_open": {"clips": ["menu_modding_open"], "trim": [0, 1.0]},
     "modding_close": {"clips": ["menu_modding_close"], "trim": [0, 1.0]},
@@ -262,6 +379,29 @@ PICKS.update({
     "shell_load": {"clips": ["mr133_shell_in_mag", "mr133_shell_in_mag2", "mr133_shell_in_mag3"],
                    "trim": [0, 1.0], "gain": -4},
     "shell_unload": {"clips": ["mr133_shell_out_mag"], "trim": [0, 1.0], "gain": -4},
+})
+
+# ---------------- repair, building, unpacking ----------------
+# Out-of-raid weapon work, from the interface bank and itemsounds:
+#   repair_complete           the game's repair-finished sting (resources.assets)
+#   spec_weaprep_use          the weapon repair kit being applied (itemsounds)
+#   menu_weapon_assemble /    a build being put together / stripped back to
+#   menu_weapon_disassemble   parts (resources.assets)
+#   ammo_pack_generic_use     an ammo box being torn open - the ItemSound of
+#                             every SPT ammo box but one; ammo_shotgun_use is
+#                             the 12ga box's own
+# The repair kit's pickup/drop are named exactly as _item_cues() would name
+# them from an ItemSound of `spec_weaprep`, so once the kit is in items-db
+# the derived entry lands on the same key and nothing doubles up.
+PICKS.update({
+    "repair_done": {"clips": ["repair_complete"], "trim": [0, 1.5]},
+    "repair_kit_use": {"clips": ["spec_weaprep_use"], "trim": [0, 3.5]},
+    "build_assemble": {"clips": ["menu_weapon_assemble"], "trim": [0, 1.0]},
+    "build_strip": {"clips": ["menu_weapon_disassemble"], "trim": [0, 1.0]},
+    "ammo_unpack": {"clips": ["ammo_pack_generic_use"], "trim": [0, 0.6]},
+    "ammo_unpack_12ga": {"clips": ["ammo_shotgun_use"], "trim": [0, 0.6]},
+    "item_spec_weaprep_pickup": {"clips": ["spec_weaprep_pickup"], "trim": [0, 2.0]},
+    "item_spec_weaprep_drop": {"clips": ["spec_weaprep_drop"], "trim": [0, 2.0]},
 })
 
 # ---------------- bullet impacts ----------------

@@ -597,10 +597,14 @@ try {
   const spot0 = bench.findSpot(ak); bench.place(ak, spot0.x, spot0.y, 0);
   const stockSlot = ak.modSlot('mod_stock');
   const oldStock = stockSlot.item;
-  const rem = wp.uninstallMod(stockSlot, [bench]);
+  // parts come off into a second grid: the freed cells of this one are where
+  // the gun has to grow back into
+  const tray = new Grid(6, 6, { tag: 'stash' });
+  const rem = wp.uninstallMod(stockSlot, [tray]);
   check('a stock comes off into the grid', rem.ok && oldStock.holder?.kind === 'grid' && !stockSlot.item);
   check('the gun shrank without its stock', ak.fw === 4);
-  const back = wp.installMod(stockSlot, oldStock, [bench]);
+  check('the grid frees the cells the stock stood in', bench.usedCells() === ak.w * ak.h && bench.canPlace(new Item('bolts'), spot0.x + 4, spot0.y, 0));
+  const back = wp.installMod(stockSlot, oldStock, [tray]);
   check('the stock goes back on', back.ok && stockSlot.item === oldStock && oldStock.holder?.kind === 'mod');
   check('the gun grew back', ak.fw === 5);
   const wrong = new Item('mod_ak_74_bak');   // an AK pistol grip
@@ -696,6 +700,196 @@ try {
   loot3.buildLootPools(T);
   check('the parts pool is filled', loot3.POOLS.mods.length > 500);
   check('the ammo pool carries the wider set', loot3.POOLS.ammo.length > 40);
+
+  head('weapons: the grid follows the gun');
+  {
+    // a gun that grows must take the cells it grows into, one that shrinks must free them
+    const g6 = new Grid(8, 4, { tag: 'stash' });
+    const bare = new Item('w_ak74n', { bare: true });
+    g6.place(bare, 0, 0, 0);
+    const stock = new Item('mod_ak_74_wood'), grip = new Item('mod_ak_74_bak'), mag = new Item('mag_ak74');
+    const tray = new Grid(6, 6, { tag: 'stash' });
+    for (const p2 of [stock, grip, mag]) autoPlace(p2, [tray]);
+    wp.installMod(bare.modSlot('mod_stock'), stock, [tray]);
+    wp.installMod(bare.modSlot('mod_pistol_grip'), grip, [tray]);
+    wp.installMod(bare.modSlot('mod_magazine'), mag, [tray]);
+    check('the gun grew to its assembled size', bare.fw === 5 && bare.fh === 2, `${bare.fw}x${bare.fh}`);
+    check('and the grid marks every cell of it', g6.usedCells() === 10 && g6.at(4, 0) === bare.uid && g6.at(0, 1) === bare.uid);
+    check('nothing can be dropped under its stock', !g6.canPlace(new Item('bolts'), 4, 0, 0) && !g6.canPlace(new Item('bolts'), 0, 1, 0));
+    wp.uninstallMod(bare.modSlot('mod_magazine'), [tray]);
+    wp.uninstallMod(bare.modSlot('mod_pistol_grip'), [tray]);
+    check('taking the mag and grip off frees the row below', bare.fh === 1 && g6.canPlace(new Item('bolts'), 0, 1, 0) && g6.at(0, 1) === null);
+    g6.remove(bare);
+    check('no phantom cells stay behind', g6.usedCells() === 0 && g6.cells.every((c) => c === null));
+  }
+
+  head('weapons: parts on a gun are where the gun is');
+  {
+    const stashMod = await import('../src/ui/stash.js');
+    const gunA = wp.spawnWeapon('w_ak74n', { examined: true });
+    const stashG = new Grid(10, 10, { tag: 'stash' });
+    autoPlace(gunA, [stashG]);
+    const grip = gunA.mod('mod_pistol_grip');
+    let threw = false;
+    try { stashMod.isOnCharacter(grip); } catch { threw = true; }
+    check('isOnCharacter answers for an installed part', !threw && stashMod.isOnCharacter(grip) === false);
+    const win = await import('../src/inventory/window.js');
+    // isLive is not exported; the modding refresher uses it - exercise through the menu instead
+    let menuOk = true;
+    try { stashMod.buildMenu(grip, 'stash'); } catch { menuOk = false; }
+    check('the context menu builds for an installed part', menuOk);
+    void win;
+  }
+
+  head('weapons: raid locks hold everywhere');
+  {
+    const gunL = wp.spawnWeapon('w_ak74n', { examined: true });
+    const bag = new Grid(6, 6, { tag: 'stash' });
+    autoPlace(gunL, [bag]);
+    const grip = gunL.mod('mod_pistol_grip');
+    wp.setInRaid(true);
+    check('a vital part is locked in raid', !wp.canDetachPart(grip).ok);
+    check('the modding screen refuses it too', !wp.uninstallMod(gunL.modSlot('mod_pistol_grip'), [bag]).ok);
+    const sight = new Item('mod_pk_06');
+    autoPlace(sight, [bag]);
+    check('a raid-moddable part is not locked', wp.canDetachPart(gunL.mod('mod_stock')).ok === true || gunL.mod('mod_stock')?.tpl.mod?.noRaidMod === true);
+    wp.setInRaid(false);
+    check('and the lock lifts out of raid', wp.canDetachPart(grip).ok);
+  }
+
+  head('weapons: folding the Kedr, and what blocks a fold');
+  {
+    const kedr = wp.spawnWeapon('w_kedr', { examined: true });
+    check('the Kedr folds as a whole (no stock slot)', wp.canFold(kedr).ok, wp.canFold(kedr).reason);
+    const w0 = kedr.fw;
+    check('and it shrinks by its SizeReduceRight', wp.toggleFold(kedr).ok && kedr.fw === w0 - 1, `${w0} -> ${kedr.fw}`);
+    wp.toggleFold(kedr);
+    const aks = wp.spawnWeapon('w_aks74u', { examined: true });
+    const tray2 = new Grid(6, 6, { tag: 'stash' });
+    check('the AKS-74U folds', wp.toggleFold(aks).ok && aks.folded);
+    // a part that blocks folding will not go on a folded gun
+    const blockerKey = Object.values(T).find((t) => t.cat === 'mod' && t.mod?.blocksFold && aks.modSlot('mod_stock')?.item?.tpl.slots?.some((sl) => sl.f.includes(t.key)))?.key;
+    if (blockerKey) {
+      const blocker = new Item(blockerKey);
+      autoPlace(blocker, [tray2]);
+      const sub = aks.mod('mod_stock').slots.find((sl) => sl.def.f.includes(blockerKey));
+      check('a fold-blocking part is refused while folded', !wp.installMod(sub, blocker, [tray2]).ok);
+    } else check('a fold-blocking part is refused while folded (no candidate in the DB - skipped)', true);
+    // taking the stock off a folded gun unfolds it
+    wp.uninstallMod(aks.modSlot('mod_stock'), [tray2]);
+    check('a folded gun that loses its stock is not folded any more', aks.folded === false);
+  }
+
+  head('weapons: saves from before parts existed');
+  {
+    // a gun saved by the old game carried no `m` at all; it must come back built
+    const legacy = Item.fromJSON({ uid: 'i1abc', t: 'w_ak74n', d: 80 });
+    check('a legacy gun restores assembled', [...legacy.allMods()].length >= 6 && wp.isFunctional(legacy));
+    const stripped = new Item('w_ak74n', { bare: true });
+    const again = Item.fromJSON(JSON.parse(JSON.stringify(stripped.toJSON())));
+    check('a deliberately bare receiver stays bare', [...again.allMods()].length === 0 && again.toJSON().m !== undefined);
+    const worn = wp.spawnWeapon('w_akm', { examined: true });
+    worn.maxDura = 91.5; worn.dura = 40;
+    const back = Item.fromJSON(JSON.parse(JSON.stringify(worn.toJSON())));
+    check('the worn ceiling survives a save', back.maxDura === 91.5 && back.dura === 40);
+  }
+
+  head('weapons: repair');
+  {
+    const rp = await import('../src/inventory/repair.js');
+    const gun = wp.spawnWeapon('w_akm', { examined: true });
+    gun.dura = 40;
+    check('a worn gun is repairable', rp.isRepairable(gun) && rp.repairNeeded(gun) === 60);
+    const prapor = tr.TRADER_BY_ID.prapor, mech = tr.TRADER_BY_ID.mechanic;
+    check('Prapor, Skier and Mechanic mend guns; the rest do not', !!prapor.repair && !!tr.TRADER_BY_ID.skier.repair && !!mech.repair && !tr.TRADER_BY_ID.therapist.repair);
+    // SPT: RepairCost 148 x points x (1 + 80/100) at LL1
+    check('the price is RepairCost x points x the loyalty rate', rp.traderRepairPrice(prapor, gun, 50, 1) === Math.round(148 * 50 * 1.8), String(rp.traderRepairPrice(prapor, gun, 50, 1)));
+    check('a higher loyalty level costs more at Prapor', rp.traderRepairPrice(prapor, gun, 50, 4) === Math.round(148 * 50 * 2.0));
+    check('Mechanic is dearer', rp.traderRepairPrice(mech, gun, 50, 1) > rp.traderRepairPrice(prapor, gun, 50, 1));
+    const rngHi = { float: (a, b) => b };
+    const r1 = rp.traderRepair(prapor, gun, 60, 1, rngHi);
+    check('the gun is back at its ceiling, and the ceiling took the worst-case wear', r1.ok && gun.dura === gun.maxDura && gun.maxDura === 100 - 4.8, `${gun.dura}/${gun.maxDura}`);
+    gun.dura = 10;
+    const rngLo = { float: (a) => a };
+    const r2 = rp.traderRepair(mech, gun, 1000, 1, rngLo);
+    check('repair never passes the worn ceiling', r2.ok && gun.dura === gun.maxDura && gun.maxDura === 95.2, `${gun.dura}/${gun.maxDura}`);
+    check('nothing to repair is refused', !rp.traderRepair(prapor, gun, 10, 1).ok);
+    // kits: 0.5 resource a point, kit wear on the ceiling
+    const kit = new Item('weaprepkit');
+    check('a repair kit has 1000 resource and mends 2000 points', kit.res === 1000 && rp.kitPointsLeft(kit) === 2000);
+    gun.dura = 50;
+    const k1 = rp.kitRepair(kit, gun, 30, rngHi);
+    check('a kit repair costs 0.5 resource a point', k1.ok && k1.spent === 15 && kit.res === 985 && k1.restored === 30, JSON.stringify(k1));
+    check('and wears the ceiling by the kit range', gun.maxDura === Math.round((95.2 - 95.2 * 0.035) * 100) / 100, String(gun.maxDura));
+    kit.res = 3;
+    check('a nearly empty kit mends what it can', rp.kitRepair(kit, gun, 30, rngLo).restored === 6);
+    kit.res = 0;
+    check('an empty kit is refused', !rp.kitRepair(kit, gun, 5).ok);
+  }
+
+  head('weapons: builds');
+  {
+    const bd = await import('../src/inventory/builds.js');
+    const gun = wp.spawnWeapon('w_akm', { examined: true });
+    const stash2 = new Grid(10, 12, { tag: 'stash' });
+    // the gun on its own grid with room to grow (the AKMB's PBS-1 adds a cell),
+    // the loose parts on another
+    stash2.place(gun, 0, 0, 0);
+    const parts = new Grid(8, 8, { tag: 'stash' });
+    const src = [parts, stash2];
+    const fac = bd.factoryBuilds(T.w_akm);
+    check('the AKM has its factory builds', fac.length >= 3 && fac.some((b) => b.tree.mod_muzzle?.t === 'mod_pbs_1'), fac.map((b) => b.name).join(','));
+    const akmb = fac.find((b) => b.name.includes('AKMB'));
+    let plan = bd.planBuild(gun, akmb.tree, src);
+    check('a plan lists what is missing', !plan.complete && plan.missing.length >= 2, JSON.stringify(plan.missing));
+    check('a build with missing parts does not assemble', !bd.assembleBuild(gun, akmb.tree, src).ok);
+    for (const m of plan.missing) for (let i = 0; i < m.n; i++) autoPlace(new Item(m.t), [parts]);
+    plan = bd.planBuild(gun, akmb.tree, src);
+    check('with the parts on hand the plan is complete', plan.complete);
+    const r = bd.assembleBuild(gun, akmb.tree, src);
+    check('assembly puts the build on and takes the rest off', r.ok && r.installed >= 2 && wp.treeOf(gun).mod_muzzle?.t === 'mod_pbs_1', JSON.stringify(r.problems));
+    const canon = (t) => JSON.stringify(Object.keys(t).sort().map((k) => [k, t[k].t, t[k].s ? canon(t[k].s) : null]));
+    check('the tree now equals the build', canon(wp.treeOf(gun)) === canon(akmb.tree), canon(wp.treeOf(gun)) + ' vs ' + canon(akmb.tree));
+    const saved = bd.saveBuild(gun, 'my akmb');
+    check('a build saves under a name', saved.ok && bd.buildsFor('w_akm').some((b) => b.name === 'my akmb'));
+    check('saving the same name overwrites', bd.saveBuild(gun, 'MY AKMB').overwrote === true && bd.buildsFor('w_akm').filter((b) => b.name.toLowerCase() === 'my akmb').length === 1);
+    const shop = bd.shoppingList([{ t: 'mod_akm_bak', n: 1 }]);
+    check('a missing part has a price at a trader', shop.lines[0].offer && shop.totalRub > 0, JSON.stringify(shop.lines[0]?.offer?.price));
+    check('a part behind loyalty is not on the shopping list', !bd.shoppingList([{ t: 'mod_pbs_1', n: 1 }]).complete);
+    const pv = bd.previewStats('w_akm', akmb.tree);
+    check('a build previews its stats without touching the gun', pv && pv.ergo > 0 && [...gun.allMods()].length > 0);
+    check('the default build assembles back', bd.assembleBuild(gun, T.w_akm.preset, src).ok && wp.treeOf(gun).mod_muzzle?.t === T.w_akm.preset.mod_muzzle.t);
+    bd.deleteBuild(bd.buildsFor('w_akm')[0].id);
+    check('a build can be forgotten', !bd.buildsFor('w_akm').length);
+  }
+
+  head('weapons: ammo packs, the chart, the cases');
+  {
+    const boxes = Object.values(T).filter((t) => t.cat === 'ammobox');
+    check('the ammo packs are in the database', boxes.length >= 80, String(boxes.length));
+    check('every pack names a round we carry, and is priced as its rounds', boxes.every((b) => T[b.box.t]?.cat === 'ammo' && b.price === T[b.box.t].price * b.box.n && b.cal === T[b.box.t].cal));
+    const g7 = new Grid(4, 4, { tag: 'stash' });
+    const box = new Item('box_ps_120');
+    autoPlace(box, [g7]);
+    const r = wp.unpackAmmoBox(box, [g7]);
+    check('a 120-pack unpacks into two stacks of 60', r.ok && r.rounds === 120 && g7.items().filter((i) => i.tplId === 'am_545ps').length === 2 && !box.holder);
+    const g8 = new Grid(1, 1, { tag: 'stash' });
+    const box2 = new Item('box_ps_120');
+    check('a pack that will not fit as rounds stays a pack', !wp.unpackAmmoBox(box2, [g8]).ok);
+    check('the ammo case takes packs', new Item('ammocase').grids[0].accepts(new Item('box_ps_30')));
+    check('the weapon case takes guns, parts, mags and rounds', (() => { const c = new Item('weaponcase'); return ['w_akm', 'mod_pbs_1', 'mag_ak55', 'am_762ps', 'box_ps_120'].every((k) => c.grids[0].accepts(new Item(k))); })());
+    check('the repair kit is a 3x2 tool worth 100k', T.weaprepkit.w === 3 && T.weaprepkit.h === 2 && T.weaprepkit.price === 100000 && T.weaprepkit.repairKit.max === 1000);
+    check('the 999-round event mags are gone', !T.mag_pm_2 && !T.mag_tt_105_2 && T.mag_pm.magSize === 8);
+    check('Prapor sells packs of the AK calibres', tr.TRADER_BY_ID.prapor.assort.some((o) => T[o.key]?.cat === 'ammobox'));
+    const bl = await import('../src/inventory/ballistics.js');
+    check('the penetration curve: 90% at the plate value, 0 fifteen under', Math.abs(bl.penChance(40, 40) - 90) < 0.01 && bl.penChance(25, 40) === 0 && bl.penChance(35, 40) > 0 && bl.penChance(60, 40) > 96);
+    const strip = bl.classStrip(T.am_545bp.ammo.pen);
+    check('BP reads green against class 4 and orange-red against class 6', bl.efficacy(strip[3].chance, T.am_545bp.ammo.pen, 4).level >= 5 && bl.efficacy(strip[5].chance, T.am_545bp.ammo.pen, 6).level <= 2, JSON.stringify(strip));
+    const ch = await import('../src/inventory/ammo-chart.js');
+    check('the chart lists every 7.62x39 round, penetration first', (() => { const rows = ch.chartRows('7.62x39'); return rows.length >= 8 && rows[0].tpl.ammo.pen >= rows[1].tpl.ammo.pen; })());
+    check('barrels carry the TT accuracy the receiver lacks', wp.weaponStats(wp.spawnWeapon('w_tt')).moa > 0);
+    check('durability burn aggregates', wp.weaponStats(wp.spawnWeapon('w_akm')).dburn > 1);
+  }
 
   head('health: the body and what hits it');
   const hm = await import('../src/raid/health.js');

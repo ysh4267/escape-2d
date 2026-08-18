@@ -12,7 +12,7 @@
 //  - presets: the parts a gun comes with from a trader or a crate
 // =========================================================
 
-import { Item, detach, autoPlace, canInstall, fitsAfter } from './model.js';
+import { Item, detach, autoPlace, canInstall, fitsAfter, footprintChanged } from './model.js';
 import { getTpl } from '../data/items.js';
 import { sfx } from '../core/audio.js';
 
@@ -33,7 +33,8 @@ export function weaponStats(item) {
   let ergo = tpl.ergo || 0;
   let recoilPct = 0, accPct = 0, velPct = wpn.vel || 0, loud = 0;
   let sightRange = 0;
-  let heat = 1, cool = 1;
+  let heat = 1, cool = 1, dburn = wpn.dburn || 1;
+  let barrelMoa = 0, zoom = 0;
   const parts = [];
   for (const m of item.allMods()) {
     const md = m.tpl.mod || {};
@@ -44,12 +45,17 @@ export function weaponStats(item) {
     velPct += md.vel || 0;
     loud += md.loud || 0;
     if (md.range) sightRange = Math.max(sightRange, md.range);
+    if (md.zoom) zoom = Math.max(zoom, md.zoom);
     if (md.heat) heat *= md.heat;
     if (md.cool) cool *= md.cool;
-    parts.push({ item: m, ergo: e, recoil: md.recoil || 0, acc: md.acc || 0, vel: md.vel || 0 });
+    if (md.dburn) dburn *= md.dburn;
+    if (md.moa && m.tpl.modType === 'barrel') barrelMoa = md.moa;
+    parts.push({ item: m, ergo: e, recoil: md.recoil || 0, acc: md.acc || 0, vel: md.vel || 0, dburn: md.dburn || 0 });
   }
   const recoilMul = 1 + recoilPct / 100;
-  const coi = (wpn.moa || 0) * (1 + accPct / 100);
+  // the receiver's centre of impact; a gun whose receiver has none (the TT)
+  // reads it off the barrel, which is where the game keeps it for those
+  const coi = (wpn.moa || barrelMoa || 0) * (1 + accPct / 100);
   const ammoKey = item.chamber?.[0] || item.magazine?.topRound || wpn.defAmmo || null;
   const ammo = ammoKey ? getTpl(ammoKey) : null;
   const speed = ammo?.ammo?.speed || 0;
@@ -72,10 +78,14 @@ export function weaponStats(item) {
     magCap: mag ? mag.tpl.magSize || 0 : 0,
     magRounds: mag ? mag.ammoCount : 0,
     chambered: item.chamber ? item.chamber.length : 0,
-    dura: item.dura, maxDura: wpn.maxDura || tpl.dura || null,
+    dura: item.dura, maxDura: item.maxDura ?? (wpn.maxDura || tpl.dura || null),
+    tplMaxDura: wpn.maxDura || tpl.dura || null,
     loud: Math.round(loud),
     heat: Math.round(heat * 100) / 100,
     cool: Math.round(cool * 100) / 100,
+    dburn: Math.round(dburn * 100) / 100,
+    zoom,
+    size: item.fw + 'x' + item.fh,
     ammo,
     parts,
     missing: missingVital(item),
@@ -106,6 +116,19 @@ export function setInRaid(v) { inRaid = !!v; }
 
 function raidLocked(item) {
   return inRaid && !!item.tpl.mod?.noRaidMod;
+}
+
+/**
+ * May this item leave the slot it is in right now? The vital parts the game
+ * will not let you swap in the field stay put - not only through the modding
+ * screen (installMod / uninstallMod check it) but through drag & drop, ctrl+
+ * click and DROP as well, which is what the drag layer and the raid menu ask
+ * here before they touch a part.
+ */
+export function canDetachPart(item) {
+  if (!item || item.holder?.kind !== 'mod') return { ok: true };
+  if (raidLocked(item)) return { ok: false, reason: 'cannot be removed in raid' };
+  return { ok: true };
 }
 
 /**
@@ -184,7 +207,64 @@ export function stripWeapon(item, targets = []) {
     }
   };
   walk(item);
+  if (removed.length && sfx.buildStrip) sfx.buildStrip();
   return removed;
+}
+
+/**
+ * The parts on an item as a preset-shaped tree: {slot: {t, s: {...}}} - the
+ * inverse of applyPreset, and the shape a saved build is kept in.
+ */
+export function treeOf(item) {
+  const out = {};
+  if (!item?.slots) return out;
+  for (const sl of item.slots) {
+    if (!sl.item) continue;
+    const rec = { t: sl.item.tplId };
+    const sub = treeOf(sl.item);
+    if (Object.keys(sub).length) rec.s = sub;
+    out[sl.name] = rec;
+  }
+  return out;
+}
+
+/** every part key in a tree, with how many of each */
+export function treeParts(tree, out = new Map()) {
+  for (const rec of Object.values(tree || {})) {
+    out.set(rec.t, (out.get(rec.t) || 0) + 1);
+    if (rec.s) treeParts(rec.s, out);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------
+// ammo packs
+// ---------------------------------------------------------
+/**
+ * Tear open a box of cartridges: its rounds come out as stacks into
+ * `targets`, the box is gone. All or nothing - a box that will not fit as
+ * rounds stays a box.
+ */
+export function unpackAmmoBox(box, targets = []) {
+  const b = box?.tpl.box;
+  if (!b || !getTpl(b.t)) return { ok: false, reason: 'not an ammo pack' };
+  const per = getTpl(b.t).stack || 1;
+  const made = [];
+  let left = b.n;
+  while (left > 0) {
+    const n = Math.min(per, left);
+    const stack = new Item(b.t, { stack: n, fir: box.fir, examined: true });
+    // merging is off so a failure can be undone: a merge cannot be
+    if (!autoPlace(stack, targets, { merge: false })) {
+      for (const m of made) detach(m);
+      return { ok: false, reason: 'no room for the rounds' };
+    }
+    made.push(stack);
+    left -= n;
+  }
+  detach(box);
+  if (sfx.ammoUnpack) sfx.ammoUnpack(getTpl(b.t)); else sfx.ammoLoad(getTpl(b.t), 2);
+  return { ok: true, stacks: made, rounds: b.n };
 }
 
 // ---------------------------------------------------------
@@ -192,7 +272,10 @@ export function stripWeapon(item, targets = []) {
 // ---------------------------------------------------------
 export function canFold(item) {
   const w = item.tpl.wpn;
-  if (!w?.fold || !w.foldSlot) return { ok: false, reason: 'not foldable' };
+  if (!w?.fold) return { ok: false, reason: 'not foldable' };
+  // a gun that folds at a stock slot needs a stock in it; one that folds as a
+  // whole (the Kedr, FoldedSlot empty in the template) has nothing to check
+  if (w.foldSlot && !item.mod(w.foldSlot)) return { ok: false, reason: 'no stock to fold' };
   for (const m of item.allMods()) {
     if (m.tpl.mod?.blocksFold) return { ok: false, reason: `${m.tpl.short || m.tpl.name} blocks folding` };
   }
@@ -207,6 +290,7 @@ export function toggleFold(item) {
     return { ok: false, reason: 'no room to unfold here' };
   }
   item.folded = next;
+  footprintChanged(item);
   sfx.weaponFold(item.tpl, next);
   return { ok: true, folded: next };
 }
@@ -290,7 +374,7 @@ export function chamberRound(weapon) {
   weapon.chamber.push(top.t);
   top.n -= 1;
   if (top.n <= 0) mag.rounds.pop();
-  sfx.weaponBolt(weapon.tpl);
+  if (sfx.chamberRound) sfx.chamberRound(weapon.tpl, true); else sfx.weaponBolt(weapon.tpl);
   return { ok: true, round: weapon.chamber[weapon.chamber.length - 1] };
 }
 
@@ -300,7 +384,7 @@ export function clearChamber(weapon, targets = []) {
   const t = weapon.chamber.pop();
   const round = new Item(t, { stack: 1 });
   autoPlace(round, targets);   // a round with nowhere to go falls on the floor
-  sfx.weaponBolt(weapon.tpl);
+  if (sfx.chamberRound) sfx.chamberRound(weapon.tpl, false); else sfx.weaponBolt(weapon.tpl);
   return { ok: true, round: t };
 }
 

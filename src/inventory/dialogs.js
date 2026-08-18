@@ -186,7 +186,9 @@ export function inspectDialog(item) {
   openModal((box, done) => {
     box.classList.add('inspect');
     const art = el('div', { class: 'inspect__art' });
-    if (tpl.imgUrl) art.append(el('img', { src: tpl.imgUrl, alt: '' }));
+    // a gun with parts on it is drawn assembled, as on its tile
+    const src = (item.isWeapon && tpl.presetImgUrl && item.slots?.some((s) => s.item)) ? tpl.presetImgUrl : tpl.imgUrl;
+    if (src) art.append(el('img', { src, alt: '' }));
     else art.append(el('div', { class: 'item__fallback' }, tpl.short));
 
     const dl = el('dl', { class: 'tooltip__rows' });
@@ -194,7 +196,7 @@ export function inspectDialog(item) {
     row('CATEGORY', catLabel(tpl.cat));
     row('SIZE', `${item.fw} x ${item.fh}`);
     row('WEIGHT', `${fmtWeight(item.weight)} kg`);
-    row('BASE VALUE', `${fmtNum(tpl.price)} ₽`);
+    row('BASE VALUE', `${fmtNum(item.isWeapon ? item.value : tpl.price)} ₽`);
     if (item.stack > 1) row('STACK', `${fmtNum(item.stack)} / ${fmtNum(tpl.stack)}`);
     if (tpl.res && item.res != null) row('RESOURCE', `${Math.round(item.res)} / ${tpl.res.max}`);
     if (tpl.dura != null && item.dura != null) row('DURABILITY', `${Math.round(item.dura)} / ${tpl.dura}`);

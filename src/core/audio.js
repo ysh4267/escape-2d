@@ -108,7 +108,14 @@ const WEAPON_CUE = {
   '576165642459773c7a400233': 'saiga',  // Saiga-12K
 };
 
-/** every bank the pack carries, so a bad name cannot select a missing cue */
+/**
+ * Every shot bank the pack carries, so a bad name cannot select a missing cue.
+ * Each bank has `fire_<bank>` and `fire_<bank>_far`; most also have
+ * `fire_<bank>_sil` / `_sil_far` for a suppressor fitted (kedrb *is* the
+ * Kedr's suppressed bank, the pm cannot mount one, the tt borrows the PB's),
+ * and the pb - recorded suppressed - has `fire_pb_unsil` / `_unsil_far` for
+ * when its can comes off. `fire()` / `hostileFire()` pick between them.
+ */
 const BANKS = new Set(['ak74', 'aksu', 'akm', 'kedr', 'kedrb', 'pm', 'pb', 'tt',
   'mp133', 'mp153', 'saiga']);
 
@@ -624,8 +631,8 @@ export const sfx = {
    * one another; 45ms lets every shot through up to ~1300rpm and drops only
    * what would have overlapped inaudibly anyway.
    */
-  fire(tpl) {
-    play(`fire_${weaponBank(tpl)}`, { rate: [0.97, 1.04], limit: 45 });
+  fire(tpl, opts = {}) {
+    play(fireCue(tpl, opts, ''), { rate: [0.97, 1.04], limit: 45 });
   },
 
   /**
@@ -633,8 +640,8 @@ export const sfx = {
    * what makes a scav firing across the hall read as coming from over there.
    * Until this existed hostile fire made no sound at all.
    */
-  hostileFire(tpl) {
-    play(`fire_${weaponBank(tpl)}_far`, { rate: [0.96, 1.05], limit: 45 });
+  hostileFire(tpl, opts = {}) {
+    play(fireCue(tpl, opts, '_far'), { rate: [0.96, 1.05], limit: 45 });
   },
 
   /**
@@ -723,11 +730,90 @@ export const sfx = {
   /** the bolt / slide / pump cycled by hand */
   weaponBolt(tpl) { play(`bolt_${handlingBank(tpl)}`, { rate: [0.97, 1.03] }); },
 
-  /** a folding stock going in or out */
+  /**
+   * A folding stock going in or out. The pack names these
+   * `fold_<open|close>_<bank>` - kind first, like every other handling cue -
+   * and this used to ask for `fold_<bank>_<open|close>`, so folding was silent.
+   */
   weaponFold(tpl, folded) {
-    play(`fold_${handlingBank(tpl)}_${folded ? 'close' : 'open'}`);
+    play(`fold_${folded ? 'close' : 'open'}_${handlingBank(tpl)}`);
+  },
+
+  // ---- weapon actions: the trigger, the selector, checks, stoppages ----
+  //
+  // Same per-handling-bank banks as above, `<kind>_<bank>`. Coverage in the
+  // install is thin here so most banks borrow (the AKS-74U and AKM click with
+  // the AK-74's trigger, every AK checks its chamber with the Saiga's slide,
+  // the shotguns jam like the Saiga) - sfx_picks.py `_ACTIONS` spells out
+  // which. A bank with no cue for a kind is a silent no-op, never a fallback
+  // to a wrong gun.
+
+  /** trigger pulled on an empty chamber */
+  weaponDry(tpl) { play(`dry_${handlingBank(tpl)}`, { rate: [0.98, 1.02], limit: 80 }); },
+
+  /**
+   * The fire selector thrown. Only the AKs and the Kedr have one - the
+   * pistols, shotguns and VPO-136 are single-fire and have no cue, so this
+   * quietly does nothing for them.
+   */
+  fireSelector(tpl) { play(`selector_${handlingBank(tpl)}`, { rate: [0.97, 1.03] }); },
+
+  /** the magazine pulled part way out to look at it */
+  magCheck(tpl) { play(`magcheck_${handlingBank(tpl)}`, { rate: [0.97, 1.03] }); },
+
+  /** the bolt eased back to see whether a round is chambered */
+  chamberCheck(tpl) { play(`chambercheck_${handlingBank(tpl)}`, { rate: [0.97, 1.03] }); },
+
+  /** a round put into the chamber by hand (`loaded`), or taken back out */
+  chamberRound(tpl, loaded = true) {
+    play(`${loaded ? 'chamber' : 'unchamber'}_${handlingBank(tpl)}`, { rate: [0.97, 1.03] });
+  },
+
+  /** the bolt catching on a stoppage */
+  weaponJam(tpl) { play(`jam_${handlingBank(tpl)}`, { rate: [0.97, 1.03] }); },
+
+  // ---- out of raid: repair, builds, ammo boxes ----
+
+  /** a repair finished - the game's own sting */
+  repairDone() { play('repair_done', { bus: 'ui', gain: 0.5 }); },
+
+  /** the weapon repair kit being applied */
+  repairKit() { play('repair_kit_use'); },
+
+  /** a build assembled from parts */
+  buildAssemble() { play('build_assemble', { bus: 'ui', gain: 0.5 }); },
+
+  /** a weapon stripped back to parts */
+  buildStrip() { play('build_strip', { bus: 'ui', gain: 0.5 }); },
+
+  /**
+   * An ammo box torn open. The 12ga box has its own clip in the install
+   * (`ammo_shotgun_use`); every other calibre shares `ammo_pack_generic_use`.
+   */
+  ammoUnpack(tpl) {
+    play(tpl?.cal?.startsWith('12') ? 'ammo_unpack_12ga' : 'ammo_unpack');
   },
 };
+
+/**
+ * Which shot cue a weapon fires. `opts.suppressed === true` asks for the
+ * bank's `_sil` cue and gets it only when the pack has one - a bank without
+ * (pm, kedr, kedrb) keeps its plain report rather than going quiet.
+ * `opts.suppressed === false` on the PB, whose plain bank is the suppressed
+ * recording, swaps in `fire_pb_unsil`. A caller that passes nothing gets
+ * exactly what it always did. `tail` is '' for the player, '_far' for a scav.
+ */
+function fireCue(tpl, opts, tail) {
+  const bank = weaponBank(tpl);
+  if (opts?.suppressed === true) {
+    const sil = `fire_${bank}_sil${tail}`;
+    if (hasCue(sil)) return sil;
+  } else if (opts?.suppressed === false && bank === 'pb') {
+    const bare = `fire_pb_unsil${tail}`;
+    if (hasCue(bare)) return bare;
+  }
+  return `fire_${bank}${tail}`;
+}
 
 /**
  * Handling clips are recorded per weapon family too, but the set is smaller
@@ -735,6 +821,12 @@ export const sfx = {
  * no handling of their own and borrow the Makarov's, the MP-153 has a slide
  * but its shells go in like the MP-133's. `HANDLING` names the bank that
  * actually has clips for each shot bank.
+ *
+ * Every handling bank carries `magin_` / `magout_` / `bolt_`, `dry_`,
+ * `magcheck_`, `chambercheck_`, `chamber_` / `unchamber_` and `jam_`;
+ * `fold_open_` / `fold_close_` exist for the folders (aksu, akm, kedr, saiga)
+ * and `selector_` for the AKs and the Kedr. sfx_picks.py `_HANDLING` and
+ * `_ACTIONS` are the matching tables and say which clips are borrowed.
  */
 const HANDLING = {
   ak74: 'ak74', aksu: 'aksu', akm: 'akm', kedr: 'kedr', kedrb: 'kedr',

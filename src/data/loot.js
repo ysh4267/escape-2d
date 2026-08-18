@@ -51,6 +51,8 @@ const P = {
     ['toolset', 6], ['drill', 4], ['edrill', 4], ['wrench', 10], ['pliers', 9], ['wd40', 10],
     ['ducttape', 12], ['insultape', 12], ['bolts', 12], ['nuts', 12], ['nails', 9], ['screws', 9],
     ['hose', 7], ['ripstop', 5], ['paracord', 5],
+    // the kit that mends guns: superrare, and only where tools are kept
+    ['weaprepkit', 0.4],
   ],
   electronics: [
     ['pcb', 10], ['caps', 10], ['powercord', 9], ['wirebundle', 9], ['hddbroken', 8], ['gphone', 7],
@@ -86,6 +88,7 @@ const P = {
   mags: [['mag_ak74', 8], ['mag_akm', 7], ['mag_pm', 8], ['mag_kedr', 6]],
   // filled from the item database by buildLootPools()
   mods: [],
+  ammoboxes: [],
   weapons_low: [['w_pm', 8], ['w_tt', 7], ['w_kedr', 5], ['w_mp133', 6], ['w_vpo136', 4]],
   weapons_mid: [
     ['w_aks74u', 5], ['w_akm', 3], ['w_ak74n', 3], ['w_saiga', 2], ['w_kedrb', 3],
@@ -113,10 +116,10 @@ const P = {
 /** container type -> weighted list of pools */
 export const LOOT_TABLES = {
   crate:       [[P.junk, 24], [P.ammo, 16], [P.meds_low, 12], [P.grenades, 8], [P.mags, 8], [P.mods, 6], [P.tools, 12], [P.electronics, 8], [P.weapons_low, 4], [P.money, 4]],
-  ammobox:     [[P.ammo, 80], [P.mags, 20]],
+  ammobox:     [[P.ammo, 70], [P.ammoboxes, 12], [P.mags, 18]],
   suitcase:    [[P.junk, 30], [P.food, 22], [P.drink, 14], [P.valuables, 10], [P.info, 8], [P.money, 10], [P.electronics, 6]],
-  weaponbox:   [[P.weapons_low, 22], [P.weapons_mid, 10], [P.mags, 20], [P.mods, 18], [P.ammo, 20], [P.grenades, 6], [P.meds_low, 4]],
-  weaponbox6:  [[P.weapons_mid, 20], [P.weapons_low, 16], [P.mags, 18], [P.mods, 24], [P.ammo, 16], [P.grenades, 6]],
+  weaponbox:   [[P.weapons_low, 22], [P.weapons_mid, 10], [P.mags, 20], [P.mods, 18], [P.ammo, 16], [P.ammoboxes, 4], [P.grenades, 6], [P.meds_low, 4]],
+  weaponbox6:  [[P.weapons_mid, 20], [P.weapons_low, 16], [P.mags, 18], [P.mods, 24], [P.ammo, 12], [P.ammoboxes, 4], [P.grenades, 6]],
   medbag:      [[P.meds_low, 58], [P.meds_mid, 34], [P.meds_high, 8]],
   medcase:     [[P.meds_low, 44], [P.meds_mid, 44], [P.meds_high, 12]],
   medcrate:    [[P.meds_mid, 46], [P.meds_high, 24], [P.meds_low, 30]],
@@ -171,6 +174,14 @@ export function buildLootPools(TPL) {
   for (const t of all) {
     if (t.cat !== 'mag' || haveMag.has(t.key)) continue;
     P.mags.push([t.key, Math.max(1, Math.round(rarity(t.price) * 0.6))]);
+  }
+  // packs are rarer than loose rounds, and the good stuff rarer still
+  P.ammoboxes.length = 0;
+  for (const t of all) {
+    if (t.cat !== 'ammobox') continue;
+    const inner = TPL[t.box?.t];
+    const pen = inner?.ammo?.pen ?? 0;
+    P.ammoboxes.push([t.key, pen < 20 ? 5 : pen < 30 ? 3 : pen < 40 ? 1.5 : 0.7]);
   }
   const haveAmmo = new Set(P.ammo.map((e) => e[0]));
   for (const t of all) {

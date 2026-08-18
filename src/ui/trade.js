@@ -10,6 +10,10 @@
 //    commits every staged offer in one transaction.
 //  - SELL: the mirror of that. Drag items onto the table, each carries what
 //    the trader will pay for it, then DEAL!.
+//  - REPAIR (Prapor, Skier, Mechanic): a gun goes on the bench, a slider picks
+//    how many points of durability to put back, the price is the weapon's
+//    RepairCost x points x the trader's rate for your loyalty level, and the
+//    trader's quality decides how much comes off the gun's ceiling.
 //  - the stash stays docked on the right the whole time
 //
 // The wording is the game's own, read out of tools/cache/en.json: "DEAL!"
@@ -29,6 +33,10 @@ import { isKnown, needsExamine } from '../inventory/examine.js';
 import { dndContext, quickTransfer, isDragging } from '../inventory/dnd.js';
 import { setContextProvider, inspectDialog, closeContext } from '../inventory/dialogs.js';
 import { openContainerWindow, refreshContainerWindows, closeContainerWindow } from '../inventory/window.js';
+import { moddingContext } from '../inventory/modding.js';
+import {
+  isRepairable, repairNeeded, traderRepairRate, traderRepairPrice, traderRepair, wearRange,
+} from '../inventory/repair.js';
 import { buildMenu, markOpenable, examineNow } from './stash.js';
 import { sfx } from '../core/audio.js';
 import { on, emit, EV } from '../core/events.js';
@@ -51,7 +59,23 @@ const MAX_BUY_QTY = 999;
  */
 const TABLE_MIN = { w: 4, h: 4 };
 export const tradeTable = new Grid(TABLE_MIN.w, TABLE_MIN.h, { tag: 'tradeTable', label: 'TRADING TABLE' });
-tradeTable.mayAccept = (item) => sellableTo(TRADER_BY_ID[activeId], item);
+tradeTable.mayAccept = (item) => (mode === 'repair'
+  ? repairableHere(TRADER_BY_ID[activeId], item)
+  : sellableTo(TRADER_BY_ID[activeId], item));
+
+/**
+ * The repair bench takes one gun at a time: this trader mends weapons, the
+ * item is a gun with a durability track and it is short of its ceiling.
+ */
+function repairableHere(trader, item) {
+  if (!trader?.repair || !isRepairable(item)) return false;
+  if (!isKnown(item)) return false;
+  if (repairNeeded(item) <= 0) return false;
+  const on = tradeTable.items();
+  return on.length === 0 || (on.length === 1 && on[0] === item);
+}
+/** points staged for the repair of the gun on the bench (null = all of it) */
+let repairPts = null;
 
 /**
  * The buy-side trading table. Picking an offer stages it here; nothing is
@@ -132,7 +156,7 @@ export function initTrade() {
   // the table is cut to the column's size, so a resized window (or a cell-size
   // breakpoint) has to cut it again
   window.addEventListener('resize', debounce(() => {
-    if (mode === 'sell' && tradeScreenActive()) renderTrade();
+    if ((mode === 'sell' || mode === 'repair') && tradeScreenActive()) renderTrade();
   }, 160));
 
   // the deal bar advertises SPACE, so SPACE has to actually close the deal
@@ -151,6 +175,7 @@ export function initTrade() {
     e.preventDefault();
     const t = TRADER_BY_ID[activeId];
     if (mode === 'buy') doBuyStaged(t);
+    else if (mode === 'repair') doRepair(t);
     else doSell(t);
   });
 }
@@ -210,9 +235,12 @@ export function activateTradeContext() {
   dndContext.quickTargets = (item) => {
     // on the buy side there is nowhere for a stash item to go; returning the
     // stash itself made ctrl+click shuffle items to a random free cell
-    if (mode !== 'sell') return [];
+    if (mode !== 'sell' && mode !== 'repair') return [];
     return onTable(item) ? [game.stash] : [tradeTable];
   };
+  // the modding screen and the ammo dialogs are reachable from here too:
+  // parts and rounds come from the stash and what is worn, as in the hideout
+  moddingContext.sources = () => [game.stash, ...game.equipment.allGrids(), ...game.equipment.nestedGrids()];
   dndContext.equipSlotFor = () => null;
   dndContext.requestSplit = null;
   dndContext.canMove = (item) => !item.virtual;
@@ -275,6 +303,31 @@ export function activateTradeContext() {
             : `${t.name} DOES NOT BUY THIS`;
         extra.push({ label: why, icon: 'warn', disabled: true, run: () => {} });
       }
+    } else if (mode === 'repair') {
+      if (onTable(item)) {
+        extra.push({
+          label: 'TAKE OFF THE BENCH', icon: 'back',
+          run: () => {
+            if (!item.holder) return;
+            if (!autoPlace(item, [game.stash])) toast('No room in the stash', 'warn');
+            repairPts = null;
+            dndContext.onChange();
+          },
+        });
+      } else if (repairableHere(t, item)) {
+        extra.push({
+          label: `PUT ON THE BENCH — ${fmtNum(traderRepairPrice(t, item, repairNeeded(item), loyaltyLevel(t)))}₽ FULL`,
+          icon: 'check',
+          run: () => {
+            if (!item.holder) return;
+            if (!autoPlace(item, [tradeTable])) toast('The bench is taken', 'warn');
+            repairPts = null;
+            dndContext.onChange();
+          },
+        });
+      } else if (item.isWeapon && t.repair && isRepairable(item) && repairNeeded(item) <= 0) {
+        extra.push({ label: 'NOTHING TO REPAIR', icon: 'warn', disabled: true, run: () => {} });
+      }
     }
     // a case sitting on the trading table must not be openable: filling it
     // there hid items inside something the trader was about to take away
@@ -320,6 +373,11 @@ export function renderTrade() {
   renderBar($('#trader-bar'), t);
   renderAssortTools(t);
 
+  // only the three who mend guns get the REPAIR tab; landing on it at a
+  // trader who does not falls back to BUY
+  const repairSeg = $('#pane-traders .seg[data-mode="repair"]');
+  if (repairSeg) repairSeg.hidden = !t.repair;
+  if (mode === 'repair' && !t.repair) { returnTableItems(); mode = 'buy'; }
   for (const seg of $$('#pane-traders .seg')) {
     seg.classList.toggle('is-active', seg.dataset.mode === mode);
   }
@@ -337,6 +395,7 @@ export function renderTrade() {
   content.replaceChildren();
   table.replaceChildren();
   if (mode === 'buy') { renderBuy(t, content); renderBuyTable(t, table); }
+  else if (mode === 'repair') { renderShowcaseIdle(t, content); renderRepair(t, table); }
   else { renderShowcaseIdle(t, content); renderSell(t, table); }
   const shelf = $('.assort-scroll', content);
   if (shelf) shelf.scrollTop = shelfTop;
@@ -351,6 +410,7 @@ export function renderTrade() {
     clear.disabled = !staged && !tradeTable.count;
     clear.onclick = () => {
       if (mode === 'buy') clearStaged();
+      repairPts = null;
       if (tradeTable.count) returnTableItems();
       sfx.trade('click');
       renderTrade();
@@ -903,6 +963,133 @@ function doSell(t) {
 }
 
 // ---------------------------------------------------------
+// REPAIR
+// ---------------------------------------------------------
+/** the gun on the bench, if any */
+function benchGun() {
+  const on = tradeTable.items();
+  return on.length === 1 && isRepairable(on[0]) ? on[0] : null;
+}
+
+function renderRepair(t, host) {
+  const ll = loyaltyLevel(t);
+  const rr = traderRepairRate(t, ll);
+  const gun = benchGun();
+  const need = gun ? repairNeeded(gun) : 0;
+  const pts = gun ? Math.min(need, repairPts == null ? need : repairPts) : 0;
+  const price = gun ? traderRepairPrice(t, gun, pts, ll) : 0;
+
+  const sumEl = el('span', { class: 'deal-bar__sum' }, '₽ ' + fmtNum(price));
+  const dealBtn = el('button', { class: 'deal-bar', dataset: { sfx: 'own' } },
+    el('span', { class: 'deal-bar__key' }, 'SPACE'),
+    el('span', { class: 'deal-bar__label' }, 'REPAIR'),
+    sumEl);
+  dealBtn.addEventListener('click', () => doRepair(t));
+  host.append(dealBtn);
+
+  const wrap = el('div', { class: 'deal-wrap deal-wrap--repair' });
+  wrap.append(el('div', { class: 'deal-head' },
+    `${t.name} repairs weapons · ${fmtNum(Math.round((rr?.rate || 1) * 100))}% of the base cost at LL${ll} · wear x${rr?.quality ?? 1}`));
+
+  const zone = el('div', { class: 'table-zone table-zone--bench' });
+  wrap.append(zone);
+
+  const panel = el('div', { class: 'repair' });
+  if (!gun) {
+    panel.append(el('div', { class: 'deal-empty' }, 'No selected items',
+      el('small', {}, 'drag a worn gun onto the bench, or right-click one in the stash')));
+  } else {
+    const max = gun.maxDura, cur = gun.dura;
+    const after = Math.min(max, cur + pts);
+    const [lo, hi] = wearRange(gun, { quality: rr?.quality ?? 1 });
+    const per = traderRepairPrice(t, gun, 1, ll);
+    const bar = el('div', { class: 'repair__bar' },
+      el('i', { class: 'repair__bar-cur', style: { width: `${(cur / (gun.tpl.wpn.maxDura || max || 1)) * 100}%` } }),
+      el('i', { class: 'repair__bar-add', style: { left: `${(cur / (gun.tpl.wpn.maxDura || max || 1)) * 100}%`, width: `${((after - cur) / (gun.tpl.wpn.maxDura || max || 1)) * 100}%` } }),
+      el('i', { class: 'repair__bar-max', style: { left: `${(max / (gun.tpl.wpn.maxDura || max || 1)) * 100}%` } }));
+    const field = el('input', { class: 'split__val', type: 'number', min: '0', max: String(need), value: String(pts) });
+    const range = el('input', { type: 'range', min: '0', max: String(need), value: String(pts) });
+    const readout = el('div', { class: 'repair__readout' });
+    const sync = (v) => {
+      repairPts = clamp(Math.round(Number(v) || 0), 0, need);
+      field.value = String(repairPts); range.value = String(repairPts);
+      const p = traderRepairPrice(t, gun, repairPts, ll);
+      const a = Math.min(max, cur + repairPts);
+      sumEl.textContent = '₽ ' + fmtNum(p);
+      readout.textContent = `${fmt2(cur)} → ${fmt2(a)} of ${fmt2(max)} · ${fmtNum(per)}₽ a point · ${fmtNum(p)}₽`;
+      bar.querySelector('.repair__bar-add').style.width = `${((a - cur) / (gun.tpl.wpn.maxDura || max || 1)) * 100}%`;
+      dealBtn.disabled = repairPts <= 0 || countMoney('RUB') < p;
+      warnEl.textContent = repairPts <= 0 ? 'No selected items' : countMoney('RUB') < p ? 'Not enough money' : '';
+    };
+    field.addEventListener('input', () => sync(field.value));
+    range.addEventListener('input', () => sync(range.value));
+    const warnEl = el('div', { class: 'deal-warn' }, '');
+    panel.append(
+      el('div', { class: 'repair__name' }, gun.tpl.name),
+      el('div', { class: 'repair__dura' }, `DURABILITY ${fmt2(cur)} / ${fmt2(max)}`,
+        max < (gun.tpl.wpn.maxDura || max) ? el('small', {}, ` (was ${gun.tpl.wpn.maxDura})`) : null),
+      bar,
+      el('div', { class: 'deal-need' }, 'Points to repair:'),
+      el('div', { class: 'split__row' }, field, range),
+      readout,
+      el('div', { class: 'repair__wear' },
+        `Each repair takes ${fmt2(lo)}–${fmt2(hi)} off the maximum durability (${t.name}: x${rr?.quality ?? 1}).`),
+      warnEl);
+    setTimeout(() => sync(pts), 0);
+  }
+  wrap.append(panel);
+  host.append(wrap);
+
+  fitBench(zone);
+  const gridEl = renderGrid(tradeTable);
+  gridEl.classList.add('table-grid');
+  zone.append(gridEl);
+  if (!tradeTable.count) {
+    zone.append(el('div', { class: 'table-empty' }, 'DRAG A GUN HERE', el('small', {}, 'one at a time')));
+  }
+  if (!gun) dealBtn.disabled = true;
+}
+
+/** the bench is a small table: wide enough for the longest gun, two rows */
+function fitBench(zone) {
+  const cs = getComputedStyle(zone);
+  const innerW = zone.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  if (innerW <= 0) { tradeTable.resize(Math.max(TABLE_MIN.w, 7), 3); return; }
+  const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) || 62;
+  const cols = Math.max(TABLE_MIN.w, Math.min(8, Math.floor((innerW - 2) / cell)));
+  tradeTable.resize(cols, Math.max(3, TABLE_MIN.h - 1));
+}
+
+function fmt2(v) { const r = Math.round(v * 100) / 100; return String(r); }
+
+function doRepair(t) {
+  closeContext();
+  const gun = benchGun();
+  if (!gun || !t.repair) return;
+  const ll = loyaltyLevel(t);
+  const need = repairNeeded(gun);
+  const pts = Math.min(need, repairPts == null ? need : repairPts);
+  if (pts <= 0) return;
+  const price = traderRepairPrice(t, gun, pts, ll);
+  if (countMoney('RUB') < price) { toast('Not enough money', 'bad'); return; }
+  takeMoney(price, 'RUB');
+  const r = traderRepair(t, gun, pts, ll);
+  const st = traderState(t.id);
+  st.spent += price;
+  st.rep = Math.min(10, st.rep + price / 900000);
+  addExp(Math.round(pts / 5));
+  sfx.trade('deal');
+  toast(`Repaired ${gun.tpl.short}: ${fmt2(r.dura)} / ${fmt2(r.maxDura)}${r.loss ? ` (max -${fmt2(r.loss)})` : ''}`, 'ok');
+  // the mended gun goes home; the bench is for the next one
+  repairPts = null;
+  if (!autoPlace(gun, [game.stash])) toast('Stash is full — the gun stays on the bench', 'warn');
+  renderTrade();
+  refreshTopbar();
+  emit(EV.INVENTORY_CHANGED);
+  saveSoon();
+}
+
+// ---------------------------------------------------------
 // docked stash
 // ---------------------------------------------------------
 function renderDockedStash(t) {
@@ -923,6 +1110,12 @@ function renderDockedStash(t) {
       if (node._item && !sellableTo(t, node._item)) node.classList.add('is-nosell');
     }
     if (note) note.textContent = 'greyed items: not bought here';
+  } else if (mode === 'repair') {
+    for (const node of gridEl.querySelectorAll('.item')) {
+      const it = node._item;
+      if (it && !(isRepairable(it) && repairNeeded(it) > 0)) node.classList.add('is-nosell');
+    }
+    if (note) note.textContent = 'greyed items: nothing to repair';
   } else if (note) {
     note.textContent = '';
   }
@@ -978,6 +1171,14 @@ export function devTrade(kind) {
     clearStaged();
     const o = t.assort.find((x) => x.ll <= loyaltyLevel(t) && x.stock > 1);
     if (o) { stageOffer(t, o); stageOffer(t, o); }
+    renderTrade();
+  } else if (kind === 'repair') {
+    // a worn AK on Prapor's bench, half repaired
+    activeId = 'prapor';
+    mode = 'repair';
+    renderTrade();
+    const gun = game.stash.items().find((it) => isRepairable(it));
+    if (gun) { gun.dura = Math.min(gun.dura, 41); autoPlace(gun, [tradeTable]); repairPts = 30; }
     renderTrade();
   }
 }

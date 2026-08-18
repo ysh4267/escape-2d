@@ -19,7 +19,12 @@
 #     FragmentationChance, InitialSpeed, ammoRec, ProjectileCount ...)
 #   - the default preset of every weapon from globals.json ItemPresets, so a
 #     gun bought from a trader or found in a crate arrives assembled the way
-#     the real one does
+#     the real one does, plus the factory alternates (AKMB, "Tactical" MP-133,
+#     the NERFGUN Saiga ...) the build screen offers
+#   - the repair numbers (RepairCost, Min/MaxRepairDegradation, the kit ones)
+#   - ammo packs: every AmmoBox whose StackSlots filter is a round we carry,
+#     the weapon repair kit, and the two weapon cases - records that are not
+#     parts but exist only because the weapons do
 # =========================================================
 
 from __future__ import annotations
@@ -66,6 +71,18 @@ PARENT_KIND = {
 # a grenade launcher is a second weapon hanging under the first, with its own
 # ammunition and firing logic; it is out of scope for the modding system
 SKIP_PARENTS = {'55818b014bdc2ddc698b456b'}   # Launcher
+
+AMMO_BOX_PARENT = '543be5cb4bdc2deb348b4568'
+# things that ride along with the weapons: the kit that mends them and the
+# cases that store them - id -> (key, cat, extra template fields)
+COMPANIONS = {
+    '5910968f86f77425cf569c32': ('weaprepkit', 'barter',
+                                 {'repairKit': {'max': 1000, 'type': 'weapon'}, 'res': 1000}),
+    '59fb023c86f7746d0d4b423c': ('weaponcase', 'container',
+                                 {'filter': {'allow': ['weapon', 'pistol', 'mod', 'mag', 'ammo', 'ammobox']}}),
+    '5b6d9ce188a4501afc1b2b25': ('thiccweaponcase', 'container',
+                                 {'filter': {'allow': ['weapon', 'pistol', 'mod', 'mag', 'ammo', 'ammobox']}}),
+}
 
 MOD_TYPE_LABEL = {
     'barrel': 'Barrel', 'handguard': 'Handguard', 'gasblock': 'Gas block',
@@ -231,6 +248,30 @@ def mod_fields(props):
             m['zoom'] = _num(max(flat), 1)
     if props.get('RaidModdable') is False:
         m['noRaidMod'] = True
+    if props.get('ToolModdable'):
+        m['toolMod'] = True
+    # a barrel carries the accuracy of a gun whose receiver has none (the TT),
+    # and the shotgun barrels the pattern spread
+    _put(m, 'moa', _num(props.get('CenterOfImpact'), 4))
+    _put(m, 'shotDisp', _num(props.get('ShotgunDispersion'), 3))
+    if props.get('DeviationMax'):
+        m['dev'] = [_num(props.get('DeviationCurve'), 3), _num(props.get('DeviationMax'), 3)]
+    # sights: every zoom step per sight mode, the zeroing distances, the
+    # sight family; tacticals: how many modes the switch cycles through
+    if zooms and isinstance(zooms, list) and zooms and isinstance(zooms[0], list):
+        flat_modes = [[_num(z, 1) for z in zz] for zz in zooms]
+        if any(z != 1 for zz in flat_modes for z in zz) or len(flat_modes) > 1:
+            m['zooms'] = flat_modes
+    cal = props.get('CalibrationDistances')
+    if cal and isinstance(cal, list) and cal and isinstance(cal[0], list):
+        m['zero'] = [[int(d) for d in dd] for dd in cal]
+    _put(m, 'sightType', props.get('sightModType'))
+    _put(m, 'muzzleType', props.get('muzzleModType'))
+    modes = props.get('ModesCount')
+    if isinstance(modes, list) and modes and max(modes) > 1:
+        m['modes'] = [int(x) for x in modes]
+    elif isinstance(modes, (int, float)) and modes > 1:
+        m['modes'] = [int(modes)]
     return m
 
 
@@ -274,6 +315,23 @@ def weapon_fields(props, key_of):
     _put(w, 'dburn', _num(props.get('DurabilityBurnRatio'), 4))
     _put(w, 'shotDisp', _num(props.get('shotgunDispersion')))
     _put(w, 'repairCost', _num(props.get('RepairCost')))
+    # how much of the maximum a repair grinds off: a uniform roll in this range
+    # times the current maximum (times the repairer's quality) - RepairHelper
+    if props.get('MaxRepairDegradation'):
+        w['repairDeg'] = [_num(props.get('MinRepairDegradation') or 0, 4), _num(props['MaxRepairDegradation'], 4)]
+    if props.get('MaxRepairKitDegradation'):
+        w['kitDeg'] = [_num(props.get('MinRepairKitDegradation') or 0, 4), _num(props['MaxRepairKitDegradation'], 4)]
+    _put(w, 'repairSpeed', _num(props.get('RepairSpeed')))
+    _put(w, 'opRes', _num(props.get('OperatingResource')))
+    _put(w, 'lootXp', _num(props.get('LootExperience')))
+    _put(w, 'boltCatch', bool(props.get('isBoltCatch')))
+    if props.get('isFastReload') is False:
+        w['slowReload'] = True
+    if props.get('CanQueueSecondShot') is False:
+        w['noQueue'] = True
+    if props.get('DeviationMax'):
+        w['dev'] = [_num(props.get('DeviationCurve'), 3), _num(props.get('DeviationMax'), 3)]
+    _put(w, 'rarity', props.get('RarityPvE'))
     _put(w, 'vital', bool(props.get('ForbidMissingVitalParts')))
     da = key_of(props.get('defAmmo'))
     if da:
@@ -299,6 +357,9 @@ def mag_fields(props, key_of):
     _put(m, 'malf', _num(props.get('MalfunctionChance'), 4))
     _put(m, 'type', props.get('ReloadMagType'))
     _put(m, 'visible', props.get('VisibleAmmoRangesString'))
+    # a window or a translucent body: the count is read exactly on a check
+    _put(m, 'checkOverride', _num(props.get('CheckOverride')))
+    _put(m, 'anim', _num(props.get('magAnimationIndex')))
     return m
 
 
@@ -328,6 +389,18 @@ def ammo_fields(props):
     _put(a, 'type', props.get('ammoType'))
     _put(a, 'staminaBurn', _num(props.get('StaminaBurnPerDamage'), 4))
     _put(a, 'penObst', _num(props.get('PenetrationChanceObstacle'), 3))
+    if props.get('MaxFragmentsCount'):
+        a['frags'] = [int(props.get('MinFragmentsCount') or 0), int(props['MaxFragmentsCount'])]
+    _put(a, 'penDmgMod', _num(props.get('PenetrationDamageMod'), 3))
+    _put(a, 'penDev', _num(props.get('PenetrationPowerDiviation'), 3))
+    _put(a, 'misfireBase', _num(props.get('MisfireChance'), 3))
+    if props.get('StackMaxRandom'):
+        a['stackRnd'] = [int(props.get('StackMinRandom') or 1), int(props['StackMaxRandom'])]
+    # the game has no subsonic flag; the wiki marks anything under the speed
+    # of sound, and so does the card
+    if props.get('InitialSpeed') and float(props['InitialSpeed']) < 343:
+        a['subsonic'] = True
+    _put(a, 'rarity', props.get('RarityPvE'))
     return a
 
 
@@ -370,6 +443,9 @@ def preset_tree(preset, key_of):
             k = key_of(ch['_tpl'])
             if not k or not ch.get('slotId'):
                 continue
+            # rounds sitting in a magazine are a load, not a part
+            if ch['slotId'] == 'cartridges':
+                continue
             rec = {'t': k}
             sub = build(ch)
             if sub:
@@ -378,6 +454,53 @@ def preset_tree(preset, key_of):
         return out
 
     return build(root)
+
+
+def preset_load(preset, key_of):
+    """the rounds a preset ships loaded, as [{t, n}] top last - or None"""
+    runs = []
+    for it in preset['_items']:
+        if it.get('slotId') != 'cartridges':
+            continue
+        k = key_of(it['_tpl'])
+        if not k:
+            continue
+        n = int((it.get('upd') or {}).get('StackObjectsCount') or 1)
+        if runs and runs[-1]['t'] == k:
+            runs[-1]['n'] += n
+        else:
+            runs.append({'t': k, 'n': n})
+    return runs or None
+
+
+def alt_presets(globals_db, weapon_id, key_of, en):
+    """
+    The factory presets of a weapon other than the default one - the AKMB,
+    the "Tactical" MP-133, the NERFGUN Saiga - as the build screen offers them:
+    [{id, name, label, tree, load}]. Only builds every part of which we carry.
+    """
+    out = []
+    for pid, pr in (globals_db.get('ItemPresets') or {}).items():
+        if pr.get('_encyclopedia'):
+            continue
+        root = next((it for it in pr['_items'] if not it.get('parentId')), None)
+        if not root or root['_tpl'] != weapon_id:
+            continue
+        # every part must be one we carry, or the build lies about itself
+        if any(key_of(it['_tpl']) is None for it in pr['_items'] if it is not root):
+            continue
+        tree = preset_tree(pr, key_of)
+        if not tree:
+            continue
+        rec = {'id': pid, 'name': pr.get('_name') or pid, 'tree': tree}
+        label = en.get(pid) or en.get(pid + ' Name')
+        if label:
+            rec['label'] = label
+        load = preset_load(pr, key_of)
+        if load:
+            rec['load'] = load
+        out.append(rec)
+    return out
 
 
 def expand(items, hb_items, en, selection_ids, our_keys):
@@ -419,19 +542,76 @@ def expand(items, hb_items, en, selection_ids, our_keys):
         cat, mtype = kind
         if cat in ('weapon', 'pistol'):
             continue    # a weapon reachable through a slot (launchers) is skipped
-        # a template the handbook does not price is still carried when it is a
-        # magazine (the TT-105 mag has no handbook row) - the builder gives it a
-        # fallback price; anything else unpriced is noise
-        if iid not in hb_items and cat != 'mag':
+        # a template the handbook does not price is noise: the only unpriced
+        # magazines reachable are the 999-round zombie-event ones, which the
+        # dump names *_infectedMagazin and marks Not_exist
+        if iid not in hb_items:
             continue
         prefix = 'mag' if cat == 'mag' else 'mod'
         new.append({'key': make_key(prefix, iid), 'id': iid, 'cat': cat, 'modType': mtype})
         counts[cat] += 1
 
+    ammo_keys = {}
     for iid in sorted(ammo):
-        if iid in selection_ids or iid not in hb_items:
+        if iid in selection_ids:
+            ammo_keys[iid] = selection_ids[iid]
             continue
-        new.append({'key': make_key('am', iid), 'id': iid, 'cat': 'ammo', 'modType': None})
+        if iid not in hb_items:
+            continue
+        k = make_key('am', iid)
+        ammo_keys[iid] = k
+        new.append({'key': k, 'id': iid, 'cat': 'ammo', 'modType': None})
         counts['ammo'] += 1
+    # rounds the curated list names on its own (the AK calibres' PS/BP)
+    for iid, k in selection_ids.items():
+        if items.get(iid, {}).get('_parent') == '5485a8684bdc2da71d8b4567':
+            ammo_keys.setdefault(iid, k)
+
+    # --- ammo packs: a box of one round type, unpacked into stacks ---
+    # The handbook prices every box at a flat 1000, so a box is priced as its
+    # rounds. The dump carries dev duplicates of the 120-round 5.45 packs
+    # (ExaminedByDefault false, RarityPvE Not_exist); those are skipped.
+    for iid, node in items.items():
+        if node.get('_parent') != AMMO_BOX_PARENT:
+            continue
+        p = node['_props']
+        if p.get('ExaminedByDefault') is False or iid not in hb_items:
+            continue
+        slots = p.get('StackSlots') or []
+        if not slots:
+            continue
+        inside = None
+        for f in slots[0].get('_props', {}).get('filters', []):
+            for a in f.get('Filter', []):
+                if a in ammo_keys:
+                    inside = a
+        if not inside:
+            continue
+        n = int(slots[0].get('_max_count') or 0)
+        if n <= 0:
+            continue
+        rk = ammo_keys[inside]
+        price = int(hb_items.get(inside, {}).get('Price', 0) or 0) * n
+        short = en.get(inside + ' ShortName') or rk
+        base = f"box_{slug(short)}_{n}"
+        k2, i2 = base, 2
+        while k2 in taken:
+            k2 = f'{base}_{i2}'
+            i2 += 1
+        taken.add(k2)
+        # the box's own ammoCaliber is stale in the dump (5.45 packs say 9x18);
+        # the round inside is the truth
+        new.append({'key': k2, 'id': iid, 'cat': 'ammobox', 'modType': None,
+                    'extra': {'box': {'t': rk, 'n': n}, 'price': price, 'known': True,
+                              'cal': caliber(items[inside]['_props'])}})
+        counts['ammobox'] += 1
+
+    # --- the repair kit and the weapon cases ---
+    for iid, (key, cat, extra) in COMPANIONS.items():
+        if iid in selection_ids or iid not in items or key in taken:
+            continue
+        taken.add(key)
+        new.append({'key': key, 'id': iid, 'cat': cat, 'modType': None, 'extra': dict(extra)})
+        counts[cat] += 1
 
     return new, counts, depth

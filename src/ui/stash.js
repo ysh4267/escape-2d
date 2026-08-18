@@ -14,7 +14,10 @@ import { paintExamine } from '../inventory/view.js';
 import { autoPlace, detach, moveToSlot, splitStack } from '../inventory/model.js';
 import { openModdingWindow, moddingContext } from '../inventory/modding.js';
 import { loadAmmoDialog, loadIntoDialog } from '../inventory/ammo-dialogs.js';
-import { unloadAmmo, toggleFold, canFold, magazineOf } from '../inventory/weapon.js';
+import { unloadAmmo, toggleFold, canFold, magazineOf, unpackAmmoBox } from '../inventory/weapon.js';
+import { openAmmoChart } from '../inventory/ammo-chart.js';
+import { repairKitDialog, kitTargetDialog } from '../inventory/repair-dialogs.js';
+import { isRepairable, repairNeeded, repairKitsIn, isRepairKit } from '../inventory/repair.js';
 import { emit, EV } from '../core/events.js';
 import { toast } from './shell.js';
 import { useInHideout } from './health-ui.js';
@@ -112,8 +115,9 @@ export function activateStashContext() {
     saveSoon();
   };
   dndContext.canMove = () => true;
-  // parts come out of, and go back into, the stash and everything worn
-  moddingContext.sources = () => [game.stash, ...game.equipment.carryGrids(), ...game.equipment.nestedGrids()];
+  // parts come out of, and go back into, the stash and everything worn -
+  // the pouch included, as the game allows
+  moddingContext.sources = () => [game.stash, ...game.equipment.allGrids(), ...game.equipment.nestedGrids()];
 
   setContextProvider((item) => buildMenu(item, 'stash'));
 }
@@ -125,6 +129,7 @@ export function isOnCharacter(item) {
     const h = cur.holder;
     if (!h) return false;
     if (h.kind === 'slot') return true;
+    if (h.kind === 'mod') { cur = h.slot.owner; continue; }   // a part is wherever its gun is
     if (h.grid.tag === 'stash') return false;
     if (h.grid.tag === 'pocket') return true;
     cur = h.grid.owner;
@@ -221,11 +226,27 @@ export function buildMenu(item, where, extra = [], opts = {}) {
         },
       });
     }
+    // a gun in the hideout can be mended with a kit, if there is one about
+    if (where !== 'raid' && isRepairable(item) && repairNeeded(item) > 0) {
+      const kits = repairKitsIn(moddingContext.sources());
+      actions.push({
+        label: 'REPAIR WITH KIT', icon: 'check', disabled: !kits.length,
+        run: () => repairKitDialog(item, kits, () => dndContext.onChange()),
+      });
+    }
+    if (where !== 'raid' && isRepairKit(item)) {
+      actions.push({
+        label: 'USE ON WEAPON', icon: 'crosshair',
+        run: () => kitTargetDialog(item, moddingContext.sources(), () => dndContext.onChange()),
+      });
+    }
     const mag = magazineOf(item);
     if (mag) {
       actions.push({
         label: item.isMag ? 'LOAD AMMO' : 'LOAD MAGAZINE', icon: 'cart', disabled: mag.ammoFree === 0,
-        run: () => loadAmmoDialog(mag, dndContext.quickTargets(item) || [], () => dndContext.onChange()),
+        // rounds come from everywhere the modding screen looks - the stash and
+        // what is worn - not only from the quick-transfer target
+        run: () => loadAmmoDialog(mag, moddingContext.sources(), () => dndContext.onChange()),
       });
       actions.push({
         label: 'UNLOAD AMMO', icon: 'sell', disabled: mag.ammoCount === 0,
@@ -241,6 +262,18 @@ export function buildMenu(item, where, extra = [], opts = {}) {
       actions.push({
         label: 'LOAD INTO MAGAZINE', icon: 'cart',
         run: () => loadIntoDialog(item, moddingContext.sources(), () => dndContext.onChange()),
+      });
+      actions.push({ label: 'CALIBER CHART', icon: 'info', run: () => openAmmoChart(item.tpl.cal, item.tplId) });
+    }
+    if (item.cat === 'ammobox') {
+      actions.push({
+        label: `UNPACK — ${item.tpl.box?.n || ''} ROUNDS`, icon: 'split',
+        run: () => {
+          const host = item.holder?.kind === 'grid' ? [item.holder.grid] : [];
+          const r = unpackAmmoBox(item, [...host, ...(dndContext.quickTargets(item) || []), ...moddingContext.sources()]);
+          if (!r.ok) toast(r.reason || 'No room for the rounds', 'warn');
+          dndContext.onChange();
+        },
       });
     }
   }

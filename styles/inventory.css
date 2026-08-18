@@ -564,3 +564,65 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .ammoload__tile .item__img { position: relative; width: auto; height: auto; max-height: var(--cell); max-width: calc(var(--cell) * 1.5); }
 .ammoload__name { font-size: 11px; color: var(--tx-0); }
 .ammoload__stat { font-size: 10px; color: var(--tx-3); }
+
+/* ---- picker sections, trader offers, stash highlight ---- */
+.mod__pick-sub {
+  padding: 4px 8px; font-size: 9px; letter-spacing: .14em; color: var(--tx-3);
+  background: rgba(0,0,0,.25); border-bottom: 1px solid var(--line-1);
+}
+.mod__cand--shop .mod__cand-name { color: var(--tx-1); }
+.mod__cand-art { display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); border: 1px solid var(--line-1); }
+.mod__cand-art img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.mslot-row.is-picked { border-color: var(--line-2); background: rgba(184,219,217,.06); }
+/* while a slot is picked, the stash shows what fits it */
+body.is-modpick .item.is-nofit { opacity: .28; filter: grayscale(.7); }
+body.is-modpick .item.is-fit { outline: 1px solid var(--ok); outline-offset: -1px; box-shadow: 0 0 0 1px rgba(127,179,154,.35) inset; }
+
+/* ---- builds panel ---- */
+.mod__builds {
+  min-width: 0; align-self: stretch;
+  border: 1px solid var(--line-2); background: rgba(0,0,0,.35);
+}
+.mod__build-save { display: flex; gap: 6px; align-items: center; }
+.mod__build-name {
+  width: 200px; padding: 3px 6px; font: inherit; font-size: 11px;
+  background: rgba(0,0,0,.4); border: 1px solid var(--line-1); color: var(--tx-0);
+}
+.mod__build-name:focus { outline: none; border-color: var(--line-2); }
+.mod__build-list { display: flex; flex-direction: column; max-height: 66vh; overflow: auto; }
+.mod__build {
+  display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+  padding: 6px 8px; border-bottom: 1px solid var(--line-1);
+}
+.mod__build.is-ready .mod__cand-name { color: var(--pale); }
+.mod__build-missing { color: var(--warn); }
+.mod__build-acts { display: flex; gap: 5px; align-items: center; }
+.mod__cand-name small { color: var(--tx-3); font-size: 10px; letter-spacing: .06em; }
+
+/* ---- calibre chart ---- */
+.cwin--chart { min-width: 720px; max-width: min(1100px, 96vw); }
+.cwin--chart .cwin__body.chart { max-height: 72vh; overflow: auto; }
+.chart__table { border-collapse: collapse; width: 100%; font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart__table th { font-size: 9px; letter-spacing: .12em; color: var(--tx-3); text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+.chart__table th:first-child { text-align: left; }
+.chart__table td { padding: 3px 6px; text-align: right; border-bottom: 1px solid var(--line-1); color: var(--tx-1); white-space: nowrap; }
+.chart__table td.chart__name { text-align: left; color: var(--tx-0); display: flex; align-items: center; gap: 6px; }
+.chart__table td.chart__name img { width: 22px; height: 22px; object-fit: contain; }
+.chart__table td.chart__name sup { color: var(--tx-3); font-size: 8px; }
+.chart__table td.chart__pen { color: var(--pale); font-weight: 600; }
+.chart__table td.chart__cell { color: var(--white); text-shadow: 0 1px 2px #000; text-align: center; min-width: 34px; }
+.chart__table td.chart__unknown { text-align: left; color: var(--tx-3); font-style: italic; }
+.chart__table tr.is-focus td { background: rgba(184,219,217,.08); }
+.chart__table tr.is-focus td.chart__name { color: var(--pale); }
+.chart__note { margin-top: 8px; font-size: 10px; color: var(--tx-3); }
+.chart__legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 10px; color: var(--tx-2); }
+.chart__key { display: inline-flex; align-items: center; gap: 4px; }
+.chart__key i { display: inline-block; width: 12px; height: 12px; border: 1px solid rgba(255,255,255,.15); }
+
+/* ---- repair kit dialog ---- */
+.split.repairkit { width: 480px; }
+.repairkit .modal__body { display: flex; flex-direction: column; gap: 8px; }
+.repairkit .ammoload__row { min-width: 0; }
+.repairkit .ammoload__info { min-width: 0; }
+.repairkit .ammoload__name { white-space: normal; }
+.ammoload__row.is-static { border: 1px solid var(--line-1); }

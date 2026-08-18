@@ -204,6 +204,10 @@ Kedr-B와 PB는 소음형이라 원본의 `_silenced` 뱅크를 쓴다 — 게�
 이제 같은 뱅크의 `_distant` 변형을 −7dB로 재생한다(`ai.js:shoot`). 스캐브는 스폰 시
 티어별 후보에서 뱅크를 하나 뽑아 두므로 같은 개체는 계속 같은 총을 쓴다:
 
+> Saiga만 `_indoor_distant`가 없다. 예전엔 `saiga_outdoor_distant1`을 썼는데, 설치본에
+> 유일한 실내 원거리 녹음인 **`saiga_indoor_far1`**(2.54s)로 바꿔 나머지 뱅크의 실내
+> 정책과 맞췄다(2026-08-18).
+
 | 티어 | 후보 |
 |---|---|
 | 1 | mp133, akm, kedr |
@@ -320,13 +324,19 @@ SFX_PACK_KEY='aAzve0EY1zPMn9Z28Z-1rzq3hX_bh36z' python tools/pack_sfx.py
 | `ak74` | `ak74_magin_plastic` / `ak74_magout_plastic` | `ak74_slider_up`, `ak74_slider_down` | — | `weapons/ak74.bundle` |
 | `aksu` | AK-74의 것 | AK-74의 것 | `aksu_stock_open` / `aksu_stock_close` | `weapons/aksu.bundle` |
 | `akm` | `akm_magin_metal` / `akm_magout_metal` | `akms_slider_up`, `akms_slider_down` (ak74.bundle 안) | `akms_stock_unfold` / `akms_stock_fold` | `weapons/akm/instrumental.bundle` |
-| `kedr` | `kedr_magin` / `kedr_magout` | `kedr_slider_up`, `kedr_slider_down` | — | `weapons/kedr.bundle` |
+| `kedr` | `kedr_magin` / `kedr_magout` | `kedr_slider_up`, `kedr_slider_down` | `9A91_stock_unfold` / `9A91_stock_fold` (**빌림** — 같은 상부 접이식인 9A-91의 것, ak74.bundle 안. kedr.bundle에는 개머리판 클립이 없다) | `weapons/kedr.bundle` |
 | `pm` (PB·TT도 사용) | `pm_mag_in` / `pm_mag_out` | `pm_slider_out`, `pm_slider_in` | — | `weapons/pm.bundle` |
 | `mp133` | `mr133_shell_in_mag` / `mr133_shell_out_mag` | `mr133_pump_out`, `mr133_pump_in` | — | `weapons/mr133.bundle` |
 | `mp153` | MP-133의 셸 | `mr153_slider_up`, `mr153_slider_down` | — | `weapons/mr153.bundle` |
 | `saiga` | `saiga_magin_plastic` / `saiga_magout_plastic` | `saiga_slider_up`, `saiga_slider_down` | `saiga_stock_open` / `saiga_stock_close` | `weapons/saiga12.bundle` |
 
 TT와 PB는 설치본에 조작음이 아예 없다(총성만 있다) — Makarov의 것을 쓴다.
+
+> **접이식 개머리판 큐는 2026-08-18까지 한 번도 울린 적이 없었다.** 픽은 `fold_open_<뱅크>` /
+> `fold_close_<뱅크>`로 굽는데 `audio.js`의 `weaponFold`는 `fold_<뱅크>_open`을 불렀다.
+> `play()`가 모르는 큐를 조용히 무시하니 아무도 눈치채지 못했다. `audio.js` 쪽을 팩
+> 이름에 맞춰 고쳤고(`fold_${open|close}_${뱅크}`), `sfx_test.html`이 이제 items-db의
+> `wpn.fold`가 붙은 총마다 fold 쌍이 팩에 있는지 검사한다.
 
 | 큐 | 원본 클립 | 언제 |
 |---|---|---|
@@ -342,3 +352,89 @@ TT와 PB는 설치본에 조작음이 아예 없다(총성만 있다) — Makaro
 **파생**되어 자동으로 팩에 들어왔다(`_item_cues`) — 하드코딩한 게 아니다.
 
 현재 **210개 큐 / 409개 파일**, `pack.bin` 2.8 MiB. `tools/smoke.html` 191개 통과.
+
+---
+
+## 무기 동작 · 소음기 · 정비 (2026-08-18 추가, 2차)
+
+발사 이외의 방아쇠·조정간·점검·급탄·고장 큐와 소음기 장착 총성, 정비/조립/탄약 개봉
+효과음을 같은 설치본에서 뽑았다. 조작 뱅크 8종(`ak74 aksu akm kedr pm mp133 mp153
+saiga`)마다 `<종류>_<뱅크>` 이름으로 들어 있고, `audio.js`의 `HANDLING`이 총성 뱅크를
+조작 뱅크로 접는다(kedrb→kedr, pb·tt→pm). 픽 표는 `sfx_picks.py`의 `_ACTIONS`.
+
+### 동작 큐 — 뱅크별 원본 클립
+
+**빌림**은 굵게. 설치본의 커버리지가 총성보다 훨씬 좁아 표의 절반이 빌림이다.
+
+| 뱅크 | `dry_` 공이치기(빈 약실) | `selector_` 조정간 | `magcheck_` 탄창 확인 | `chambercheck_` 약실 확인 | `chamber_` / `unchamber_` 약실에 손으로 넣기/빼기 | `jam_` 고장 |
+|---|---|---|---|---|---|---|
+| `ak74` | `ak74_trigger_empty` | `ak74_fireselector_up`, `_down` | `ak74_magout_plastic` | **`saiga_slider_check`** | `ak74_round_in_chamber` / `ak74_round_out` | `ak74_slider_jam` |
+| `aksu` | **`ak74_trigger_empty`** | **`ak74_fireselector_*`** | **`ak74_magout_plastic`** | **`saiga_slider_check`** | **`ak74_round_in_chamber` / `ak74_round_out`** | **`ak74_slider_jam`** |
+| `akm` | **`ak74_trigger_empty`** | **`ak74_fireselector_*`** | `akm_magout_metal` | **`saiga_slider_check`** | **`ak74_round_in_chamber` / `ak74_round_out`** | **`ak74_slider_jam`** |
+| `kedr` | `kedr_trigger_empty` | `kedr_fireselector_up`, `_down` | `kedr_magout` | `kedr_slider_up_slow`, `kedr_slider_down_slow` | `kedr_round_in_chamber` / `kedr_round_out` | `kedr_slider_jam` |
+| `pm` (PB·TT) | `pm_trigger_empty` | — (단발) | `pm_mag_pullout` (1.6s라 trim 1.8) | `pm_catch_slider` | `pm_slider_in` / `pm_slider_out` (탄 클립이 없어 슬라이드로 대신) | `pm_slider_jammed`, `pm_shell_jammed` |
+| `mp133` | `mr133_trigger` | — | `mr133_magcover` (튜브 마개) | `mr133_pump_out` (펌프 반만) | `mr133_shell_in_port` / `mr133_shell_pickup` | **`saiga_slider_jam`** |
+| `mp153` | **`mr133_trigger`** | — | **`mr133_magcover`** | **`mr133_pump_out`** | **`mr133_shell_in_port` / `mr133_shell_pickup`** | **`saiga_slider_jam`** |
+| `saiga` | `saiga_trigger_empty` | — | `saiga_magout_plastic` | `saiga_slider_check` | `saiga_round_in_chamber` / `saiga_round_out` | `saiga_slider_jam` |
+
+- `saiga_slider_check`는 12개 뱅크를 통틀어 유일한 `_check` 슬라이드라 AK 셋이 빌린다.
+- `ak74_trigger_empty`는 유일한 AK 공이치기 클릭이고, `mr133_trigger`는 두 산탄총 번들을
+  통틀어 유일한 방아쇠 클립이다.
+- `magcheck_pm`은 원래 `pm_mag_pullout` + `pm_mag_pullin` 두 단계인데 추출기가 레이어를
+  **믹스**하지 이어붙이지는 않아서 pullout만 넣었다.
+- 조정간 큐는 items-db `wpn.fire`에 `fullauto`가 있는 총(AK-74N·AKM·AKS-74U·Kedr·Kedr-B)만.
+  VPO-136·권총·산탄총은 단발이라 큐가 없고 `sfx.fireSelector()`는 조용히 아무것도 안 한다.
+- 별도로 `jam_examined` = `battle_malfunction_examined`(resources.assets) — 고장을 살펴본
+  순간의 원본 스팅.
+
+모든 동작 큐는 조작 큐와 같은 trim [0, 1.2] / gain −4dB. `audio.js` 메서드:
+`weaponDry(tpl)` `fireSelector(tpl)` `magCheck(tpl)` `chamberCheck(tpl)`
+`chamberRound(tpl, loaded=true)` `weaponJam(tpl)`.
+
+> `dry_ak74`·`dry_saiga`는 결과 파일이 24ms다. 원본 `*_trigger_empty`(0.18s)는 클릭 두 번
+> 사이에 −50dB 아래 구간이 있는데, 추출기의 뒤쪽 무음 제거(`silenceremove`, RMS 창 검출)가
+> 두 번째 클릭까지 잘라낸다. 다른 짧은 클립(`ui_click` 0.07s)도 같은 공정을 거친 것이라
+> 관행대로 두었다. 살리려면 `extract_tarkov_sfx.py:transcode`의 두 `silenceremove`에
+> `detection=peak`를 붙이면 되는데(0.157s로 살아남는 걸 확인), 팩 전체의 꼬리 길이가
+> 함께 바뀌므로 이 문서 범위에서는 손대지 않았다.
+
+### 소음기 총성 — `fire_<뱅크>_sil` / `_sil_far`
+
+`sfx.fire(tpl, { suppressed: true })` / `sfx.hostileFire(tpl, { suppressed: true })`가
+해당 큐가 팩에 있을 때만 골라 쓴다. 없으면(PM은 소음기를 못 달고, Kedr는 소음형이
+`fire_kedrb`라는 별개 뱅크) 맨 총성이 그대로 난다. **플래그를 넘기지 않으면 예전과 완전히
+같다.** trim/gain은 `WEAPON_FIRE`와 동일(근접 [0,1.6] −3dB / 원거리 [0,1.8] −7dB).
+
+설치본이 "silenced"를 이름에 넣는 자리가 세 가지고 AK-74는 근접·원거리끼리도 다르다:
+
+| 큐 | 원본 클립 (근접 / 원거리) | 변형 | 번들 |
+|---|---|---|---|
+| `fire_ak74_sil` / `_sil_far` | `ak74_indoor_silenced_close_01–08` / `ak74_indoor_distant_silenced_01–08` | 8+8 | `ak74.bundle` |
+| `fire_aksu_sil` / `_sil_far` | `aksu_indoor_close_silenced_01–08` / `aksu_indoor_distant_silenced_01–08` | 8+8 | `aksu.bundle` |
+| `fire_akm_sil` / `_sil_far` | `akm_close_indoor_silenced_01–08` / `akm_distant_indoor_silenced_01–08` | 8+8 | `akm.bundle` |
+| `fire_mp133_sil` / `_sil_far` | `mr133_fire_silenced_indoor_close` / `_distant` | 1+1 | `mr133.bundle` |
+| `fire_mp153_sil` / `_sil_far` | `mr153_fire_silenced_indoor_close` / `_distant` | 1+1 | `mr153.bundle` |
+| `fire_saiga_sil` / `_sil_far` | `saiga_fire_silenced_indoor_close` / `_distant` | 1+1 | `saiga12.bundle` |
+| `fire_tt_sil` / `_sil_far` | **`pb_silenced_indoor_close1` / `pb_silenced_indoor_distant1`** (빌림 — `tt_*silenced*`가 없다) | 1+1 | `pb.bundle` |
+| `fire_pb_unsil` / `_unsil_far` | `pb_indoor_close1` / `pb_indoor_distant1` — PB는 기본 녹음이 소음형이라 **소음기를 뗀** 쪽이 별도 큐 | 1+1 | `pb.bundle` |
+
+`sfx.fire(tpl, { suppressed: false })`는 PB에서만 의미가 있고 `fire_pb_unsil`을 고른다.
+
+### 정비 · 조립 · 탄약 개봉
+
+| 큐 | 원본 클립 | 컨테이너 | `audio.js` |
+|---|---|---|---|
+| `repair_done` | `repair_complete` | resources.assets | `sfx.repairDone()` (ui 0.5) |
+| `repair_kit_use` | `spec_weaprep_use` | itemsounds.bundle | `sfx.repairKit()` |
+| `build_assemble` | `menu_weapon_assemble` | resources.assets | `sfx.buildAssemble()` (ui 0.5) |
+| `build_strip` | `menu_weapon_disassemble` | resources.assets | `sfx.buildStrip()` (ui 0.5) |
+| `ammo_unpack` | `ammo_pack_generic_use` | itemsounds.bundle | `sfx.ammoUnpack(tpl)` — 12게이지 외 전부 |
+| `ammo_unpack_12ga` | `ammo_shotgun_use` | itemsounds.bundle | `sfx.ammoUnpack(tpl)` — `tpl.cal`이 `12`로 시작할 때 |
+| `item_spec_weaprep_pickup` / `_drop` | `spec_weaprep_pickup` / `_drop` | itemsounds.bundle | `sfx.item(tpl, …)` — 무기 수리 키트의 ItemSound. `_item_cues()`가 만들 이름 그대로 명시해 두어 DB에 키트가 있으면 같은 키에 겹쳐 쓰인다 |
+
+`ammo_pack_generic`은 SPT 탄약 상자 202종의 ItemSound이고 `ammo_shotgun`은 12/70 RIP
+5발 상자 하나뿐이다. pickup/drop은 `_item_cues()`가 DB에서 파생한다.
+
+현재 **289개 큐 / 536개 파일**, `pack.bin` 3.19 MiB(3,343,882 B). `tools/sfx_test.html`
+88개 검사 중 84개 통과 — 실패 4건은 전부 이전부터 있던 것(`ui_back` 큐 없음, `ui_error`
+미사용, `looseloot` 컨테이너의 수색 루프·뚜껑 미매핑)이고 이 문서 범위 밖이다.

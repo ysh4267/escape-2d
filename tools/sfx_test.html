@@ -125,7 +125,12 @@ for (const fn of ['play', 'hasCue', 'setEnabled', 'setVolume', 'audioState', 'st
   check(`exports ${fn}`, typeof audio[fn] === 'function');
 }
 for (const m of ['footstep', 'halt', 'ui', 'trade', 'item', 'searchStart', 'searchStop',
-  'openContainer', 'use', 'fire', 'hostileFire', 'hit', 'impact', 'death', 'extract']) {
+  'openContainer', 'use', 'fire', 'hostileFire', 'hit', 'impact', 'death', 'extract',
+  // weapon handling and actions
+  'modding', 'modInstall', 'modRemove', 'ammoLoad', 'ammoUnload', 'weaponBolt', 'weaponFold',
+  'weaponDry', 'fireSelector', 'magCheck', 'chamberCheck', 'chamberRound', 'weaponJam',
+  // out of raid
+  'repairDone', 'repairKit', 'buildAssemble', 'buildStrip', 'ammoUnpack']) {
   check(`sfx.${m} exists`, typeof audio.sfx[m] === 'function');
 }
 // a cue with no audio behind it must be a quiet no-op, never a throw
@@ -137,7 +142,15 @@ try {
   audio.sfx.searchStop();
   audio.sfx.fire(null);
   audio.sfx.hostileFire(null);
+  audio.sfx.fire(null, { suppressed: true });
+  audio.sfx.hostileFire('garbage-bank', { suppressed: false });
   audio.sfx.ui('nope');
+  for (const m of ['weaponBolt', 'weaponDry', 'fireSelector', 'magCheck', 'chamberCheck',
+    'weaponJam']) audio.sfx[m](null);
+  audio.sfx.weaponFold(null, true);
+  audio.sfx.chamberRound(null, false);
+  audio.sfx.ammoUnpack(null);
+  audio.sfx.repairDone(); audio.sfx.repairKit(); audio.sfx.buildAssemble(); audio.sfx.buildStrip();
 } catch (e) { threw = e; }
 check('unknown cues are silent no-ops', !threw, threw && String(threw));
 
@@ -184,7 +197,7 @@ if (pack) {
   // These families are chosen at the call site rather than named in a literal
   // play('...') - by container material, weapon bank, item ItemSound, or what
   // the round landed on - so the scan above cannot see them.
-  const dynamic = /^(item_|search_|open_|fire_|step_|amb_|hit_|impact_|ricochet|magin_|magout_|bolt_|fold_|mod_install_|modding_|ammo_load|ammo_unload|shell_load|shell_unload)/;
+  const dynamic = /^(item_|search_|open_|fire_|step_|amb_|hit_|impact_|ricochet|magin_|magout_|bolt_|fold_|dry_|selector_|magcheck_|chambercheck_|chamber_|unchamber_|jam_|mod_install_|modding_|ammo_load|ammo_unload|ammo_unpack|shell_load|shell_unload)/;
   const unused = Object.keys(manifest).filter((c) => !dynamic.test(c) && !wanted.has(c));
   check('no shipped cue is dead weight', unused.length === 0, unused.join(','));
 
@@ -278,6 +291,71 @@ if (pack) {
     unbanked.map((g) => g.name).join(','));
   const badBank = [...byId.values()].filter((b) => !banks.includes(b));
   check('no weapon points at a bank that does not exist', badBank.length === 0, badBank.join(','));
+
+  // suppressed shots: `fire_<bank>_sil` / `_sil_far` come in pairs and only
+  // for real banks; the pb, recorded suppressed, has the reverse pair. The
+  // list of banks that must have one mirrors sfx_picks.py WEAPON_FIRE_SIL -
+  // every gun that can take a can except the Kedr, whose suppressed bank is
+  // kedrb, and the PM, which cannot mount one.
+  const silBanks = Object.keys(manifest).map((c) => c.match(/^fire_(\w+?)_sil$/)?.[1]).filter(Boolean);
+  const silOdd = silBanks.filter((b) => !banks.includes(b) || !manifest[`fire_${b}_sil_far`]);
+  const silOrphan = Object.keys(manifest).filter((c) => /_sil_far$/.test(c) && !manifest[c.replace(/_far$/, '')]);
+  check('every suppressed cue is a near/far pair on a real bank',
+    silOdd.length === 0 && silOrphan.length === 0, [...silOdd, ...silOrphan].join(','));
+  const SIL = ['ak74', 'aksu', 'akm', 'mp133', 'mp153', 'saiga', 'tt'];
+  const silGaps = SIL.filter((b) => !manifest[`fire_${b}_sil`] || !manifest[`fire_${b}_sil_far`]);
+  check('every bank that takes a suppressor has a suppressed pair', silGaps.length === 0, silGaps.join(','));
+  check('the PB has its bare-barrel pair', !!manifest.fire_pb_unsil && !!manifest.fire_pb_unsil_far);
+
+  // handling: every shot bank maps to a handling bank, and every handling
+  // bank carries the full set of action cues audio.js can ask it for
+  const handBlock = audioSrc.match(/const HANDLING = \{([\s\S]*?)\n\};/);
+  const handMap = new Map([...(handBlock ? handBlock[1] : '').matchAll(/(\w+):\s*'(\w+)'/g)]
+    .map((m) => [m[1], m[2]]));
+  const unhandled = banks.filter((b) => !handMap.has(b));
+  check('every shot bank has a handling bank', unhandled.length === 0, unhandled.join(','));
+  const hbanks = [...new Set(handMap.values())];
+  note(`${hbanks.length} handling banks: ${hbanks.join(', ')}`);
+  const KINDS = ['magin', 'magout', 'bolt', 'dry', 'magcheck', 'chambercheck', 'chamber', 'unchamber', 'jam'];
+  const handGaps = [];
+  for (const hb of hbanks) for (const k of KINDS) if (!manifest[`${k}_${hb}`]) handGaps.push(`${k}_${hb}`);
+  check('every handling bank has every action cue', handGaps.length === 0, handGaps.join(','));
+
+  // the optional kinds are driven by the weapon data: a folding stock needs a
+  // fold pair, a full-auto gun a selector cue. Both are read off items-db so
+  // adding a folder without its clips fails here instead of going silent.
+  const hbOf = (g) => handMap.get(byId.get(g.id)) || null;
+  const folders = guns.filter((g) => g.wpn?.fold);
+  const foldGaps = folders.filter((g) => {
+    const hb = hbOf(g);
+    return !hb || !manifest[`fold_open_${hb}`] || !manifest[`fold_close_${hb}`];
+  });
+  note(`${folders.length} folding stocks: ${folders.map((g) => g.key).join(', ')}`);
+  check('every folding stock has a fold pair', foldGaps.length === 0, foldGaps.map((g) => g.key).join(','));
+  const autos = guns.filter((g) => (g.wpn?.fire || []).includes('fullauto'));
+  const selGaps = autos.filter((g) => { const hb = hbOf(g); return !hb || !manifest[`selector_${hb}`]; });
+  note(`${autos.length} selective-fire guns: ${autos.map((g) => g.key).join(', ')}`);
+  check('every selective-fire gun has a selector cue', selGaps.length === 0, selGaps.map((g) => g.key).join(','));
+
+  // and the one-offs the actions and the out-of-raid work name
+  for (const cue of ['jam_examined', 'repair_done', 'repair_kit_use', 'build_assemble', 'build_strip',
+    'ammo_unpack', 'ammo_unpack_12ga']) {
+    check(`cue present: ${cue}`, !!manifest[cue]);
+  }
+
+  // drive every action through every real weapon template, the way the
+  // inventory will: nothing here may throw
+  let actThrew = null;
+  try {
+    for (const g of guns) {
+      audio.sfx.fire(g, { suppressed: true }); audio.sfx.hostileFire(g, { suppressed: false });
+      audio.sfx.weaponDry(g); audio.sfx.fireSelector(g); audio.sfx.magCheck(g);
+      audio.sfx.chamberCheck(g); audio.sfx.chamberRound(g, true); audio.sfx.chamberRound(g, false);
+      audio.sfx.weaponJam(g); audio.sfx.weaponBolt(g); audio.sfx.weaponFold(g, true);
+      audio.sfx.ammoUnpack(g);
+    }
+  } catch (e) { actThrew = e; }
+  check('weapon actions run on every template', !actThrew, actThrew && String(actThrew));
 } else {
   note('no pack answered — cue coverage cannot be checked');
 }

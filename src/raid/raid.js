@@ -499,7 +499,9 @@ export class Raid {
       if (!tpl) continue;
       const item = new Item(tpl.key, { stack: tpl.stack > 1 ? this.rng.int(1, Math.min(tpl.stack, 3)) : 1 });
       item.raidLoot = true;
+      for (const d of item.descendants()) d.raidLoot = true;
       if (tpl.dura != null) item.dura = Math.round(tpl.dura * this.rng.float(0.3, 1));
+      if (tpl.wpn?.maxDura) { const r = tpl.wpn.spawnDura || [30, 90]; item.dura = Math.round(this.rng.float(r[0], r[1])); }
       if (tpl.res) item.res = Math.round(tpl.res.max * this.rng.float(0.35, 1));
       const spot = c.grid.findSpot(item);
       if (spot) { c.grid.place(item, spot.x, spot.y, spot.rot); placed++; }
@@ -552,7 +554,9 @@ export class Raid {
         const pick = rng.weighted(pool, (e) => e[1]);
         if (!pick) break;
         const t = TPL[pick[0]];
-        if (t && (t.w <= c.grid.w && t.h <= c.grid.h || t.h <= c.grid.w && t.w <= c.grid.h)) {
+        // a gun arrives assembled, so it is its assembled size that has to fit
+        const tw = t?.presetSize?.[0] || t?.w, th = t?.presetSize?.[1] || t?.h;
+        if (t && (tw <= c.grid.w && th <= c.grid.h || th <= c.grid.w && tw <= c.grid.h)) {
           entry = pick;
           break;
         }
@@ -566,6 +570,8 @@ export class Raid {
       else if (tpl.stack > 1) stack = rng.int(1, Math.min(tpl.stack, 3));
       const item = new Item(key, { stack: clamp(stack, 1, tpl.stack) });
       item.raidLoot = true;
+      // the parts on a found gun are found in raid too
+      for (const d of item.descendants()) d.raidLoot = true;
       if (tpl.dura != null) item.dura = Math.round(tpl.dura * rng.float(0.3, 1));
       // a found gun is worn inside its template's spawn range, and more often
       // than not has something in the magazine; a loose magazine sometimes does
@@ -1037,7 +1043,21 @@ export class Raid {
       if (!tpl) continue;
       const it = new Item(entry[0]);
       it.raidLoot = true;
+      for (const d of it.descendants()) d.raidLoot = true;
       if (tpl.dura != null) it.dura = Math.round(tpl.dura * this.rng.float(0.2, 0.8));
+      // a scav's gun is a scav's gun: the ceiling itself is worn (the server
+      // rolls 85-100 for the max and 30-45 under it, never below 15%), and
+      // there is usually something in the magazine
+      if (tpl.wpn?.maxDura) {
+        const max = this.rng.int(85, 100);
+        it.maxDura = max;
+        it.dura = Math.max(Math.round(max * 0.15), max - this.rng.int(30, 45));
+        const mag = it.magazine;
+        if (mag && this.rng.chance(0.7)) {
+          const a = tpl.wpn.defAmmo || mag.tpl.ammoFilter?.[0];
+          if (a) mag.rounds.push({ t: a, n: this.rng.int(1, mag.tpl.magSize) });
+        }
+      }
       const spot = body.grid.findSpot(it);
       if (spot) body.grid.place(it, spot.x, spot.y, spot.rot);
     }

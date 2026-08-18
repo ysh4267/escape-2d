@@ -117,11 +117,53 @@ takes the chambered round first and cycles the next one in. Loaded magazines
 weigh what their rounds weigh and sell for what they are worth.
 
 Cartridges carry the full ballistic card — damage, penetration, armour damage,
-fragmentation, velocity, recoil and accuracy modifiers, bleed chances, tracer,
-misfire — read straight from the template. What those numbers do to a shot is
-the next pass; for now a round's own damage is what lands.
+fragmentation (and how many fragments), velocity and whether it is subsonic,
+recoil and accuracy modifiers, bleed chances, tracer, misfire and feed-failure
+chance, durability burn and heat — read straight from the template, plus a
+strip of the round's chance to go through a fresh plate of each armour class,
+on the penetration curve every calculator quotes off the client (`90%` at the
+plate's value, nothing fifteen under it). Right-click a round → CALIBER CHART
+for the wiki's table of every round of that calibre you have examined, coloured
+on the wiki's own six-step scale. What those numbers do to a shot is the next
+pass; for now a round's own damage is what lands.
 
-![modding](docs/modding.png)
+**Ammo packs and cases.** The 86 ammo packs (every `AmmoBox` whose round we
+carry — the 120-round 5.45 PS pack, the 20-round 7.62x39 boxes, the 16 and 50
+of 9x18, the 25 of 12/70) are items of their own, priced as their rounds and
+unpacked (right-click → UNPACK) into stacks; the ammo case and the two weapon
+cases (5×10 and 6×15 inside) file them as ammunition.
+
+**Builds.** BUILDS in the modding screen is the game's weapon-presets panel:
+the factory's builds of the gun (the default, and the alternates globals.json
+carries — the AKMB and AKMP, the 2k17 New Year AKM, the "Tactical" MP-133,
+the NERFGUN Saiga, the Brunner TT) and the ones you save under a name. Each is
+planned against what you own — parts already on the gun stay, loose parts in
+the stash go on, what is missing is listed with what the traders ask for it
+and can be bought in one go — previewed (ergonomics, recoil, MOA, weight, size)
+and ASSEMBLE takes the gun to exactly that tree, the parts that do not belong
+coming off into the stash. A slot's picker also lists what the traders sell
+for it, with BUY & INSTALL; while a slot is picked, the stash dims everything
+that does not fit it.
+
+**Repair.** A gun's ceiling is its own (`Repairable.MaxDurability`), and every
+repair grinds a little off it. Prapor, Skier and Mechanic have a REPAIR tab: a
+gun on the bench, a slider for the points, the price is the weapon's
+`RepairCost` × points × the trader's `repair_price_coef` for your loyalty
+level (Prapor 80–100%, Skier 110–140%, Mechanic 175–195% on top of the base),
+and the wear on the ceiling is a roll in the template's
+`Min/MaxRepairDegradation` (0–4%) times the trader's `quality` — Prapor cheap
+and rough (×1.2), Mechanic dear and careful (×0.7). The Weapon repair kit
+(1000 resource, 0.5 a point, its own 0–3.5% wear) does the same from the stash:
+right-click a worn gun → REPAIR WITH KIT, or the kit → USE ON WEAPON. Scav
+guns come with a worn ceiling (85–100, and 30–45 under it), as the server rolls
+them.
+
+| | |
+|---|---|
+| ![modding](docs/modding.png) | ![builds](docs/builds.png) |
+| the modding screen — a slot picked, the stash dimmed to what fits it, the traders' offers for the slot | BUILDS — factory and saved builds, planned against the stash |
+| ![repair](docs/repair.png) | ![ammo chart](docs/ammochart.png) |
+| Prapor's bench | the 7.62x39 chart |
 
 **The plant, all four storeys of it.** Tunnels, ground floor, the locker level
 and the rafters, each with its own walls, walkable surface, machinery and
@@ -299,7 +341,7 @@ python -m http.server 8777
 |---|---|
 | `tools/build_items.py` | builds `src/data/items-db.json` and downloads item artwork |
 | `tools/selection.py` | the curated item list the builder resolves |
-| `tools/weapons_expand.py` | expands the guns in the selection into every part, magazine and cartridge they can take, and reads the modding numbers, ballistics and default presets |
+| `tools/weapons_expand.py` | expands the guns in the selection into every part, magazine and cartridge they can take, and reads the modding numbers, ballistics, repair numbers, the default and alternate factory presets, the ammo packs, the repair kit and the weapon cases |
 | `tools/build_map.py` | extracts all four Factory storeys, finds every opening in them, derives the stairwell links, and folds in tarkov.dev's exits / locks / spawns / loot spots — all into `src/data/map-factory.json` |
 | `tools/pack_sfx.py` | compresses and seals the sound pack (and `--unpack` reverses it) |
 | `tools/sfx_picks.py` | which clip backs which cue |

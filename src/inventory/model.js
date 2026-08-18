@@ -22,6 +22,9 @@ import { getTpl } from '../data/items.js';
 
 export const MAX_NEST_DEPTH = 3;
 
+/** categories a grid filter treats as another: an ammo box files under ammo */
+const FILTER_ALIAS = { ammobox: 'ammo' };
+
 /** categories that may never be nested inside the given owner category */
 const NEST_DENY = {
   backpack: ['backpack', 'rig', 'secure'],
@@ -47,6 +50,12 @@ export class Item {
     this.examined = opts.examined ?? !!(tpl.known || tpl.alwaysExamined);
     this.res = opts.res ?? (tpl.res ? tpl.res.max : null);
     this.dura = opts.dura ?? (tpl.dura != null ? tpl.dura : (tpl.wpn?.maxDura ?? null));
+    /**
+     * the ceiling this particular item can be repaired back up to. Every repair
+     * grinds a little off it (Repairable.MaxDurability in the game), so it is
+     * per item, not per template.
+     */
+    this.maxDura = opts.maxDura ?? (tpl.wpn?.maxDura ?? tpl.dura ?? null);
     /**
      * cartridges in a magazine (or the internal tube of a shotgun): runs of
      * {t: ammo template key, n: count}, the LAST run is the top of the stack
@@ -228,23 +237,29 @@ export class Item {
     if (this.examined) o.e = 1;
     if (this.res != null) o.res = this.res;
     if (this.dura != null) o.d = this.dura;
+    if (this.maxDura != null && this.maxDura !== (this.tpl.wpn?.maxDura ?? this.tpl.dura ?? null)) o.md = this.maxDura;
     if (this.folded) o.fd = 1;
     if (this.rounds && this.rounds.length) o.rd = this.rounds.map((r) => [r.t, r.n]);
     if (this.chamber && this.chamber.length) o.ch = this.chamber.slice();
     if (this.grids) o.g = this.grids.map((g) => g.toJSON());
     if (this.slots) {
+      // always written, empty or not: a save without `m` is one from before
+      // guns had parts, and fromJSON tells the two apart by exactly this
       const m = {};
-      let any = false;
-      for (const sl of this.slots) if (sl.item) { m[sl.name] = sl.item.toJSON(); any = true; }
-      if (any) o.m = m;
+      for (const sl of this.slots) if (sl.item) m[sl.name] = sl.item.toJSON();
+      o.m = m;
     }
     return o;
   }
 
   static fromJSON(o) {
+    // a gun saved before parts existed carries no `m` at all: it comes back
+    // assembled to its preset rather than as a bare receiver, which is what
+    // the player had. Anything saved since carries `m`, even when empty.
+    const legacy = o.m === undefined;
     const it = new Item(o.t, {
       uid: o.uid, rot: o.r, stack: o.s, fir: o.f, examined: o.e,
-      res: o.res, dura: o.d, folded: o.fd, bare: true,
+      res: o.res, dura: o.d, maxDura: o.md, folded: o.fd, bare: !legacy,
     });
     if (o.g && it.grids) {
       o.g.forEach((gj, i) => { if (it.grids[i]) it.grids[i].loadJSON(gj); });
@@ -318,6 +333,7 @@ export class ModSlot {
       item.rot = 0;
       item.holder = { kind: 'mod', slot: this };
     }
+    footprintChanged(this.owner);
     return true;
   }
 
@@ -325,6 +341,11 @@ export class ModSlot {
     if (this.item && this.item.holder && this.item.holder.slot === this) this.item.holder = null;
     const old = this.item;
     this.item = null;
+    // a stock coming off a folded gun leaves nothing to be folded
+    if (old && this.owner.folded && this.name === (this.owner.tpl.wpn?.foldSlot || this.owner.tpl.mod?.foldSlot)) {
+      this.owner.folded = false;
+    }
+    footprintChanged(this.owner);
     return old;
   }
 
@@ -356,6 +377,10 @@ export function canInstall(slot, item) {
   if (slot.item && slot.item !== item && [...slot.item.allMods()].length) {
     return { ok: false, reason: 'remove the parts on the current one first' };
   }
+  // a part that stops the stock folding cannot go on while it is folded
+  if (root.folded && (item.tpl.mod?.blocksFold || [...item.allMods()].some((m) => m.tpl.mod?.blocksFold))) {
+    return { ok: false, reason: 'unfold the stock first' };
+  }
   // the assembled gun must still fit where it lies
   if (!fitsAfter(root, () => {
     const prev = slot.item;
@@ -379,6 +404,19 @@ export function fitsAfter(root, apply) {
     ok = h.grid.canPlace(root, h.x, h.y, root.rot, { ignore: root });
   } finally { undo(); }
   return ok;
+}
+
+/**
+ * A part went on or came off, or a stock folded: the gun's footprint moved,
+ * and the cell map of the grid it lies in has to follow. Without this the
+ * grid kept the cells of the OLD size - a gun that grew could have things
+ * dropped under its stock, one that shrank left phantom cells nothing could
+ * use until the next reload.
+ */
+export function footprintChanged(node) {
+  const root = node?.root;
+  const h = root?.holder;
+  if (h && h.kind === 'grid') h.grid.restamp(root);
 }
 
 // ---------------------------------------------------------
@@ -478,9 +516,10 @@ export class Grid {
     if (this.mayAccept && !this.mayAccept(item)) return false;
     const f = this.filter;
     if (!f) return true;
-    const cat = item.cat;
-    if (f.allow && !f.allow.includes(cat)) return false;
-    if (f.deny && f.deny.includes(cat)) return false;
+    // a box of rounds is rounds as far as a case is concerned
+    const cat = FILTER_ALIAS[item.cat] || item.cat;
+    if (f.allow && !f.allow.includes(cat) && !f.allow.includes(item.cat)) return false;
+    if (f.deny && (f.deny.includes(cat) || f.deny.includes(item.cat))) return false;
     return true;
   }
 
@@ -500,6 +539,28 @@ export class Grid {
       for (let dx = 0; dx < w; dx++) {
         const occ = this.cells[(y + dy) * this.w + (x + dx)];
         if (occ && (!ignore || !ignore.has(occ))) return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Re-stamp an item's cells at its current size: clear every cell that
+   * carries its uid, mark its footprint again from its top-left. Cells that
+   * another item holds are left alone - the caller checked the fit.
+   */
+  restamp(item) {
+    if (!this._items.has(item.uid)) return false;
+    const h = item.holder;
+    if (!h || h.kind !== 'grid' || h.grid !== this) return false;
+    for (let i = 0; i < this.cells.length; i++) if (this.cells[i] === item.uid) this.cells[i] = null;
+    const w = item.w, hh = item.h;
+    for (let dy = 0; dy < hh; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        const x = h.x + dx, y = h.y + dy;
+        if (x >= this.w || y >= this.h) continue;
+        const idx = y * this.w + x;
+        if (!this.cells[idx]) this.cells[idx] = item.uid;
       }
     }
     return true;

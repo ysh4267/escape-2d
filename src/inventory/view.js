@@ -94,7 +94,9 @@ export function renderItem(item, opts = {}) {
   // rounds in a magazine, or in the magazine of a gun
   if (item.isMag || (item.isWeapon && item.magazine)) {
     const mag = item.isMag ? item : item.magazine;
-    const n = mag.ammoCount + (item.chamber?.length || 0);
+    // the badge is the magazine's count, as in the game; the chambered round
+    // is on the card, not on the tile (a "31/30" reads as an error)
+    const n = mag.ammoCount;
     const cap = mag.tpl.magSize || 0;
     const badge = el('div', { class: 'item__ammo' }, `${n}/${cap}`);
     if (n === 0) badge.classList.add('is-dry');
@@ -140,6 +142,11 @@ function resourceBar(item) {
   }
   if (tpl.dura != null && item.dura != null) {
     const f = item.dura / tpl.dura;
+    return barNode('dura', f);
+  }
+  // guns keep their ceiling on the item (it wears down with each repair)
+  if (tpl.wpn?.maxDura && item.dura != null) {
+    const f = item.dura / (tpl.wpn.maxDura || 1);
     return barNode('dura', f);
   }
   return null;

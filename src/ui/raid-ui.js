@@ -15,7 +15,7 @@ import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
 import { openContainerWindow, refreshContainerWindows, closeAllContainerWindows } from '../inventory/window.js';
 import { openModdingWindow, closeAllModdingWindows, moddingContext } from '../inventory/modding.js';
 import { loadAmmoDialog, loadIntoDialog } from '../inventory/ammo-dialogs.js';
-import { unloadAmmo, toggleFold, canFold, magazineOf, roundsInWeapon, setInRaid } from '../inventory/weapon.js';
+import { unloadAmmo, toggleFold, canFold, magazineOf, roundsInWeapon, setInRaid, canDetachPart, unpackAmmoBox } from '../inventory/weapon.js';
 import { sfx, startAmbient, stopAmbient } from '../core/audio.js';
 import { dndContext, quickTransfer, isDragging } from '../inventory/dnd.js';
 import { setContextProvider, splitDialog, inspectDialog, confirmDialog } from '../inventory/dialogs.js';
@@ -489,6 +489,9 @@ export function closeOverlay() {
   if (overlayOpen) sfx.ui('close');
   overlayOpen = false;
   $('#raid-inventory').hidden = true;
+  // the floating panels belong to the overlay; they must not hang over the canvas
+  closeAllContainerWindows();
+  closeAllModdingWindows();
   if (raid) raid.closeLoot();
 }
 
@@ -578,16 +581,19 @@ function activateRaidContext() {
   dndContext.equipSlotFor = (item) => game.equipment.slotFor(item);
   dndContext.requestSplit = (item, cb) => splitDialog(item, cb);
   dndContext.onActivate = (item) => {
+    // loot still under the searching hand is not yours to open or strip yet
+    if (raid && !raid.isRevealed(item)) return;
     if (needsExamine(item)) examineNow(item);
     else if (item.isContainer) openContainerWindow(item);
     else if (item.isWeapon) openModdingWindow(item);
     else quickTransfer(item);
   };
-  // in raid, parts come out of and go back into what is carried
-  moddingContext.sources = () => [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()];
+  // in raid, parts come out of and go back into what is carried (the pouch too)
+  moddingContext.sources = () => [...game.equipment.allGrids(), ...game.equipment.nestedGrids()];
   setInRaid(true);
-  // loot that has not been uncovered yet cannot be touched
-  dndContext.canMove = (item) => (raid ? raid.isRevealed(item) : true);
+  // loot that has not been uncovered yet cannot be touched, and a vital part
+  // stays on its gun in the field however it is grabbed
+  dndContext.canMove = (item) => (raid ? raid.isRevealed(item) : true) && canDetachPart(item).ok;
   dndContext.onChange = () => {
     renderOverlay();
     emit(EV.INVENTORY_CHANGED);
@@ -636,7 +642,8 @@ function activateRaidContext() {
         run: () => { if (moveToSlot(item, slot).ok) dndContext.onChange(); },
       });
     }
-    actions.push({ label: 'TAKE / STOW', icon: 'sell', key: 'CTRL+CLICK', run: () => quickTransfer(item) });
+    const lock = canDetachPart(item);
+    actions.push({ label: 'TAKE / STOW', icon: 'sell', key: 'CTRL+CLICK', disabled: !lock.ok, run: () => quickTransfer(item) });
     actions.push({ label: 'INSPECT', icon: 'info', run: () => inspectDialog(item) });
     // guns, magazines and cartridges get the same handling as in the stash;
     // vital parts stay put in the field (weapon.js enforces it)
@@ -672,10 +679,21 @@ function activateRaidContext() {
         run: () => loadIntoDialog(item, [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()], () => dndContext.onChange()),
       });
     }
+    if (tpl.cat === 'ammobox') {
+      actions.push({
+        label: `UNPACK — ${tpl.box?.n || ''} ROUNDS`, icon: 'split',
+        run: () => {
+          const host = item.holder?.kind === 'grid' ? [item.holder.grid] : [];
+          const r = unpackAmmoBox(item, [...host, ...game.equipment.carryGrids(), ...game.equipment.nestedGrids()]);
+          if (!r.ok) raidToast(r.reason || 'No room for the rounds', 'warn');
+          dndContext.onChange();
+        },
+      });
+    }
     actions.push('-');
     actions.push({
-      label: 'DROP', icon: 'discard', danger: true,
-      run: () => { detach(item); dndContext.onChange(); },
+      label: 'DROP', icon: 'discard', danger: true, disabled: !lock.ok,
+      run: () => { if (!canDetachPart(item).ok) return; detach(item); dndContext.onChange(); },
     });
     return actions;
   });

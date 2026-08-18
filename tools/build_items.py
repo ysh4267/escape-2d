@@ -68,7 +68,7 @@ CAT_HINT = {
     '5b47574386f77428ca22b32f': 'facecover',
     '5b5f754a86f774094242f19b': 'mag',
     '5b47574386f77428ca22b33b': 'ammo',
-    '5b47574386f77428ca22b33c': 'ammo',
+    '5b47574386f77428ca22b33c': 'ammobox',
     '5b5f7a2386f774093f2ed3c4': 'grenade',
     '5b5f7a0886f77409407a7f96': 'melee',
     '5b5f792486f77447ed5636b3': 'pistol',
@@ -150,6 +150,7 @@ def webp_size(data):
         return (int.from_bytes(data[26:28], 'little') & 0x3FFF,
                 int.from_bytes(data[28:30], 'little') & 0x3FFF)
     return None
+
 
 
 # ---------------------------------------------------------
@@ -305,7 +306,7 @@ def main():
     expanded, ex_counts, tree_depth = wx.expand(raw_items, hb_items, en, sel_ids, seen_keys)
     for rec in expanded:
         resolved.append({'key': rec['key'], 'id': rec['id'], 'cat': rec['cat'], 'weight': 0.1,
-                         'stack': 1, 'extra': {}, 'query': rec['id'], 'how': 'tree',
+                         'stack': 1, 'extra': rec.get('extra', {}), 'query': rec['id'], 'how': 'tree',
                          'modType': rec['modType']})
         seen_ids[rec['id']] = rec['key']
     print('      weapon trees: +%s' % ', '.join(f'{v} {k}' for k, v in sorted(ex_counts.items())))
@@ -482,6 +483,10 @@ def main():
                     if pimg:
                         tpl['presetImg'] = pimg[0]
                         tpl['presetSize'] = [pimg[1], pimg[2]]
+                # the factory's other builds of the same gun, for the build screen
+                alts = wx.alt_presets(globals_db, iid, key_of, en)
+                if alts:
+                    tpl['wpn']['alts'] = alts
                 if props.get('weapFireType'):
                     tpl['fire'] = list(props['weapFireType'])
             elif kcat == 'mag':

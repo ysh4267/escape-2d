@@ -10,7 +10,7 @@
 import { $, el } from '../core/util.js';
 import { renderItem, gridCellAt } from './view.js';
 import { moveToGrid, moveToSlot, autoPlace, detach, splitStack } from './model.js';
-import { canLoad, loadAmmo, installMod, magazineOf } from './weapon.js';
+import { canLoad, loadAmmo, installMod, magazineOf, canDetachPart } from './weapon.js';
 import { sfx } from '../core/audio.js';
 import { emit, on, EV } from '../core/events.js';
 
@@ -81,6 +81,8 @@ function onPointerDown(e) {
   if (node.closest('.drag-layer')) return;
   const item = node._item;
   if (!dndContext.canMove(item)) return;
+  // a vital part in raid does not leave its gun by dragging either
+  if (!canDetachPart(item).ok) { emit(EV.TOAST, { kind: 'warn', text: 'Cannot be removed in raid' }); return; }
 
   // alt+click = quick equip into the matching character slot
   if (e.altKey) {
