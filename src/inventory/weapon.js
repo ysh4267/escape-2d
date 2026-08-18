@@ -27,7 +27,7 @@ const MOA_PER_COI = 100 / 2.908 * 2;
  * field is what the game shows in the same place, and `parts` lists what
  * each installed part contributed so the UI can colour deltas.
  */
-export function weaponStats(item) {
+export function weaponStats(item, opts = {}) {
   const tpl = item.tpl;
   const wpn = tpl.wpn || {};
   let ergo = tpl.ergo || 0;
@@ -36,7 +36,8 @@ export function weaponStats(item) {
   let heat = 1, cool = 1, dburn = wpn.dburn || 1;
   let barrelMoa = 0, zoom = 0;
   const parts = [];
-  for (const m of item.allMods()) {
+  const swap = opts.swap || null;
+  for (const m of statMods(item, swap)) {
     const md = m.tpl.mod || {};
     const e = m.tpl.ergo ?? md.ergo ?? 0;
     ergo += e;
@@ -59,7 +60,8 @@ export function weaponStats(item) {
   const ammoKey = item.chamber?.[0] || item.magazine?.topRound || wpn.defAmmo || null;
   const ammo = ammoKey ? getTpl(ammoKey) : null;
   const speed = ammo?.ammo?.speed || 0;
-  const mag = item.magazine;
+  const mag = swap && swap.slot.name === 'mod_magazine' ? (swap.part || null) : item.magazine;
+  const weight = swap ? item.weight - (swap.slot.item?.weight || 0) + (swap.part?.weight || 0) : item.weight;
   return {
     ergo: Math.round(ergo),
     vRecoil: Math.round((wpn.rup || 0) * recoilMul),
@@ -71,7 +73,7 @@ export function weaponStats(item) {
     velPct: Math.round(velPct * 10) / 10,
     sightRange: sightRange || wpn.range || wpn.ironRange || 0,
     effDist: wpn.eff || 0,
-    weight: item.weight,
+    weight,
     fire: wpn.fire || tpl.fire || [],
     rpm: wpn.rpm || tpl.rpm || 0,
     cal: tpl.cal || null,
@@ -90,6 +92,20 @@ export function weaponStats(item) {
     parts,
     missing: missingVital(item),
   };
+}
+
+/**
+ * The parts the stats are aggregated over. `swap` = {slot, part} reads the
+ * gun as it would be with `part` in `slot` instead of what is there (and
+ * nothing at all when part is null) - the modding screen's hover preview.
+ */
+function statMods(item, swap) {
+  const all = [...item.allMods()];
+  if (!swap) return all;
+  const skip = new Set(swap.slot.item ? [swap.slot.item, ...swap.slot.item.allMods()] : []);
+  const out = all.filter((m) => !skip.has(m));
+  if (swap.part) out.push(swap.part, ...swap.part.allMods());
+  return out;
 }
 
 /** required slots without a part, anywhere in the tree */

@@ -69,6 +69,8 @@ export async function loadItems() {
     tpl.tier = valueTier(tpl);
     tpl.imgUrl = tpl.img ? ITEM_ASSET_DIR + tpl.img : null;
     tpl.presetImgUrl = tpl.presetImg ? ITEM_ASSET_DIR + tpl.presetImg : null;
+    // the large render of the default preset, for the modding screen's stage
+    tpl.presetLgUrl = tpl.presetImg ? ITEM_ASSET_DIR + tpl.presetImg.replace('-preset.webp', '-preset-lg.webp') : null;
     TPL[key] = tpl;
     BY_ID[tpl.id] = tpl;
   }

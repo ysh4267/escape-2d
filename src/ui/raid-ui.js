@@ -13,7 +13,7 @@ import { game, saveSoon, registerSaveSection } from '../core/state.js';
 import { renderGrid, renderItem } from '../inventory/view.js';
 import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
 import { openContainerWindow, refreshContainerWindows, closeAllContainerWindows } from '../inventory/window.js';
-import { openModdingWindow, closeAllModdingWindows, moddingContext } from '../inventory/modding.js';
+import { openModdingWindow, closeAllModdingWindows, moddingContext, moddingScreenOpen } from '../inventory/modding.js';
 import { loadAmmoDialog, loadIntoDialog } from '../inventory/ammo-dialogs.js';
 import { unloadAmmo, toggleFold, canFold, magazineOf, setInRaid, canDetachPart, unpackAmmoBox } from '../inventory/weapon.js';
 import { MODE_LABEL, weaponModes } from '../raid/gunplay.js';
@@ -503,6 +503,8 @@ function onKeyDown(e) {
   // a modal or an in-flight drag owns Escape (and every other key) — the raid
   // handler acting too would close the dialog AND pop the leave prompt
   if (!$('#modal-root').hidden || isDragging()) return;
+  // the modding screen owns the keyboard while it is up (Escape closes it, not the raid)
+  if (moddingScreenOpen()) return;
 
   if (e.key === 'Tab') {
     e.preventDefault();

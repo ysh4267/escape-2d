@@ -474,72 +474,9 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .item--incomplete { outline: 1px dashed var(--danger); outline-offset: -2px; }
 .item--folded .item__img { filter: saturate(.7); }
 
-/* ---------------- modding window ---------------- */
-.cwin--mod { min-width: 720px; max-width: min(1080px, 96vw); }
-.cwin--mod .cwin__body.mod {
-  display: grid; grid-template-columns: 300px 1fr; gap: 14px;
-  align-items: start; max-height: 78vh; overflow: auto;
-}
-.mod__left { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.mod__art {
-  display: flex; align-items: center; justify-content: center;
-  min-height: 90px; padding: 10px;
-  background: rgba(0,0,0,.45); border: 1px solid var(--line-1);
-  overflow: hidden;
-}
-.mod__art .item { position: relative; left: auto; top: auto; max-width: 100%; }
-.mod__warn {
-  display: flex; gap: 6px; align-items: center;
-  padding: 6px 8px; font-size: 11px; color: var(--warn);
-  border: 1px solid var(--warn-soft); background: rgba(217,164,65,.08);
-}
-.mod__stats {
-  display: grid; grid-template-columns: auto 1fr; gap: 3px 12px;
-  margin: 0; font-size: 11px; font-variant-numeric: tabular-nums;
-}
-.mod__stats dt { color: var(--tx-3); letter-spacing: .08em; font-size: 10px; align-self: center; }
-.mod__stats dd { margin: 0; color: var(--tx-0); text-align: right; display: flex; justify-content: flex-end; gap: 6px; }
-.mod__delta { font-size: 10px; }
-.mod__delta.is-good { color: var(--ok); }
-.mod__delta.is-bad { color: var(--danger); }
-.mod__actions { display: flex; flex-wrap: wrap; gap: 5px; }
+/* ---------------- modding screen: the candidate rows and build rows it shares (the screen itself is styles/modding.css) ---------------- */
 
-.mod__tree { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.mslot-row {
-  display: grid; grid-template-columns: 170px auto 1fr 22px; gap: 8px; align-items: center;
-  padding: 3px 4px; border: 1px solid transparent;
-}
-.mslot-row--child { background: rgba(0,0,0,.18); }
-.mslot-row:hover { background: rgba(88,111,124,.08); border-color: var(--line-1); }
-.mslot-row__name { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 10px; letter-spacing: .1em; color: var(--tx-2); }
-.mslot-row__name small { color: var(--tx-0); letter-spacing: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mslot-row__req { color: var(--danger); font-style: normal; margin-left: 3px; }
-.mslot-row__stat { font-size: 10px; color: var(--tx-3); font-variant-numeric: tabular-nums; min-width: 0; }
-.mslot-row__x { color: var(--tx-3); display: flex; padding: 3px; border-radius: 2px; }
-.mslot-row__x:hover { color: var(--danger); background: rgba(194,96,79,.16); }
-.mslot {
-  width: calc(var(--cell) * 2 + 2px); height: calc(var(--cell) + 2px);
-  min-height: 0; display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-}
-.mslot .item.mslot__tile {
-  position: relative; left: auto; top: auto;
-  max-width: calc(var(--cell) * 2); max-height: var(--cell);
-  width: auto !important; height: auto !important;
-}
-.mslot .item.mslot__tile .item__img { position: relative; width: auto; height: auto; max-height: var(--cell); max-width: calc(var(--cell) * 2); }
-.mslot .slot__hint .ico { width: 16px; height: 16px; }
 
-.mod__pick {
-  grid-column: 1 / -1;
-  border: 1px solid var(--line-2); background: rgba(0,0,0,.35);
-}
-.mod__pick-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 8px; font-size: 10px; letter-spacing: .12em; color: var(--pale);
-  border-bottom: 1px solid var(--line-1);
-}
-.mod__pick-list { display: flex; flex-direction: column; max-height: 260px; overflow: auto; }
 .mod__cand {
   display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
   padding: 5px 8px; border-bottom: 1px solid var(--line-1);
@@ -573,17 +510,11 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .mod__cand--shop .mod__cand-name { color: var(--tx-1); }
 .mod__cand-art { display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.35); border: 1px solid var(--line-1); }
 .mod__cand-art img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.mslot-row.is-picked { border-color: var(--line-2); background: rgba(184,219,217,.06); }
 /* while a slot is picked, the stash shows what fits it */
 body.is-modpick .item.is-nofit { opacity: .28; filter: grayscale(.7); }
 body.is-modpick .item.is-fit { outline: 1px solid var(--ok); outline-offset: -1px; box-shadow: 0 0 0 1px rgba(127,179,154,.35) inset; }
 
 /* ---- builds panel ---- */
-.mod__builds {
-  min-width: 0; align-self: stretch;
-  border: 1px solid var(--line-2); background: rgba(0,0,0,.35);
-}
-.mod__build-save { display: flex; gap: 6px; align-items: center; }
 .mod__build-name {
   width: 200px; padding: 3px 6px; font: inherit; font-size: 11px;
   background: rgba(0,0,0,.4); border: 1px solid var(--line-1); color: var(--tx-0);

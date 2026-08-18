@@ -12,6 +12,9 @@ Chrome's --virtual-time-budget headless runs never let that derivation finish
 the sealed models are only reachable in a headless run on the real clock.
 Playwright's Chromium is that.
 
+The modding screen no longer shows the 3D button (the viewer is parked); the
+?dev=view3d hook still opens the viewer beside the screen for this script.
+
 What it asserts:
   - ?dev=view3d opens the modding screen on an AKM and its 3D window
   - the gun assembles: meshes > 0 and no "no model for" note
@@ -78,8 +81,8 @@ def main() -> int:
         check("hovering a part names it", "MAGAZINE" in hint or "—" in hint, hint)
         pg.mouse.down(); time.sleep(0.05); pg.mouse.up()
         time.sleep(0.8)
-        pick = pg.evaluate("() => document.querySelector('.mod__pick-head span')?.textContent || ''")
-        check("clicking the magazine picks its slot in the modding screen", "COMPATIBLE PARTS" in pick, pick)
+        pick = pg.evaluate("() => document.querySelector('.modpick__head span')?.textContent || ''")
+        check("clicking the magazine picks its slot in the modding screen", "COMPATIBLE" in pick, pick)
 
         # a rear sight from the stash onto the receiver
         src = pg.evaluate("() => { const n = Array.from(document.querySelectorAll('#stash-host .item')).find(n => n._item?.tplId === 'mod_akmb_rs'); if (!n) return null; const r = n.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }")
@@ -90,8 +93,8 @@ def main() -> int:
             for i in range(1, 16):
                 pg.mouse.move(src[0] + (tx - src[0]) * i / 15, src[1] + (ty - src[1]) * i / 15); time.sleep(0.03)
             time.sleep(0.3); pg.mouse.up(); time.sleep(1.5)
-            fitted = pg.evaluate("() => Array.from(document.querySelectorAll('.mslot-row__name small')).map(n => n.textContent)")
-            check("the sight dropped on the 3D view went onto the gun", "AKMB RS" in fitted, ",".join(fitted))
+            fitted = pg.evaluate("() => Array.from(document.querySelectorAll('.modbox:not(.is-empty)')).map(n => n.dataset.slot)")
+            check("the sight dropped on the 3D view went onto the gun", "mod_sight_rear" in fitted, ",".join(fitted))
         check("no page errors", not errors, "; ".join(errors)[:300])
         if args.shot:
             pg.screenshot(path=args.shot)

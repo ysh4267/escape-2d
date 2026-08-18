@@ -1,28 +1,30 @@
 // =========================================================
 // weapon modding screen
 //
-// A floating panel like the container windows, laid out the way the game's
-// own is: the assembled gun and its numbers on the left, the tree of slots on
-// the right. Every slot is a real drop target (`.slot` with `_slot`, the same
-// hit-test drag & drop uses for the character's gear), so a part is dragged
-// out of the stash straight onto the slot it goes in; clicking a slot lists
-// what you own that fits it - and what the traders sell for it, with a BUY &
-// INSTALL for the hideout - and, while a slot is picked, the stash dims
-// everything that does not fit it. A part is taken off with the cross beside
-// it or by dragging it out into a grid.
+// The game's own WEAPON MODDING screen, as it is (0.14): a full-screen view
+// with the gun large in the middle, its slots hung around it as small boxes
+// joined to their pins on the gun by thin lines - a box per slot with the
+// part's icon and short name in it, NONE when empty, sub-slots branching off
+// the part they sit on - the numbers in a table bottom-left (durability,
+// weight, ergonomics, accuracy, sighting range, recoil, velocity, fire modes,
+// calibre, fire rate, effective distance), three filters under the title
+// (Vital parts / Functional mods / Gear mods) that hide whole families of
+// slots, PRESETS on the bar and BACK bottom-right.
 //
-// The stats re-aggregate on every change, with the delta each part
-// contributes shown against the bare receiver, so swapping a stock reads
-// immediately as "-2 ergo, -8% recoil".
+// Clicking a slot box drops down what you own that fits it (and what the
+// traders sell for it, with BUY & INSTALL in the hideout); hovering a
+// candidate previews the numbers it would give. Every box is a real drop
+// target too (`.slot` with `_slot`, the same hit-test the drag layer uses),
+// and a part comes off with the cross on its box or through its own menu.
 //
-// BUILDS opens the game's weapon-presets panel under the tree: the factory's
-// builds of this gun and the ones the player saved, each with what is on
-// hand / missing / for sale, a stat preview, ASSEMBLE and BUY MISSING.
+// The 3D viewer (viewer3d.js) is parked: nothing here loads it. The stage
+// shows the large render of the gun's factory preset; the boxes are the
+// truth about what is on it.
 // =========================================================
 
-import { el, icon, fmtWeight, fmtNum } from '../core/util.js';
+import { el, icon, fmtWeight, fmtNum, clamp } from '../core/util.js';
 import { renderItem } from './view.js';
-import { ensureHost, makeDraggable, bringToFront, isLive, registerWindowRefresher, flash } from './window.js';
+import { isLive, registerWindowRefresher } from './window.js';
 import { sfx } from '../core/audio.js';
 import { emit, EV } from '../core/events.js';
 import { dndContext } from './dnd.js';
@@ -30,6 +32,7 @@ import { isKnown } from './examine.js';
 import { FIRE_MODE_LABEL, modTypeLabel, getTpl, FX } from '../data/items.js';
 import { game, isExamined } from '../core/state.js';
 import { openModal } from './dialogs.js';
+import { Item } from './model.js';
 import {
   weaponStats, installMod, uninstallMod, compatibleParts, toggleFold, canFold,
   unloadAmmo, chamberRound, clearChamber, describeRounds, stripWeapon, inRaid,
@@ -38,14 +41,14 @@ import {
   buildsFor, factoryBuilds, saveBuild, deleteBuild, planBuild, shoppingList,
   buyMissing, assembleBuild, previewStats, offersFor, buyOffer,
 } from './builds.js';
-import { openViewer3D, hasModel, loadModelIndex, modelsAvailable, closeAllViewers3D } from './viewer3d.js';
 
-// the 3D viewer needs to know which items have a model; the index is small
-loadModelIndex().then(() => refreshModdingWindows());
+/** the 3D viewer is parked for now: no button, nothing loaded */
+const VIEW3D = false;
 
-/** uid -> { item, node, body, pick, builds } */
+/** uid -> rec; one screen at a time, kept as a map for the callers that ask by uid */
 const open = new Map();
 let registered = false;
+let resizeBound = false;
 
 /**
  * Where the modding screen looks for parts and where removed parts go. The
@@ -56,57 +59,131 @@ export const moddingContext = {
   sources: () => [],
 };
 
-const CUR_SYM = { RUB: '₽', USD: '$', EUR: '€' };
-const fmt2 = (v) => { const r = Math.round(v * 100) / 100; return String(r); };
+/** the three filters under the title, remembered across screens */
+const FILTERS = { vital: true, functional: true, gear: true };
 
+const CUR_SYM = { RUB: '₽', USD: '$', EUR: '€' };
+const fmt2 = (v) => String(Math.round(v * 100) / 100);
+
+// ---------------------------------------------------------
+// the slot families and where their pins sit on the gun
+// ---------------------------------------------------------
+/** slot -> the family the filters know it by (a required slot is vital regardless) */
+function familyOf(slot) {
+  if (slot.required) return 'vital';
+  const n = slot.name;
+  if (/^mod_(magazine|stock|mount|launcher|charge|equipment)/.test(n)) return 'gear';
+  return 'functional';
+}
+
+/** the boxes of these families hang under the gun; everything else above */
+const BELOW = /^mod_(magazine|pistol_grip|launcher|foregrip|bipod|tactical|mag_shaft)/;
+
+/** the slot-type placeholder icons the game draws over an empty box */
+const SLOT_ICON = {
+  mod_barrel: 'barrel', mod_bipod: 'bipod', mod_charge: 'charge', mod_equipment: 'equipment', mod_foregrip: 'foregrip',
+  mod_gas_block: 'gas_block', mod_handguard: 'handguard', mod_launcher: 'launcher', mod_magazine: 'magazine',
+  mod_mount: 'mount', mod_muzzle: 'muzzle', mod_nvg: 'nvg', mod_pistol_grip: 'pistol_grip', mod_reciever: 'reciever',
+  mod_scope: 'scope', mod_sight_front: 'sight_front', mod_sight_rear: 'sight_rear', mod_stock: 'stock', mod_tactical: 'tactical',
+};
+function slotIcon(slot) {
+  const base = slot.name.replace(/_\d+$/, '');
+  const k = SLOT_ICON[base] || SLOT_ICON[Object.keys(SLOT_ICON).find((s) => base.startsWith(s))] || null;
+  return k ? `assets/ui/slots/mod_${k}.png` : null;
+}
+
+/**
+ * Where a top-level slot's pin sits on the preset render, as fractions of the
+ * image box, by the shape of the gun. The renders all point the muzzle
+ * left; a rifle's receiver sits a little right of centre, a pistol's slide
+ * runs along the top, a tube shotgun's magazine is under the barrel.
+ */
+const ANCHORS = {
+  rifle: {
+    mod_muzzle: [0.035, 0.44], mod_barrel: [0.17, 0.46], mod_sight_front: [0.13, 0.33], mod_gas_block: [0.31, 0.42],
+    mod_handguard: [0.41, 0.55], mod_reciever: [0.68, 0.33], mod_sight_rear: [0.50, 0.30], mod_scope: [0.63, 0.25],
+    mod_charge: [0.75, 0.42], mod_magazine: [0.55, 0.76], mod_pistol_grip: [0.665, 0.70], mod_stock: [0.90, 0.46],
+    mod_launcher: [0.42, 0.68], mod_foregrip: [0.42, 0.66], mod_mount: [0.60, 0.47], mod_tactical: [0.36, 0.60],
+    mod_equipment: [0.5, 0.5], mod_bipod: [0.3, 0.63], mod_nvg: [0.6, 0.25],
+  },
+  pistol: {
+    mod_muzzle: [0.33, 0.24], mod_barrel: [0.40, 0.24], mod_reciever: [0.50, 0.22], mod_sight_front: [0.36, 0.17],
+    mod_sight_rear: [0.62, 0.17], mod_magazine: [0.60, 0.88], mod_pistol_grip: [0.63, 0.58], mod_tactical: [0.40, 0.42],
+    mod_mount: [0.42, 0.38], mod_stock: [0.72, 0.45], mod_charge: [0.66, 0.24], mod_scope: [0.5, 0.15],
+  },
+  smg: {
+    mod_muzzle: [0.06, 0.44], mod_barrel: [0.2, 0.45], mod_sight_front: [0.15, 0.34], mod_reciever: [0.55, 0.40],
+    mod_sight_rear: [0.5, 0.33], mod_scope: [0.55, 0.28], mod_charge: [0.66, 0.42], mod_magazine: [0.5, 0.78],
+    mod_pistol_grip: [0.62, 0.66], mod_stock: [0.86, 0.38], mod_mount: [0.45, 0.36], mod_tactical: [0.3, 0.6],
+    mod_handguard: [0.32, 0.5], mod_gas_block: [0.28, 0.44],
+  },
+  shotgun: {
+    mod_muzzle: [0.025, 0.46], mod_barrel: [0.18, 0.46], mod_handguard: [0.38, 0.56], mod_magazine: [0.28, 0.63],
+    mod_reciever: [0.60, 0.46], mod_sight_rear: [0.62, 0.35], mod_scope: [0.62, 0.30], mod_mount: [0.6, 0.35],
+    mod_stock: [0.87, 0.5], mod_pistol_grip: [0.72, 0.63], mod_charge: [0.63, 0.56], mod_tactical: [0.35, 0.63],
+    mod_launcher: [0.4, 0.66], mod_sight_front: [0.08, 0.36], mod_gas_block: [0.3, 0.44],
+  },
+};
+/** guns whose render does not read like their class */
+const ANCHOR_SHAPE = { w_saiga: 'rifle', w_kedr: 'smg', w_kedrb: 'smg', w_pb: 'pistol', w_pm: 'pistol', w_tt: 'pistol' };
+function anchorsFor(item) {
+  const cls = item.tpl.wpn?.cls || '';
+  const shape = ANCHOR_SHAPE[item.tpl.key] || (cls === 'pistol' ? 'pistol' : cls === 'smg' ? 'smg' : cls === 'shotgun' ? 'shotgun' : 'rifle');
+  return ANCHORS[shape];
+}
+function anchorOf(item, slot) {
+  const table = anchorsFor(item);
+  const base = slot.name.replace(/_\d+$/, '');
+  const a = table[base] || table[Object.keys(table).find((k) => base.startsWith(k))] || [0.5, 0.5];
+  // mod_mount_000 / _001 / ... share a pin: step them along the gun
+  const n = /_(\d+)$/.exec(slot.name);
+  return n ? [a[0] + parseInt(n[1], 10) * 0.05, a[1]] : a;
+}
+/** how much of the stage's width the render takes, by shape (a pistol's render is mostly margin) */
+const SHAPE_SCALE = { pistol: 0.75, smg: 0.9 };
+
+// ---------------------------------------------------------
+// open / close
+// ---------------------------------------------------------
 export function openModdingWindow(item, opts = {}) {
   if (!item || !item.hasMods || !isKnown(item)) return null;
   const root = item.root;
   const existing = open.get(root.uid);
   if (existing) {
     if (opts.builds != null) { existing.builds = !!opts.builds; render(existing); }
-    bringToFront(existing.node); flash(existing.node); return existing.node;
+    return existing.node;
   }
+  // one screen at a time: another gun's screen gives way
+  for (const uid of Array.from(open.keys())) closeModdingWindow(uid, { quiet: true });
   if (!registered) { registerWindowRefresher(refreshModdingWindows); registered = true; }
+  if (!resizeBound) {
+    resizeBound = true;
+    let t = 0;
+    window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { for (const r of open.values()) render(r); }, 80); });
+    document.addEventListener('keydown', onKey, true);
+  }
 
-  const layer = ensureHost();
-  const node = el('div', { class: 'cwin cwin--mod', dataset: { uid: root.uid } });
-  const head = el('div', { class: 'cwin__head' },
-    icon('crosshair'),
-    el('span', { class: 'cwin__title' }, 'MODDING'),
-    el('span', { class: 'cwin__meta' }, ''),
-    el('button', {
-      class: 'cwin__close', title: 'Close',
-      onclick: (e) => { e.stopPropagation(); closeModdingWindow(root.uid); },
-    }, icon('close', 'ico ico--sm')));
-  const body = el('div', { class: 'cwin__body mod' });
-  node.append(head, body);
-  const i = open.size % 5;
-  node.style.left = `${140 + i * 30}px`;
-  node.style.top = `${80 + i * 30}px`;
-  makeDraggable(node, head);
-  node.addEventListener('pointerdown', () => bringToFront(node), true);
-  layer.append(node);
-  open.set(root.uid, { item: root, node, body, pick: null, builds: !!opts.builds, buildName: '' });
-  bringToFront(node);
-  render(open.get(root.uid));
+  const node = el('div', { class: 'modscreen', dataset: { uid: root.uid } });
+  document.body.append(node);
+  const rec = {
+    item: root, node, pick: null, builds: !!opts.builds, buildName: '', hover: null, imgSize: null,
+  };
+  open.set(root.uid, rec);
+  render(rec);
   sfx.modding(true);
   return node;
 }
 
-export function closeModdingWindow(uid) {
+export function closeModdingWindow(uid, { quiet = false } = {}) {
   const rec = open.get(uid);
   if (!rec) return;
   rec.node.remove();
   open.delete(uid);
-  clearHighlight();
-  sfx.modding(false);
+  if (!quiet) sfx.modding(false);
 }
 
 export function closeAllModdingWindows() {
   for (const uid of Array.from(open.keys())) { open.get(uid).node.remove(); open.delete(uid); }
-  clearHighlight();
-  closeAllViewers3D();
 }
 
 export function refreshModdingWindows() {
@@ -114,7 +191,25 @@ export function refreshModdingWindows() {
     if (!isLive(rec.item) || !isKnown(rec.item)) { rec.node.remove(); open.delete(uid); continue; }
     render(rec);
   }
-  if (!open.size) clearHighlight();
+}
+
+/** is a modding screen up (the raid's key handler stands aside while it is) */
+export function moddingScreenOpen() { return open.size > 0; }
+
+function onKey(e) {
+  if (!open.size) return;
+  if (e.target.tagName === 'INPUT') { if (e.key === 'Escape') e.target.blur(); return; }
+  if (e.key === 'Escape') {
+    // a modal above the screen owns Escape
+    const modal = document.getElementById('modal-root');
+    if (modal && !modal.hidden) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const rec = [...open.values()][0];
+    if (rec.pick) { rec.pick = null; render(rec); return; }
+    if (rec.builds) { rec.builds = false; render(rec); return; }
+    closeModdingWindow(rec.item.uid);
+  }
 }
 
 // ---------------------------------------------------------
@@ -122,152 +217,267 @@ function changed() {
   dndContext.onChange();
 }
 
+/**
+ * The whole screen, rebuilt: title, filters, the stage with the gun and its
+ * slot boxes, the stats table, the bar. Rebuilding on every change is cheap
+ * at this size and keeps every box a fresh, correct drop target.
+ */
 function render(rec) {
-  const { item, node, body } = rec;
+  const { item, node } = rec;
   const st = weaponStats(item);
-  body.replaceChildren();
-  node.querySelector('.cwin__title').textContent = `MODDING — ${item.tpl.name}`;
-  node.querySelector('.cwin__meta').textContent = `${fmtWeight(item.weight)} kg`;
-
-  // ---- left: the gun and its numbers ----
-  const left = el('div', { class: 'mod__left' });
-  const art = el('div', { class: 'mod__art' });
-  const tile = renderItem(item, { static: true });
-  tile.style.width = `calc(var(--cell) * ${item.fw} * 0.9)`;
-  tile.style.height = `calc(var(--cell) * ${item.fh} * 0.9)`;
-  art.append(tile);
-  left.append(art);
-
-  if (st.missing.length) {
-    left.append(el('div', { class: 'mod__warn' },
-      icon('warn', 'ico ico--sm'),
-      el('span', {}, `Missing vital parts: ${st.missing.map((s) => s.label).join(', ')}`)));
-  }
-
-  const dl = el('dl', { class: 'mod__stats' });
-  const row = (k, v, delta = null, good = null) => {
-    const dd = el('dd', {}, String(v));
-    if (delta != null && delta !== 0) {
-      const d = el('span', { class: `mod__delta ${good ? 'is-good' : 'is-bad'}` },
-        `${typeof delta === 'number' && delta > 0 ? '+' : ''}${delta}`);
-      dd.append(d);
-    }
-    dl.append(el('dt', {}, k), dd);
-  };
-  const base = item.tpl;
-  const wpn = base.wpn || {};
   const isGun = item.isWeapon;
-  row('ERGONOMICS', st.ergo, st.ergo - (base.ergo || 0), st.ergo >= (base.ergo || 0));
-  if (isGun) {
-    row('VERTICAL RECOIL', st.vRecoil, st.recoilPct ? `${st.recoilPct}%` : null, st.recoilPct < 0);
-    row('HORIZONTAL RECOIL', st.hRecoil, st.recoilPct ? `${st.recoilPct}%` : null, st.recoilPct < 0);
-    if (st.moa != null) row('ACCURACY', `${st.moa} MOA`, st.accPct ? `${st.accPct}%` : null, st.accPct < 0);
-    if (st.velocity) row('MUZZLE VELOCITY', `${st.velocity} m/s`, st.velPct ? `${st.velPct}%` : null, st.velPct > 0);
-    row('SIGHTING RANGE', `${st.sightRange} m`);
-    if (st.zoom) row('MAGNIFICATION', `${st.zoom}x`);
-    if (st.effDist) row('EFFECTIVE DISTANCE', `${st.effDist} m`);
-    row('FIRE RATE', `${st.rpm} rpm`);
-    row('FIRE MODES', st.fire.map((f) => FIRE_MODE_LABEL[f] || f).join(' / ') || '—');
-    if (st.cal) row('CALIBER', st.cal);
-    const mag = item.magazine;
-    row('MAGAZINE', mag ? `${st.magRounds}/${st.magCap}` : 'none');
-    if (item.chamber) row('CHAMBER', st.chambered ? (st.ammo?.short || 'loaded') : 'empty');
-    if (st.maxDura) row('DURABILITY', `${fmt2(st.dura ?? st.maxDura)} / ${fmt2(st.maxDura)}`);
-    if (st.dburn && st.dburn !== 1) row('DURABILITY BURN', `${st.dburn > 1 ? '+' : ''}${Math.round((st.dburn - 1) * 100)}%`);
-    if (wpn.malf) row('MALFUNCTION', `${(wpn.malf * 100).toFixed(1)}%`);
-  } else {
-    if (st.recoilPct) row('RECOIL', `${st.recoilPct}%`);
-    if (st.accPct) row('ACCURACY', `${st.accPct}%`);
-    if (st.sightRange) row('SIGHTING RANGE', `${st.sightRange} m`);
-  }
-  row('WEIGHT', `${fmtWeight(st.weight)} kg`);
-  row('SIZE', st.size);
-  left.append(dl);
+  node.replaceChildren();
+  node.append(el('div', { class: 'modscreen__bg' }));
 
-  // actions on the gun itself
-  const acts = el('div', { class: 'mod__actions' });
-  const btn = (label, fn, disabled = false, title = '') => el('button', {
-    class: 'btn btn--sm', disabled, title,
-    onclick: () => { const r = fn(); if (r && r.ok === false) toast(r.reason); changed(); },
-  }, label);
-  if (wpn.fold) {
-    const cf = canFold(item);
-    acts.append(btn(item.folded ? 'UNFOLD STOCK' : 'FOLD STOCK', () => toggleFold(item), !cf.ok, cf.reason || ''));
-  }
-  const mag = item.magazine;
-  if (mag) {
-    acts.append(btn('UNLOAD AMMO', () => unloadAmmo(item, moddingContext.sources()), mag.ammoCount === 0));
-    if (!item.modSlot('mod_magazine')?.required) {
-      acts.append(btn('REMOVE MAG', () => uninstallMod(item.modSlot('mod_magazine'), moddingContext.sources())));
-    }
-  }
-  if (item.chamber) {
-    if (item.chamber.length) acts.append(btn('CLEAR CHAMBER', () => clearChamber(item, moddingContext.sources())));
-    else acts.append(btn('CHAMBER A ROUND', () => chamberRound(item), !mag || mag.ammoCount === 0));
-  }
-  acts.append(btn('STRIP ALL PARTS', () => {
-    const n = stripWeapon(item, moddingContext.sources()).length;
-    return n ? { ok: true } : { ok: false, reason: 'no room to strip into' };
-  }, ![...item.allMods()].length));
-  const showBuilds = rec.builds && isGun && !inRaid;
-  if (isGun && !inRaid) {
-    acts.append(el('button', {
-      class: `btn btn--sm${showBuilds ? ' btn--primary' : ''}`,
-      title: showBuilds ? 'Back to the parts tree' : 'Saved and factory builds of this weapon',
-      onclick: () => { rec.builds = !rec.builds; rec.pick = null; render(rec); },
-    }, showBuilds ? 'PARTS' : 'BUILDS'));
-  }
-  if (modelsAvailable() && hasModel(item.tpl)) {
-    acts.append(el('button', {
-      class: 'btn btn--sm', title: 'The assembled gun in three dimensions - click a part there to pick its slot here',
-      onclick: () => openViewerFor(rec),
-    }, '3D'));
-  }
-  left.append(acts);
-  body.append(left);
+  // ---- title and filters ----
+  node.append(el('header', { class: 'modscreen__head' },
+    el('div', { class: 'modscreen__title' },
+      icon('crosshair', 'ico ico--lg'),
+      el('div', {}, el('h1', {}, isGun ? 'WEAPON MODDING' : 'MODDING'), el('div', { class: 'modscreen__sub' }, item.tpl.name))),
+    el('div', { class: 'modscreen__filters' },
+      filterBox(rec, 'vital', 'Vital parts'),
+      filterBox(rec, 'functional', 'Functional mods'),
+      filterBox(rec, 'gear', 'Gear mods'))));
 
-  // ---- right: the slot tree, or the builds panel in its place ----
-  if (showBuilds) {
-    body.append(renderBuilds(rec));
-    applyHighlight();
-    return;
-  }
-  const right = el('div', { class: 'mod__tree' });
-  renderTree(rec, item, right, 0);
-  body.append(right);
+  // ---- the stage ----
+  const stage = el('div', { class: 'modscreen__stage' });
+  node.append(stage);
+  rec.stage = stage;
 
-  // the compatibility picker for a clicked slot, if one is open
-  if (rec.pick && rec.pick.slot) {
-    const still = [...walkSlots(item)].includes(rec.pick.slot);
-    if (!still) rec.pick = null;
-    else {
-      const picker = renderPicker(rec, rec.pick.slot);
-      body.append(picker);
-      // a long tree pushes the picker below the fold: bring it up on a fresh pick
-      if (rec.pickFresh) { rec.pickFresh = false; setTimeout(() => picker.scrollIntoView({ block: 'nearest' }), 0); }
-    }
-  }
-  applyHighlight();
+  // ---- the numbers ----
+  node.append(renderStats(rec, st));
+
+  // ---- the bar: actions on the gun, presets, back ----
+  node.append(renderBar(rec, st));
+
+  if (rec.builds && isGun && !inRaid) node.append(renderBuilds(rec));
+
+  // the stage needs its size; lay it out once it is in the document
+  layoutStage(rec);
 }
 
-/** the 3D window for this modding record: a click on a part there picks its slot here */
-function openViewerFor(rec) {
-  return openViewer3D(rec.item, {
-    onPick: (slot) => {
-      if (!slot || !open.has(rec.item.uid)) return;
-      rec.builds = false;
-      rec.pick = { slot }; rec.pickFresh = true;
-      render(rec);
-    },
+function filterBox(rec, key, label) {
+  const cb = el('input', { type: 'checkbox' });
+  cb.checked = FILTERS[key];
+  cb.addEventListener('change', () => { FILTERS[key] = cb.checked; sfx.ui('click'); render(rec); });
+  return el('label', { class: 'modscreen__filter' }, cb, el('span', {}, label));
+}
+
+// ---------------------------------------------------------
+// the stage: the gun, its pins, the boxes and the lines between them
+// ---------------------------------------------------------
+const BOX = 74;          // a slot box, px
+const GAP = 14;          // between boxes in a lane
+const LANE = 108;        // between lanes
+const PIN_CLEAR = 34;    // from the gun's edge to the first lane
+
+function layoutStage(rec) {
+  const { item, stage } = rec;
+  stage.replaceChildren();
+  const rect = stage.getBoundingClientRect();
+  if (rect.width < 50 || rect.height < 50) { requestAnimationFrame(() => layoutStage(rec)); return; }
+  const W = rect.width, H = rect.height;
+
+  // ---- the render of the gun ----
+  const tpl = item.tpl;
+  const src = item.isWeapon ? (tpl.presetLgUrl || tpl.presetImgUrl || tpl.imgUrl) : tpl.imgUrl;
+  const aspect = rec.imgSize ? rec.imgSize[0] / rec.imgSize[1] : (tpl.presetSize ? tpl.presetSize[0] / tpl.presetSize[1] : 2.5);
+  // how deep the tree goes above and below decides how much room the gun gets
+  const tree = collectBoxes(rec);
+  const lanesUp = tree.reduce((n, b) => (b.side === 'top' ? Math.max(n, b.depth + 1) : n), 0);
+  const lanesDown = tree.reduce((n, b) => (b.side === 'bottom' ? Math.max(n, b.depth + 1) : n), 0);
+  const roomUp = lanesUp ? PIN_CLEAR + lanesUp * LANE : 20;
+  const roomDown = lanesDown ? PIN_CLEAR + lanesDown * LANE : 20;
+  const shape = ANCHOR_SHAPE[item.tpl.key] || (item.tpl.wpn?.cls === 'pistol' ? 'pistol' : item.tpl.wpn?.cls === 'smg' ? 'smg' : 'rifle');
+  let gw = Math.min(W * 0.6, 1180) * (SHAPE_SCALE[shape] || 1);
+  let gh = gw / aspect;
+  const maxH = Math.max(160, H - roomUp - roomDown);
+  if (gh > maxH) { gh = maxH; gw = gh * aspect; }
+  const gx = (W - gw) / 2;
+  // sit the gun where the lanes leave it room, centred when there is spare
+  const spare = H - roomUp - roomDown - gh;
+  const gy = roomUp + Math.max(0, spare) / 2;
+  const gun = { x: gx, y: gy, w: gw, h: gh };
+
+  const img = el('img', { class: 'modscreen__gun', src, alt: '', draggable: 'false' });
+  img.style.left = `${gx}px`; img.style.top = `${gy}px`; img.style.width = `${gw}px`; img.style.height = `${gh}px`;
+  if (!rec.imgSize) {
+    img.addEventListener('load', () => {
+      if (img.naturalWidth && img.naturalHeight) { rec.imgSize = [img.naturalWidth, img.naturalHeight]; layoutStage(rec); }
+    }, { once: true });
+  }
+  stage.append(img);
+
+  // ---- boxes: pins on the gun, lanes above and below ----
+  for (const b of tree) {
+    if (b.depth === 0) {
+      const [ax, ay] = anchorOf(item, b.slot);
+      b.pin = [gun.x + ax * gun.w, gun.y + ay * gun.h];
+      b.tx = b.pin[0];
+    }
+  }
+  const laneY = (side, depth) => (side === 'top'
+    ? gun.y - PIN_CLEAR - (depth + 1) * LANE + (LANE - BOX) / 2
+    : gun.y + gun.h + PIN_CLEAR + depth * LANE + (LANE - BOX) / 2 - 10);
+  // children want to sit under their parent, fanned out
+  const byDepth = [...tree].sort((a, b) => a.depth - b.depth);
+  for (const b of byDepth) {
+    if (b.depth === 0) continue;
+    const sibs = b.parent.children;
+    const i = sibs.indexOf(b);
+    b.tx = b.parent.tx + (i - (sibs.length - 1) / 2) * (BOX + GAP);
+  }
+  // resolve overlaps lane by lane
+  const lanes = new Map();
+  for (const b of tree) {
+    const k = `${b.side}:${b.depth}`;
+    if (!lanes.has(k)) lanes.set(k, []);
+    lanes.get(k).push(b);
+  }
+  for (const [k, list] of lanes) {
+    const [side, depthS] = k.split(':');
+    const y = clamp(laneY(side, +depthS), 6, H - BOX - 6);
+    list.sort((a, b) => a.tx - b.tx);
+    // left to right, then pull the whole lane back toward where it wanted to be
+    let x = -Infinity;
+    for (const b of list) { b.x = Math.max(b.tx - BOX / 2, x + GAP); x = b.x + BOX; }
+    const drift = list.reduce((n, b) => n + (b.x - (b.tx - BOX / 2)), 0) / list.length;
+    for (const b of list) { b.x -= drift; b.y = y; }
+    // and inside the stage
+    const minX = 8, maxX = W - BOX - 8;
+    const first = list[0].x, last = list[list.length - 1].x;
+    if (first < minX) for (const b of list) b.x += minX - first;
+    else if (last > maxX) for (const b of list) b.x -= last - maxX;
+    for (const b of list) b.x = clamp(b.x, minX, maxX);
+    // the pull may have re-overlapped a crowded lane: one more sweep
+    x = -Infinity;
+    for (const b of list) { b.x = Math.max(b.x, x + GAP); x = b.x + BOX; }
+  }
+
+  // ---- lines and pins ----
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'modscreen__lines');
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  const line = (x1, y1, x2, y2, cls) => {
+    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('x1', x1); l.setAttribute('y1', y1); l.setAttribute('x2', x2); l.setAttribute('y2', y2);
+    l.setAttribute('class', cls);
+    svg.append(l);
+    return l;
+  };
+  for (const b of tree) {
+    const filled = !!b.slot.item;
+    const cls = `modline${filled ? ' is-filled' : ''}${b.slot.required && !filled ? ' is-vital' : ''}${rec.pick?.slot === b.slot ? ' is-picked' : ''}`;
+    const bx = b.x + BOX / 2;
+    const near = b.side === 'top' ? b.y + BOX : b.y;   // the box edge facing the gun
+    if (b.depth === 0) {
+      b.line = line(b.pin[0], b.pin[1], bx, near, cls);
+    } else {
+      const px = b.parent.x + BOX / 2;
+      const py = b.side === 'top' ? b.parent.y : b.parent.y + BOX;
+      b.line = line(px, py, bx, near, cls);
+    }
+  }
+  stage.append(svg);
+  const pinned = tree.filter((b) => b.depth === 0).sort((a, b) => a.pin[0] - b.pin[0]);
+  pinned.forEach((b, i) => {
+    const filled = !!b.slot.item;
+    // labels alternate above and below along the gun so neighbours do not collide
+    const pin = el('div', {
+      class: `modpin${filled ? ' is-filled' : ''}${b.slot.required && !filled ? ' is-vital' : ''} ${i % 2 ? 'is-down' : 'is-up'}`,
+      title: b.slot.label,
+    }, el('i'), el('span', {}, b.slot.label.toUpperCase()));
+    pin.style.left = `${b.pin[0]}px`; pin.style.top = `${b.pin[1]}px`;
+    pin.addEventListener('click', () => togglePick(rec, b.slot));
+    stage.append(pin);
   });
+
+  // ---- the boxes ----
+  for (const b of tree) stage.append(renderBox(rec, b));
+
+  // ---- the dropdown for a picked slot ----
+  if (rec.pick && rec.pick.slot) {
+    const b = tree.find((x) => x.slot === rec.pick.slot);
+    if (!b) rec.pick = null;
+    else stage.append(renderPicker(rec, b, { W, H }));
+  }
 }
 
-function* walkSlots(item) {
-  if (!item.slots) return;
-  for (const sl of item.slots) { yield sl; if (sl.item) yield* walkSlots(sl.item); }
+/**
+ * The slots to show, as a flat list of box records with parent links: every
+ * slot of the gun, then of each part, in tree order, minus the families the
+ * filters hide (a hidden family takes its subtree with it).
+ */
+function collectBoxes(rec) {
+  const out = [];
+  const walk = (holder, parent, depth, side) => {
+    if (!holder.slots) return;
+    for (const sl of holder.slots) {
+      if (!FILTERS[familyOf(sl)]) continue;
+      const s = parent ? parent.side : (BELOW.test(sl.name) ? 'bottom' : 'top');
+      const b = { slot: sl, depth, side: s, parent, children: [], tx: 0, x: 0, y: 0 };
+      out.push(b);
+      if (parent) parent.children.push(b);
+      if (sl.item) walk(sl.item, b, depth + 1, s);
+    }
+    void side;
+  };
+  walk(rec.item, null, 0, 'top');
+  return out;
 }
 
-/** the short stat line a part shows in the tree and the picker */
+function togglePick(rec, slot) {
+  rec.pick = rec.pick?.slot === slot ? null : { slot };
+  rec.hover = null;
+  sfx.ui('click');
+  render(rec);
+}
+
+/** one slot box: the part in it (or NONE), its short name, the type icon over it */
+function renderBox(rec, b) {
+  const sl = b.slot;
+  const box = el('div', {
+    class: `modbox slot${sl.item ? '' : ' is-empty'}${sl.required && !sl.item ? ' is-vital' : ''}${rec.pick?.slot === sl ? ' is-picked' : ''}`,
+    dataset: { slot: sl.name },
+    title: sl.item ? (isKnown(sl.item) ? sl.item.tpl.name : 'Unknown item') : `${sl.label} — click for compatible parts, or drop one here`,
+  });
+  box._slot = sl;
+  box.style.left = `${b.x}px`; box.style.top = `${b.y}px`;
+  const ic = slotIcon(sl);
+  if (ic) box.append(el('img', { class: 'modbox__type', src: ic, alt: '', draggable: 'false' }));
+  if (sl.item) {
+    const t = renderItem(sl.item, { static: true, noName: true });
+    t.classList.add('modbox__tile');
+    box.append(t);
+    // the sprite carries its own short name in the corner, as the game's do;
+    // only an unexamined part needs a word over it
+    if (!isKnown(sl.item)) box.append(el('span', { class: 'modbox__name' }, '?'));
+    if (sl.item.isMag) box.append(el('span', { class: 'modbox__count' }, `${sl.item.ammoCount}/${sl.item.tpl.magSize}`));
+    box.append(el('button', {
+      class: 'modbox__x', title: inRaid && sl.item.tpl.mod?.noRaidMod ? 'Cannot be removed in raid' : 'Remove',
+      onclick: (e) => {
+        e.stopPropagation();
+        const r = uninstallMod(sl, moddingContext.sources());
+        if (!r.ok) toast(r.reason);
+        else sfx.ui('click');
+        changed();
+      },
+    }, icon('close', 'ico ico--sm')));
+  } else {
+    box.append(el('span', { class: 'modbox__name' }, 'NONE'));
+  }
+  box.append(el('span', { class: 'modbox__label' }, sl.label.toUpperCase()));
+  box.addEventListener('click', (e) => {
+    if (e.target.closest('.modbox__x')) return;
+    if (e.target.closest('.item') && sl.item && e.detail > 1) return;   // a double-click on the tile is its own thing
+    togglePick(rec, sl);
+  });
+  box.addEventListener('mouseenter', () => { b.line?.classList.add('is-hover'); });
+  box.addEventListener('mouseleave', () => { b.line?.classList.remove('is-hover'); });
+  return box;
+}
+
+/** the short stat line a part shows in the dropdown */
 function partBits(it) {
   const md = it.tpl.mod || {};
   const bits = [];
@@ -284,78 +494,28 @@ function partBits(it) {
     bits.push(`${it.ammoCount}/${it.tpl.magSize} · ${describeRounds(it)}`);
     const mg = it.tpl.mag || {};
     if (mg.load) bits.push(`load ${mg.load > 0 ? '+' : ''}${mg.load}%`);
-    if (mg.check) bits.push(`check ${mg.check > 0 ? '+' : ''}${mg.check}%`);
   }
   return bits;
 }
 
-function renderTree(rec, item, host, depth) {
-  if (!item.slots) return;
-  for (const sl of item.slots) {
-    const row = el('div', { class: 'mslot-row', dataset: { depth: String(depth) } });
-    if (depth) row.classList.add('mslot-row--child');
-    if (rec.pick?.slot === sl) row.classList.add('is-picked');
-    const name = el('div', { class: 'mslot-row__name', style: { paddingLeft: `${depth * 14}px` } },
-      el('span', {}, (depth ? '└ ' : '') + sl.label.toUpperCase()),
-      sl.required ? el('i', { class: 'mslot-row__req', title: 'Vital part' }, '*') : null);
-    if (sl.item) name.append(el('small', {}, isKnown(sl.item) ? sl.item.tpl.short : '?'));
-    row.append(name);
-    let statNode = null;
-
-    // the drop target — a real .slot with a ModSlot on it
-    const box = el('div', { class: 'slot mslot', dataset: { slot: sl.name } });
-    box._slot = sl;
-    if (sl.item) {
-      const t = renderItem(sl.item, { static: true, noName: true });
-      t.classList.add('mslot__tile');
-      box.append(t);
-      const bits = partBits(sl.item);
-      if (inRaid && sl.item.tpl.mod?.noRaidMod) bits.push('locked in raid');
-      statNode = el('div', { class: 'mslot-row__stat' }, bits.join(' · '));
-    } else {
-      box.classList.add('is-empty');
-      box.append(el('div', { class: 'slot__hint' }, icon('box')));
-      box.title = 'Click for compatible parts, or drop one here';
-    }
-    box.addEventListener('click', (e) => {
-      if (e.target.closest('.item') && sl.item) return;   // clicks on the tile belong to dnd / menu
-      rec.pick = rec.pick?.slot === sl ? null : { slot: sl };
-      rec.pickFresh = !!rec.pick;
-      render(rec);
-    });
-    row.append(box, statNode || el('div', { class: 'mslot-row__stat' }, sl.required && !sl.item ? 'vital part missing' : ''));
-
-    if (sl.item) {
-      row.append(el('button', {
-        class: 'mslot-row__x', title: 'Remove',
-        onclick: (e) => {
-          e.stopPropagation();
-          const r = uninstallMod(sl, moddingContext.sources());
-          if (!r.ok) toast(r.reason);
-          changed();
-        },
-      }, icon('close', 'ico ico--sm')));
-    }
-    host.append(row);
-    if (sl.item) renderTree(rec, sl.item, host, depth + 1);
-  }
-}
-
 // ---------------------------------------------------------
-// the picker: what fits the slot - owned, and for sale
+// the dropdown: what fits the slot - owned, and for sale
 // ---------------------------------------------------------
-function renderPicker(rec, slot) {
-  const box = el('div', { class: 'mod__pick' });
-  box.append(el('div', { class: 'mod__pick-head' },
-    el('span', {}, `${slot.label.toUpperCase()} — COMPATIBLE PARTS`),
+function renderPicker(rec, b, { W, H }) {
+  const slot = b.slot;
+  const box = el('div', { class: 'modpick' });
+  box.append(el('div', { class: 'modpick__head' },
+    el('span', {}, `${slot.label.toUpperCase()} — COMPATIBLE`),
     el('button', { class: 'cwin__close', onclick: () => { rec.pick = null; render(rec); } }, icon('close', 'ico ico--sm'))));
-  const list = el('div', { class: 'mod__pick-list' });
+  const list = el('div', { class: 'modpick__list' });
   const found = compatibleParts(slot, moddingContext.sources());
   list.append(el('div', { class: 'mod__pick-sub' }, `YOU OWN · ${found.length}`));
   if (!found.length) {
     list.append(el('div', { class: 'empty-note' },
       `NOTHING THAT FITS · ${slot.def.f.length} PART${slot.def.f.length === 1 ? '' : 'S'} EXIST FOR THIS SLOT`));
   }
+  const preview = (part) => { rec.hover = { slot, part }; updateStats(rec); };
+  const unpreview = () => { rec.hover = null; updateStats(rec); };
   for (const { item, check } of found) {
     const rowEl = el('div', { class: `mod__cand${check.ok ? '' : ' is-bad'}` });
     const t = renderItem(item, { static: true, noName: true });
@@ -367,18 +527,23 @@ function renderPicker(rec, slot) {
       el('div', { class: 'mod__cand-stat' }, check.ok ? (bits.join(' · ') || modTypeLabel(item.tpl)) : check.reason)));
     rowEl.append(el('button', {
       class: 'btn btn--sm btn--primary', disabled: !check.ok,
-      onclick: () => {
+      onclick: (e) => {
+        e.stopPropagation();
         const r = installMod(slot, item, moddingContext.sources());
         if (!r.ok) toast(r.reason);
-        rec.pick = null;
+        else sfx.ui('click');
+        rec.pick = null; rec.hover = null;
         changed();
       },
     }, 'INSTALL'));
+    if (check.ok) {
+      rowEl.addEventListener('mouseenter', () => preview(item));
+      rowEl.addEventListener('mouseleave', unpreview);
+    }
     list.append(rowEl);
   }
 
-  // what the traders sell for this slot - the game highlights those on the
-  // build screen; here they are listed, and can be bought straight onto the gun
+  // what the traders sell for this slot, bought straight onto the gun
   if (!inRaid) {
     const owned = new Set(found.map((f) => f.item.tplId));
     const forSale = [];
@@ -413,60 +578,167 @@ function renderPicker(rec, slot) {
         rowEl.append(el('button', {
           class: 'btn btn--sm', disabled: offer.locked || offer.stock < 1,
           title: 'Buy it into the stash and put it on',
-          onclick: () => {
+          onclick: (e) => {
+            e.stopPropagation();
             const r = buyOffer(offer, 1, moddingContext.sources());
             if (!r.ok) { toast(r.reason); return; }
             const part = r.items[0];
             const ins = installMod(slot, part, moddingContext.sources());
             if (!ins.ok) toast(`Bought, but not fitted: ${ins.reason}`);
             else toast(`Bought and fitted ${tpl.short}`, 'ok');
-            rec.pick = null;
+            rec.pick = null; rec.hover = null;
             changed();
           },
         }, 'BUY & INSTALL'));
+        // the preview reads the template through a throwaway item
+        rowEl.addEventListener('mouseenter', () => preview(new Item(key)));
+        rowEl.addEventListener('mouseleave', unpreview);
         list.append(rowEl);
       }
     }
   }
   box.append(list);
+
+  // under the box, or over it when the bottom of the stage is near; over
+  // the stats table (bottom-left) the list stops short of it
+  const PW = 360, STATS_W = 410, STATS_H = 340;
+  const x = clamp(b.x + BOX / 2 - PW / 2, 8, W - PW - 8);
+  const floor = x < STATS_W ? H - STATS_H : H;
+  box.style.left = `${x}px`;
+  const below = b.y + BOX + 8;
+  if (floor - below >= 220) { box.style.top = `${below}px`; box.style.maxHeight = `${floor - below - 8}px`; }
+  else { box.style.bottom = `${H - b.y + 8}px`; box.style.maxHeight = `${Math.max(160, b.y - 16)}px`; box.classList.add('is-above'); }
+  box.addEventListener('click', (e) => e.stopPropagation());
   return box;
 }
 
 // ---------------------------------------------------------
-// stash highlighting while a slot is picked
+// the numbers, bottom-left
 // ---------------------------------------------------------
-let highlighted = false;
-function applyHighlight() {
-  const picks = [...open.values()].map((r) => r.pick?.slot).filter(Boolean);
-  if (!picks.length) { if (highlighted) clearHighlight(); return; }
-  highlighted = true;
-  const nodes = document.querySelectorAll('.item');
-  for (const n of nodes) {
-    if (n.closest('.cwin--mod')) continue;
-    const it = n._item;
-    if (!it || (it.cat !== 'mod' && it.cat !== 'mag')) { n.classList.remove('is-fit', 'is-nofit'); continue; }
-    const fits = picks.some((sl) => sl.fits(it) && it !== sl.owner.root);
-    n.classList.toggle('is-fit', fits);
-    n.classList.toggle('is-nofit', !fits);
+/** rows the game's table has, in its order; `bar` rows draw a fill behind the value */
+function statRows(item, st) {
+  const isGun = item.isWeapon;
+  const rows = [];
+  if (isGun && st.tplMaxDura) rows.push({ k: 'dura', icon: 'wrench', label: 'DURABILITY', v: st.dura ?? st.maxDura, text: `${fmt2(st.dura ?? st.maxDura)}/${fmt2(st.maxDura)} (${fmt2(st.tplMaxDura)})` });
+  rows.push({ k: 'weight', icon: 'weight', label: 'WEIGHT', v: st.weight, text: fmtWeight(st.weight), better: 'down' });
+  rows.push({ k: 'ergo', icon: 'ergo', label: 'ERGONOMICS', v: st.ergo, text: String(st.ergo), bar: st.ergo / 100, better: 'up' });
+  if (isGun) {
+    if (st.moa != null) rows.push({ k: 'moa', icon: 'acc', label: 'ACCURACY', v: st.moa, text: `${st.moa} MOA`, better: 'down' });
+    rows.push({ k: 'range', icon: 'range', label: 'SIGHTING RANGE', v: st.sightRange, text: String(st.sightRange), better: 'up' });
+    rows.push({ k: 'vr', icon: 'recoil-v', label: 'VERTICAL RECOIL', v: st.vRecoil, text: String(st.vRecoil), better: 'down' });
+    rows.push({ k: 'hr', icon: 'recoil-h', label: 'HORIZONTAL RECOIL', v: st.hRecoil, text: String(st.hRecoil), better: 'down' });
+    if (st.velocity) rows.push({ k: 'vel', icon: 'velocity', label: 'MUZZLE VELOCITY', v: st.velocity, text: `${st.velocity} m/s`, bar: st.velocity / 1000, better: 'up' });
+    rows.push({ k: 'fire', icon: 'fire', label: 'TYPES OF FIRE', text: st.fire.map((f) => FIRE_MODE_LABEL[f] || f).join(', ') || '—' });
+    if (st.cal) rows.push({ k: 'cal', icon: 'caliber', label: 'CALIBER', text: st.cal });
+    rows.push({ k: 'rpm', icon: 'rpm', label: 'FIRE RATE', text: `${st.rpm} rpm` });
+    if (st.effDist) rows.push({ k: 'eff', icon: 'eff', label: 'EFFECTIVE DISTANCE', text: `${st.effDist} meters` });
+  } else {
+    if (st.recoilPct) rows.push({ k: 'rec', icon: 'recoil-v', label: 'RECOIL', text: `${st.recoilPct}%` });
+    if (st.accPct) rows.push({ k: 'acc', icon: 'acc', label: 'ACCURACY', text: `${st.accPct}%` });
+    if (st.sightRange) rows.push({ k: 'range', icon: 'range', label: 'SIGHTING RANGE', text: String(st.sightRange) });
   }
-  document.body.classList.add('is-modpick');
+  return rows;
 }
-function clearHighlight() {
-  if (!highlighted && !document.body.classList.contains('is-modpick')) return;
-  highlighted = false;
-  document.body.classList.remove('is-modpick');
-  for (const n of document.querySelectorAll('.item.is-fit, .item.is-nofit')) n.classList.remove('is-fit', 'is-nofit');
+
+function renderStats(rec, st) {
+  const box = el('aside', { class: 'modstats' });
+  rec.statsNode = box;
+  fillStats(rec, box, st);
+  return box;
+}
+
+/** re-draw the table alone (a hover preview should not rebuild the stage) */
+function updateStats(rec) {
+  if (!rec.statsNode) return;
+  fillStats(rec, rec.statsNode, weaponStats(rec.item));
+}
+
+function fillStats(rec, box, st) {
+  box.replaceChildren();
+  const { item } = rec;
+  const rows = statRows(item, st);
+  const pv = rec.hover ? statRows(item, weaponStats(item, { swap: rec.hover })) : null;
+  if (st.missing.length) {
+    box.append(el('div', { class: 'modstats__warn' }, icon('warn', 'ico ico--sm'),
+      el('span', {}, `Missing vital parts: ${st.missing.map((s) => s.label).join(', ')}`)));
+  }
+  for (const r of rows) {
+    const row = el('div', { class: 'modstats__row' });
+    if (r.bar != null) row.append(el('i', { class: 'modstats__bar', style: { width: `${clamp(r.bar, 0, 1) * 100}%` } }));
+    row.append(el('span', { class: 'modstats__k' }, icon(r.icon, 'ico ico--sm'), el('b', {}, r.label)));
+    const val = el('span', { class: 'modstats__v' }, r.text);
+    const p = pv ? pv.find((x) => x.k === r.k) : null;
+    if (p && typeof r.v === 'number' && typeof p.v === 'number' && Math.abs(p.v - r.v) > 1e-9) {
+      const d = Math.round((p.v - r.v) * 100) / 100;
+      const good = r.better === 'up' ? d > 0 : r.better === 'down' ? d < 0 : null;
+      val.append(el('span', { class: `modstats__d${good == null ? '' : good ? ' is-good' : ' is-bad'}` }, `${d > 0 ? '+' : ''}${d}`));
+    }
+    row.append(val);
+    box.append(row);
+  }
 }
 
 // ---------------------------------------------------------
-// builds panel
+// the bar: actions on the gun, presets, back
+// ---------------------------------------------------------
+function renderBar(rec, st) {
+  const { item } = rec;
+  const wpn = item.tpl.wpn || {};
+  const isGun = item.isWeapon;
+  const bar = el('footer', { class: 'modscreen__bar' });
+  const acts = el('div', { class: 'modscreen__acts' });
+  const btn = (label, fn, disabled = false, title = '') => el('button', {
+    class: 'btn btn--sm', disabled, title,
+    onclick: () => { const r = fn(); if (r && r.ok === false) toast(r.reason); changed(); },
+  }, label);
+  if (wpn.fold) {
+    const cf = canFold(item);
+    acts.append(btn(item.folded ? 'UNFOLD STOCK' : 'FOLD STOCK', () => toggleFold(item), !cf.ok, cf.reason || ''));
+  }
+  const mag = item.magazine;
+  if (mag) {
+    acts.append(btn('UNLOAD AMMO', () => unloadAmmo(item, moddingContext.sources()), mag.ammoCount === 0));
+    if (!item.modSlot('mod_magazine')?.required) {
+      acts.append(btn('REMOVE MAG', () => uninstallMod(item.modSlot('mod_magazine'), moddingContext.sources())));
+    }
+  }
+  if (item.chamber) {
+    if (item.chamber.length) acts.append(btn('CLEAR CHAMBER', () => clearChamber(item, moddingContext.sources())));
+    else acts.append(btn('CHAMBER A ROUND', () => chamberRound(item), !mag || mag.ammoCount === 0));
+  }
+  acts.append(btn('STRIP ALL PARTS', () => {
+    const n = stripWeapon(item, moddingContext.sources()).length;
+    return n ? { ok: true } : { ok: false, reason: 'no room to strip into' };
+  }, ![...item.allMods()].length));
+  bar.append(acts);
+
+  const right = el('div', { class: 'modscreen__bar-right' });
+  right.append(el('span', { class: 'modscreen__meta' }, `${fmtWeight(st.weight)} kg · ${st.size}`));
+  if (isGun && !inRaid) {
+    right.append(el('button', {
+      class: `barbtn${rec.builds ? ' is-on' : ''}`, title: 'Factory and saved builds of this weapon',
+      onclick: () => { rec.builds = !rec.builds; rec.pick = null; sfx.ui('click'); render(rec); },
+    }, icon('stash', 'ico ico--sm'), el('span', {}, 'PRESETS')));
+  }
+  if (VIEW3D) {
+    right.append(el('button', { class: 'barbtn', onclick: () => devModding('view3d') }, el('span', {}, '3D')));
+  }
+  right.append(el('button', {
+    class: 'modscreen__back', title: 'Back (Esc)',
+    onclick: () => closeModdingWindow(item.uid),
+  }, 'BACK'));
+  bar.append(right);
+  return bar;
+}
+
+// ---------------------------------------------------------
+// presets drawer (the game's weapon builds)
 // ---------------------------------------------------------
 function renderBuilds(rec) {
   const { item } = rec;
-  const box = el('div', { class: 'mod__builds' });
+  const box = el('aside', { class: 'modpresets' });
   const cur = weaponStats(item);
 
-  // save the current build under a name
   const nameField = el('input', {
     class: 'mod__build-name', type: 'text', maxlength: '40', placeholder: 'name this build',
     value: rec.buildName || '', spellcheck: 'false', autocomplete: 'off',
@@ -481,10 +753,11 @@ function renderBuilds(rec) {
     render(rec);
   };
   nameField.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSave(); e.stopPropagation(); });
-  box.append(el('div', { class: 'mod__pick-head' },
-    el('span', {}, 'WEAPON BUILDS'),
-    el('span', { class: 'mod__build-save' }, nameField,
-      el('button', { class: 'btn btn--sm btn--primary', onclick: doSave }, 'SAVE CURRENT'))));
+  box.append(el('div', { class: 'modpick__head' },
+    el('span', {}, 'WEAPON PRESETS'),
+    el('button', { class: 'cwin__close', onclick: () => { rec.builds = false; render(rec); } }, icon('close', 'ico ico--sm'))));
+  box.append(el('div', { class: 'modpresets__save' }, nameField,
+    el('button', { class: 'btn btn--sm btn--primary', onclick: doSave }, 'SAVE CURRENT')));
 
   const list = el('div', { class: 'mod__build-list' });
   const rows = [
@@ -610,11 +883,17 @@ export function devModding(kind, arg) {
   const gun = guns[guns.length - 1] || game.equipment.item('primary');
   if (!gun) return;
   if (kind === 'builds') openModdingWindow(gun, { builds: true });
-  if (kind === 'view3d') { openModdingWindow(gun); const rec = open.get(gun.root.uid); if (rec) openViewerFor(rec); }
+  if (kind === 'view3d') {
+    // parked, but reachable for the capture and the verify script
+    openModdingWindow(gun);
+    import('./viewer3d.js').then((v) => v.openViewer3D(gun, {
+      onPick: (slot) => { const rec = open.get(gun.root.uid); if (rec && slot) { rec.pick = { slot }; render(rec); } },
+    }));
+  }
   if (kind === 'pick') {
     openModdingWindow(gun);
     const rec = open.get(gun.root.uid);
     const slot = gun.modSlot(arg || 'mod_muzzle');
-    if (rec && slot) { rec.pick = { slot }; rec.pickFresh = true; render(rec); }
+    if (rec && slot) { rec.pick = { slot }; render(rec); }
   }
 }

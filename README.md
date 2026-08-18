@@ -101,15 +101,25 @@ tarkov.dev's preset sprite. A gun that will not fit where it lies refuses the
 part. Guns bought or found come assembled to their default preset (globals.json
 `ItemPresets`), worn inside the template's spawn range and, often, part loaded.
 
-The modding screen (right-click → MODDING, or double-click a gun) is a floating
-panel: the assembled gun and its numbers on the left, the slot tree on the
-right. Slots are real drop targets, so a part is dragged out of the stash onto
-the slot it goes in; clicking an empty slot lists every compatible part you
-own; the cross beside a part takes it off. Ergonomics is the sum, recoil and
-muzzle velocity are percentage sums applied to the base, accuracy is
-`CenterOfImpact` turned into MOA (radius, the game's own quirk), sighting range
-comes off the best sight fitted. In raid, vital parts (`RaidModdable: false`)
-stay put.
+The modding screen (right-click → MODDING, or double-click a gun) is the
+game's own WEAPON MODDING screen: the gun large in the middle, its slots hung
+around it as small boxes on thin lines to their pins on the gun — the part's
+icon and name in each, NONE when empty, a red frame on a vital slot with
+nothing in it, sub-slots branching off the part they sit on — the numbers in
+the table bottom-left in the game's own order (durability, weight, ergonomics,
+accuracy, sighting range, vertical and horizontal recoil, muzzle velocity, types
+of fire, calibre, fire rate, effective distance), the three filters under the
+title (Vital parts / Functional mods / Gear mods) that hide whole families of
+slots, PRESETS on the bar, BACK bottom-right, Esc to leave. Click a box (or its
+pin) and what you own that fits drops down under it, and below that what the
+traders sell for the slot with BUY & INSTALL; hovering a candidate previews the
+numbers it would give as green and red deltas in the table; the cross on a box
+takes the part off. Ergonomics is the sum, recoil and muzzle velocity are
+percentage sums applied to the base, accuracy is `CenterOfImpact` turned into
+MOA (radius, the game's own quirk), sighting range comes off the best sight
+fitted. In raid, vital parts (`RaidModdable: false`) stay put. The gun on the
+stage is the large render of its factory preset (`tools/fetch_preset_art.py`);
+the boxes are the truth about what is on it.
 
 **Magazines hold cartridges.** A magazine is an ordered list of runs — the
 round loaded last comes out first, exactly as in the game — and it will only
@@ -220,7 +230,8 @@ consequence when the trigger is pulled (`src/raid/gunplay.js`):
   holes in it. Six hostiles walk the insertion floor and a few more each floor
   you reach; the plant is not empty upstairs.
 
-**The gun in three dimensions.** 3D in the modding screen opens the assembled
+**The gun in three dimensions** (parked — the viewer is kept but the modding
+screen no longer offers it; `?dev=view3d` still opens it). It opens the assembled
 weapon built from its own meshes: the receiver and every part hung on it at
 the transform of the slot it sits in, the same tree the modding screen edits,
 so it re-assembles as parts go on and come off (a folded side-folder folds).
@@ -234,8 +245,10 @@ prefabs, so a suppressor sits on the muzzle where the game puts it.
 
 | | |
 |---|---|
-| ![modding](docs/modding.png) | ![builds](docs/builds.png) |
-| the modding screen — a slot picked, the stash dimmed to what fits it, the traders' offers for the slot | BUILDS — factory and saved builds, planned against the stash |
+| ![modding](docs/modding.png) | ![modding, a slot picked](docs/modding-pick.png) |
+| the WEAPON MODDING screen — the AK-74N, its slots on their pins, the numbers | the muzzle picked: what you own, what the traders sell, deltas on hover |
+| ![builds](docs/builds.png) | |
+| PRESETS — factory and saved builds, planned against the stash | |
 | ![repair](docs/repair.png) | ![ammo chart](docs/ammochart.png) |
 | Prapor's bench | the 7.62x39 chart |
 | ![3D](docs/view3d.png) | ![gunplay](docs/gunplay.png) |
@@ -423,6 +436,7 @@ python -m http.server 8777
 | `tools/build_map.py` | extracts all four Factory storeys, finds every opening in them, derives the stairwell links, and folds in tarkov.dev's exits / locks / spawns / loot spots — all into `src/data/map-factory.json` |
 | `tools/pack_sfx.py` | compresses and seals the sound pack (and `--unpack` reverses it) |
 | `tools/extract_tarkov_models.py` | reads every weapon's and part's prefab out of the installed client — meshes, diffuse maps, the `mod_*` slot transforms — and writes one sealed, quantised pack per item plus `src/data/models-index.json` |
+| `tools/fetch_preset_art.py` | pulls the 8x grid render of each gun's default preset from tarkov.dev (through a headless Chromium — the CDN answers plain fetches with 403) and stores it downscaled as `assets/items/<id>-preset-lg.webp` for the modding screen's stage |
 | `tools/verify3d.py` | opens the 3D viewer in a real-time headless Chromium (Playwright — the sealed packs need WebCrypto, which the virtual-time headless runs never finish) and asserts the gun assembles, a click on a part picks its slot, and a part dropped on the view is fitted |
 | `tools/sfx_picks.py` | which clip backs which cue |
 | `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |

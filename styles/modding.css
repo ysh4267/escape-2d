@@ -1,0 +1,202 @@
+/* =========================================================
+   the WEAPON MODDING screen (src/inventory/modding.js)
+
+   The game's screen: full-bleed, the gun large in the middle on a dark
+   blue-black wash, slot boxes hung around it on thin lines, the numbers
+   bottom-left, PRESETS on the bar, BACK bottom-right.
+   ========================================================= */
+
+.modscreen {
+  position: fixed; inset: 0; z-index: 750;
+  display: grid; grid-template-rows: auto 1fr auto;
+  color: var(--tx-0); font-family: var(--font-ui);
+  user-select: none;
+}
+.modscreen__bg {
+  position: absolute; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 42%, rgba(46,74,88,.55), rgba(8,14,18,0) 70%),
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(30,46,54,.35), rgba(0,0,0,0) 60%),
+    linear-gradient(180deg, #06090b 0%, #0b1418 45%, #050809 100%);
+}
+.modscreen__bg::after {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(135deg, rgba(255,255,255,.012) 0 2px, transparent 2px 9px);
+  pointer-events: none;
+}
+.modscreen__head, .modscreen__stage, .modscreen__bar { position: relative; z-index: 1; }
+
+/* ---- title ---- */
+.modscreen__head { display: flex; flex-direction: column; align-items: center; padding: 14px 24px 6px; gap: 6px; }
+.modscreen__title { display: flex; align-items: center; gap: 12px; }
+.modscreen__title .ico--lg { width: 30px; height: 30px; color: var(--tx-1); }
+.modscreen__title h1 {
+  margin: 0; font-size: 34px; font-weight: 500; letter-spacing: .04em; line-height: 1;
+  color: var(--tx-0); text-shadow: 0 2px 8px rgba(0,0,0,.6);
+}
+.modscreen__sub { text-align: center; font-size: 15px; color: var(--tx-1); margin-top: 3px; letter-spacing: .01em; }
+.modscreen__filters { display: flex; gap: 40px; margin-top: 8px; font-size: 15px; color: var(--tx-0); }
+.modscreen__filter { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.modscreen__filter input {
+  appearance: none; width: 16px; height: 16px; margin: 0; border: 1px solid var(--tx-1); background: rgba(0,0,0,.35);
+  display: grid; place-content: center; cursor: pointer;
+}
+.modscreen__filter input::before {
+  content: ''; width: 9px; height: 5px; border-left: 2px solid var(--tx-0); border-bottom: 2px solid var(--tx-0);
+  transform: rotate(-45deg) translate(1px, -1px); opacity: 0;
+}
+.modscreen__filter input:checked::before { opacity: 1; }
+.modscreen__filter:hover span { color: var(--pale); }
+
+/* ---- the stage ---- */
+.modscreen__stage { position: relative; overflow: hidden; min-height: 0; }
+.modscreen__gun {
+  position: absolute; object-fit: contain; pointer-events: none;
+  filter: drop-shadow(0 18px 24px rgba(0,0,0,.7)) drop-shadow(0 0 2px rgba(0,0,0,.6));
+}
+.modscreen__lines { position: absolute; left: 0; top: 0; pointer-events: none; }
+.modline { stroke: rgba(214,220,224,.42); stroke-width: 1; }
+.modline.is-filled { stroke: rgba(120,204,120,.55); }
+.modline.is-vital { stroke: rgba(210,96,80,.6); }
+.modline.is-hover, .modline.is-picked { stroke: var(--pale); stroke-width: 1.5; }
+
+/* the pin on the gun: a small square, filled when the slot is, and its label */
+.modpin {
+  position: absolute; transform: translate(-5px, -5px); display: flex; align-items: center; gap: 5px;
+  cursor: pointer; white-space: nowrap;
+}
+.modpin i {
+  display: block; width: 9px; height: 9px; box-sizing: border-box;
+  border: 1.5px solid #e9ecef; background: rgba(0,0,0,.35); box-shadow: 0 0 4px rgba(0,0,0,.8);
+}
+.modpin.is-filled i { background: #78cc78; border-color: #78cc78; }
+.modpin.is-vital i { border-color: #d2604f; }
+.modpin span {
+  font-size: 10.5px; letter-spacing: .06em; color: #e9ecef; text-shadow: 0 1px 2px #000, 0 0 5px #000;
+}
+/* labels alternate above and below the pin so a crowded receiver stays legible */
+.modpin.is-up span { position: absolute; left: 12px; bottom: 6px; }
+.modpin.is-down span { position: absolute; left: 12px; top: 6px; }
+.modpin:hover i { border-color: var(--pale); }
+.modpin:hover span { color: var(--pale); }
+
+/* a slot box */
+.modbox {
+  position: absolute; width: 74px; height: 74px; box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(50,58,62,.65), rgba(22,28,31,.8));
+  border: 1px solid rgba(215,222,226,.55);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 6px 14px rgba(0,0,0,.55);
+  cursor: pointer;
+}
+.modbox.is-empty { background: linear-gradient(180deg, rgba(38,44,48,.55), rgba(16,20,22,.75)); border-color: rgba(190,198,204,.35); }
+.modbox.is-vital { border-color: rgba(210,96,80,.75); }
+.modbox.is-picked { border-color: var(--pale); box-shadow: 0 0 0 1px var(--pale), 0 0 16px rgba(184,219,217,.35); }
+.modbox:hover { border-color: var(--pale); }
+.modbox__type {
+  position: absolute; left: 50%; top: -1px; transform: translate(-50%, -100%); width: 22px; height: 22px;
+  object-fit: contain; opacity: .55; pointer-events: none; filter: drop-shadow(0 0 2px #000);
+}
+.modbox.is-empty .modbox__type { opacity: .8; }
+.modbox .modbox__tile {
+  position: absolute !important; inset: 3px !important; left: 3px !important; top: 3px !important;
+  width: auto !important; height: auto !important; background: transparent !important; box-shadow: none !important; border: 0 !important;
+  display: flex; align-items: center; justify-content: center; pointer-events: none;
+}
+.modbox .modbox__tile .item__img {
+  position: relative; inset: auto; width: auto; height: auto; max-width: 66px; max-height: 66px; object-fit: contain;
+}
+.modbox .modbox__tile > :not(.item__img) { display: none; }
+.modbox__name {
+  position: absolute; left: 4px; top: 2px; right: 4px; font-size: 10px; letter-spacing: .02em; color: #f2f4f6;
+  text-shadow: 0 1px 2px #000, 0 0 4px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; z-index: 3;
+}
+.modbox.is-empty .modbox__name { color: #dfe4e7; }
+.modbox__count {
+  position: absolute; right: 2px; bottom: 2px; padding: 0 3px; font-size: 10px; font-family: var(--font-mono); color: #f2f4f6;
+  background: rgba(0,0,0,.7); pointer-events: none; z-index: 3;
+}
+.modbox__label {
+  position: absolute; left: 50%; bottom: -3px; transform: translate(-50%, 100%);
+  font-size: 9px; letter-spacing: .1em; color: var(--tx-2); white-space: nowrap; pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
+.modbox:hover .modbox__label, .modbox.is-picked .modbox__label { color: var(--pale); }
+.modbox__x {
+  position: absolute; right: -8px; top: -8px; width: 18px; height: 18px; display: none; align-items: center; justify-content: center;
+  background: var(--bg-2); border: 1px solid var(--line-2); color: var(--tx-2); border-radius: 2px; cursor: pointer; z-index: 4;
+}
+.modbox:hover .modbox__x { display: flex; }
+.modbox__x:hover { color: var(--danger); border-color: var(--danger); }
+/* drops: the drag layer paints these */
+.modbox.slot.is-ok { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok), 0 0 14px rgba(127,179,154,.35); }
+.modbox.slot.is-bad { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+
+/* the dropdown under a picked box */
+.modpick {
+  position: absolute; width: 360px; display: flex; flex-direction: column;
+  background: rgba(8,12,14,.96); border: 1px solid var(--line-2); box-shadow: 0 12px 30px rgba(0,0,0,.7);
+  z-index: 3;
+}
+.modpick__head {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 10px;
+  font-size: 10px; letter-spacing: .14em; color: var(--tx-1); border-bottom: 1px solid var(--line-1); background: rgba(255,255,255,.03);
+}
+.modpick__list { display: flex; flex-direction: column; overflow: auto; min-height: 0; }
+.modpick .mod__cand { cursor: default; }
+.modpick .mod__cand:hover { background: rgba(88,111,124,.12); }
+
+/* ---- the numbers, bottom-left ---- */
+.modstats {
+  position: absolute; left: 14px; bottom: 62px; width: 380px; display: flex; flex-direction: column; gap: 3px;
+  z-index: 1; pointer-events: none;
+}
+.modstats__warn { display: flex; gap: 6px; align-items: center; color: var(--danger); font-size: 11px; letter-spacing: .04em; margin-bottom: 4px; }
+.modstats__row {
+  position: relative; display: flex; align-items: center; justify-content: space-between; height: 22px; padding: 0 8px 0 6px;
+  background: linear-gradient(90deg, rgba(56,66,70,.85), rgba(30,36,40,.85)); border: 1px solid rgba(0,0,0,.6);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+  font-size: 11px;
+}
+.modstats__bar { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(46,116,150,.55); }
+.modstats__k { position: relative; display: flex; align-items: center; gap: 6px; color: #eef1f3; letter-spacing: .06em; font-weight: 700; }
+.modstats__k .ico { width: 13px; height: 13px; color: #d7dde0; }
+.modstats__v { position: relative; font-family: var(--font-mono); font-size: 11.5px; color: #f4f4f9; display: flex; gap: 6px; }
+.modstats__d { font-size: 10px; color: var(--tx-2); }
+.modstats__d.is-good { color: #7fd48f; }
+.modstats__d.is-bad { color: #e07060; }
+
+/* ---- the bar ---- */
+.modscreen__bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 16px 12px 400px; min-height: 52px;
+  background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,.55));
+}
+.modscreen__acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.modscreen__bar-right { display: flex; align-items: center; gap: 14px; }
+.modscreen__meta { font-size: 11px; color: var(--tx-3); letter-spacing: .06em; font-family: var(--font-mono); }
+.barbtn {
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(0,0,0,.4); border: 1px solid var(--line-2);
+  color: var(--tx-1); font-size: 12px; letter-spacing: .08em; cursor: pointer;
+}
+.barbtn:hover, .barbtn.is-on { color: var(--pale); border-color: var(--pale); }
+.modscreen__back {
+  padding: 8px 22px; background: transparent; border: 0; color: #eef1f3; font-size: 30px; font-weight: 400; letter-spacing: .06em;
+  cursor: pointer; text-shadow: 0 2px 6px rgba(0,0,0,.7); line-height: 1;
+}
+.modscreen__back:hover { color: var(--pale); }
+
+/* ---- presets drawer ---- */
+.modpresets {
+  position: absolute; right: 0; top: 0; bottom: 58px; width: 460px; z-index: 4;
+  display: flex; flex-direction: column;
+  background: rgba(8,12,14,.96); border-left: 1px solid var(--line-2); box-shadow: -12px 0 30px rgba(0,0,0,.6);
+}
+.modpresets__save { display: flex; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line-1); }
+.modpresets__save .mod__build-name { flex: 1; }
+.modpresets .mod__build-list { max-height: none; flex: 1; }
+
+@media (max-width: 1100px) {
+  .modstats { width: 300px; }
+  .modscreen__bar { padding-left: 320px; }
+  .modscreen__title h1 { font-size: 26px; }
+}
