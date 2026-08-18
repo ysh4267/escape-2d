@@ -626,3 +626,20 @@ body.is-modpick .item.is-fit { outline: 1px solid var(--ok); outline-offset: -1p
 .repairkit .ammoload__info { min-width: 0; }
 .repairkit .ammoload__name { white-space: normal; }
 .ammoload__row.is-static { border: 1px solid var(--line-1); }
+
+/* ---- the 3D viewer ---- */
+.cwin--3d { min-width: 0; }
+.viewer3d {
+  position: relative; width: 640px; height: 380px; min-height: 0;
+  background: radial-gradient(ellipse at 50% 40%, #182229 0%, #0a0f12 70%);
+  border: 1px solid var(--line-1); overflow: hidden; cursor: grab;
+}
+.viewer3d.is-ok { outline: 2px solid var(--ok); outline-offset: -2px; }
+.viewer3d.is-bad { outline: 2px solid var(--danger); outline-offset: -2px; }
+.viewer3d__canvas { display: block; width: 640px; height: 380px; }
+.viewer3d__hint {
+  position: absolute; left: 8px; bottom: 6px; font-size: 10px; letter-spacing: .1em; color: var(--pale);
+  text-shadow: 0 1px 2px #000; pointer-events: none;
+}
+.viewer3d__bar { display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
+.viewer3d__note { font-size: 10px; color: var(--tx-3); }

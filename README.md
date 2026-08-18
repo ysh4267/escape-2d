@@ -158,12 +158,26 @@ right-click a worn gun → REPAIR WITH KIT, or the kit → USE ON WEAPON. Scav
 guns come with a worn ceiling (85–100, and 30–45 under it), as the server rolls
 them.
 
+**The gun in three dimensions.** 3D in the modding screen opens the assembled
+weapon built from its own meshes: the receiver and every part hung on it at
+the transform of the slot it sits in, the same tree the modding screen edits,
+so it re-assembles as parts go on and come off (a folded side-folder folds).
+Drag to turn, wheel to zoom, right-drag to pan; hover a part to name it, click
+it to pick its slot in the modding screen, drag a part from the stash onto the
+view and it goes into the nearest slot that takes it. All twelve guns and all
+654 parts and magazines have a model — 9 MB of quantised meshes and 256 px
+diffuse maps in 666 sealed packs, loaded one item at a time
+(`tools/extract_tarkov_models.py`); the slot transforms come out of the same
+prefabs, so a suppressor sits on the muzzle where the game puts it.
+
 | | |
 |---|---|
 | ![modding](docs/modding.png) | ![builds](docs/builds.png) |
 | the modding screen — a slot picked, the stash dimmed to what fits it, the traders' offers for the slot | BUILDS — factory and saved builds, planned against the stash |
 | ![repair](docs/repair.png) | ![ammo chart](docs/ammochart.png) |
 | Prapor's bench | the 7.62x39 chart |
+| ![3D](docs/view3d.png) | |
+| the AKM in 3D, beside its modding screen | |
 
 **The plant, all four storeys of it.** Tunnels, ground floor, the locker level
 and the rafters, each with its own walls, walkable surface, machinery and
@@ -344,6 +358,8 @@ python -m http.server 8777
 | `tools/weapons_expand.py` | expands the guns in the selection into every part, magazine and cartridge they can take, and reads the modding numbers, ballistics, repair numbers, the default and alternate factory presets, the ammo packs, the repair kit and the weapon cases |
 | `tools/build_map.py` | extracts all four Factory storeys, finds every opening in them, derives the stairwell links, and folds in tarkov.dev's exits / locks / spawns / loot spots — all into `src/data/map-factory.json` |
 | `tools/pack_sfx.py` | compresses and seals the sound pack (and `--unpack` reverses it) |
+| `tools/extract_tarkov_models.py` | reads every weapon's and part's prefab out of the installed client — meshes, diffuse maps, the `mod_*` slot transforms — and writes one sealed, quantised pack per item plus `src/data/models-index.json` |
+| `tools/verify3d.py` | opens the 3D viewer in a real-time headless Chromium (Playwright — the sealed packs need WebCrypto, which the virtual-time headless runs never finish) and asserts the gun assembles, a click on a part picks its slot, and a part dropped on the view is fitted |
 | `tools/sfx_picks.py` | which clip backs which cue |
 | `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |
 | `tools/ui-smoke.html` | drives the real game in an iframe with synthetic pointer and key events, asserting the trader screen, drag & drop, menus, modals and the character screen's layout behave |
@@ -388,6 +404,10 @@ Battlestate Games; this project is not affiliated with or endorsed by them.
   wiki.
 - **Sound effects** — third-party audio whose rights stay with their owner. It
   ships sealed.
+- **3D models** — the weapons' and parts' meshes and diffuse textures are
+  third-party art whose rights stay with their owner. They ship sealed, one
+  pack per item, and are drawn with [three.js](https://threejs.org) (MIT,
+  vendored in `assets/vendor/`).
 
 Because the map geometry is CC BY-NC-SA, this project inherits the same terms:
 share alike, non-commercial, with attribution.

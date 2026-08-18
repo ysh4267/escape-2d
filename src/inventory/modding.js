@@ -38,6 +38,10 @@ import {
   buildsFor, factoryBuilds, saveBuild, deleteBuild, planBuild, shoppingList,
   buyMissing, assembleBuild, previewStats, offersFor, buyOffer,
 } from './builds.js';
+import { openViewer3D, hasModel, loadModelIndex, modelsAvailable, closeAllViewers3D } from './viewer3d.js';
+
+// the 3D viewer needs to know which items have a model; the index is small
+loadModelIndex().then(() => refreshModdingWindows());
 
 /** uid -> { item, node, body, pick, builds } */
 const open = new Map();
@@ -102,6 +106,7 @@ export function closeModdingWindow(uid) {
 export function closeAllModdingWindows() {
   for (const uid of Array.from(open.keys())) { open.get(uid).node.remove(); open.delete(uid); }
   clearHighlight();
+  closeAllViewers3D();
 }
 
 export function refreshModdingWindows() {
@@ -212,6 +217,12 @@ function render(rec) {
       onclick: () => { rec.builds = !rec.builds; rec.pick = null; render(rec); },
     }, showBuilds ? 'PARTS' : 'BUILDS'));
   }
+  if (modelsAvailable() && hasModel(item.tpl)) {
+    acts.append(el('button', {
+      class: 'btn btn--sm', title: 'The assembled gun in three dimensions - click a part there to pick its slot here',
+      onclick: () => openViewerFor(rec),
+    }, '3D'));
+  }
   left.append(acts);
   body.append(left);
 
@@ -237,6 +248,18 @@ function render(rec) {
     }
   }
   applyHighlight();
+}
+
+/** the 3D window for this modding record: a click on a part there picks its slot here */
+function openViewerFor(rec) {
+  return openViewer3D(rec.item, {
+    onPick: (slot) => {
+      if (!slot || !open.has(rec.item.uid)) return;
+      rec.builds = false;
+      rec.pick = { slot }; rec.pickFresh = true;
+      render(rec);
+    },
+  });
 }
 
 function* walkSlots(item) {
@@ -587,6 +610,7 @@ export function devModding(kind, arg) {
   const gun = guns[guns.length - 1] || game.equipment.item('primary');
   if (!gun) return;
   if (kind === 'builds') openModdingWindow(gun, { builds: true });
+  if (kind === 'view3d') { openModdingWindow(gun); const rec = open.get(gun.root.uid); if (rec) openViewerFor(rec); }
   if (kind === 'pick') {
     openModdingWindow(gun);
     const rec = open.get(gun.root.uid);

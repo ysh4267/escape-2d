@@ -220,7 +220,7 @@ function runDevHooks() {
     import('./ui/trade.js').then((m) => m.devTrade(raw.slice(6)));
     return;
   }
-  if (mode === 'builds' || mode === 'chart' || mode === 'repairkit' || mode === 'pick') {
+  if (mode === 'builds' || mode === 'chart' || mode === 'repairkit' || mode === 'pick' || mode === 'view3d') {
     // the weapon builds panel, the calibre chart, the repair-kit dialog
     import('./inventory/weapon.js').then(async (wp) => {
       const gun = wp.spawnWeapon(arg && TPL[arg] ? arg : 'w_akm', { loaded: 20, examined: true });
@@ -231,6 +231,7 @@ function runDevHooks() {
       renderStash();
       if (mode === 'builds') { const m = await import('./inventory/modding.js'); m.openModdingWindow(gun, { builds: true }); }
       if (mode === 'pick') { const m = await import('./inventory/modding.js'); m.devModding('pick', 'mod_muzzle'); }
+      if (mode === 'view3d') { const m = await import('./inventory/modding.js'); m.devModding('view3d'); }
       if (mode === 'chart') { const m = await import('./inventory/ammo-chart.js'); m.openAmmoChart('7.62x39', 'am_762bp'); }
       if (mode === 'repairkit') {
         gun.dura = 37;
