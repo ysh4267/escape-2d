@@ -286,6 +286,17 @@ export class Renderer {
     const g = this.ctx;
     const { player, nav, containers, extracts, hover, path, seen, time } = state;
 
+    // a tremor shakes the whole view a little. It is a nudge on the camera in
+    // world units for the length of this frame — the same thing walking does
+    // to it, which is cheap. (Not a translation on the base transform and not
+    // a CSS transform on the canvas: both pushed the frame onto a software
+    // re-raster path in testing and the loop fell to a crawl.)
+    const fx = state.fx || {};
+    const camX = this.cam.x, camY = this.cam.y;
+    if (fx.tremor) {
+      this.cam.x += (Math.sin(time * 37.3) + Math.sin(time * 23.1) * 0.6) * 0.09;
+      this.cam.y += (Math.cos(time * 41.7) + Math.sin(time * 19.3) * 0.6) * 0.09;
+    }
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     g.fillStyle = PAL.void;
     g.fillRect(0, 0, this.vw, this.vh);
@@ -340,7 +351,54 @@ export class Renderer {
     this.drawShots(state.shots || []);
     this.drawPlayer(player, time);
     this.drawEdgeVignette();
+    this.drawConditions(fx, time);
     this.drawDamage(state);
+    this.cam.x = camX;
+    this.cam.y = camY;
+  }
+
+  /**
+   * What the body does to the view. Pain pulses a dark rim in and out; a
+   * critical pool beats it red in time with a heart; painkillers wash the
+   * colour out of the edges (the game's black-and-white periphery); tunnel
+   * vision closes the world down to the middle.
+   */
+  drawConditions(fx, time) {
+    if (!fx) return;
+    const g = this.ctx;
+    const cx = this.vw / 2, cy = this.vh / 2;
+    const rMin = Math.min(this.vw, this.vh), rMax = Math.max(this.vw, this.vh);
+    const rim = (inner, outer, color, alpha) => {
+      if (alpha <= 0.002) return;
+      const grad = g.createRadialGradient(cx, cy, rMin * inner, cx, cy, rMax * outer);
+      grad.addColorStop(0, `rgba(${color},0)`);
+      grad.addColorStop(1, `rgba(${color},${alpha})`);
+      g.fillStyle = grad;
+      g.fillRect(0, 0, this.vw, this.vh);
+    };
+    // painkillers wash the colour out. A CSS filter on the canvas element,
+    // not a 'saturation' blend in the drawing: the blend over a full frame is
+    // a software pass that dropped the loop to a crawl.
+    const filt = fx.pk ? 'saturate(.35) contrast(1.06)' : '';
+    if (filt !== this.filterApplied) {
+      this.canvas.style.filter = filt;
+      this.filterApplied = filt;
+    }
+    if (fx.pain) {
+      const a = 0.16 + 0.14 * Math.sin(time * 2.4);
+      rim(0.42, 0.78, '46,18,14', a);
+    }
+    if (fx.tunnel) {
+      const k = 0.5 + 0.5 * Math.sin(time * 1.6);
+      rim(0.22 + 0.1 * k, 0.62 + 0.08 * k, '0,0,0', 0.75);
+    }
+    if (fx.ct) rim(0.5, 0.9, '30,30,36', 0.22);
+    if (fx.lowHp) {
+      // a double beat, the way a heart goes
+      const t = (time * 1.35) % 1;
+      const beat = Math.pow(Math.max(0, Math.sin(t * Math.PI * 2)), 10) + 0.55 * Math.pow(Math.max(0, Math.sin((t - 0.18) * Math.PI * 2)), 10);
+      rim(0.4, 0.8, '160,30,22', 0.1 + 0.32 * Math.min(1, beat));
+    }
   }
 
   drawScavs(scavs, nav, player, hoverEnemy = null) {

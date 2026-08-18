@@ -22,6 +22,8 @@ import { initDeploy, renderDeploy } from './ui/deploy.js';
 import { initTrade, renderTrade, activateTradeContext, rerollFence } from './ui/trade.js';
 import { startRaid, consumePendingMIA } from './ui/raid-ui.js';
 import { initFloorplan } from './ui/floorplan.js';
+import { initHealthPane, renderHealthPane } from './ui/health-ui.js';
+import { markOpenable } from './ui/stash.js';
 
 let geo = null;
 
@@ -73,6 +75,7 @@ async function boot() {
     // the last session was closed mid-raid — that run ends as MIA, exactly
     // as if the timer had run out: unsecured gear does not come home
     game.equipment.clearInsecure();
+    game.health.afterDeath();
     game.profile.raids++;
     game.profile.died++;
     save();
@@ -89,6 +92,7 @@ async function boot() {
   initTrade();
   initDeploy(geo, deploy);
   initFloorplan();
+  initHealthPane(markOpenable);
 
   on(EV.SCREEN_CHANGED, (id) => {
     if (id === 'hideout:stash') { activateStashContext(); renderStash(); }
@@ -97,6 +101,8 @@ async function boot() {
     // survives the pane switch — without its own context, an item ctrl+clicked
     // in that window on the RAID pane still flew to the trader's sell table
     if (id === 'hideout:raid') { activateStashContext(); renderDeploy(); }
+    // the health pane borrows the stash context: meds are used out of the stash
+    if (id === 'hideout:health') { activateStashContext(); renderHealthPane(); }
   });
 
   // the brief is what the player reads to decide whether to go; a container
@@ -215,6 +221,46 @@ function runDevHooks() {
     return;
   }
   if (mode === 'deploy') { showPane('raid'); return; }
+  if (mode === 'health') {
+    // a battered body and a bag of meds, on the hideout pane or in a raid
+    import('./ui/health-ui.js').then(async (hu) => {
+      const { FX } = await import('./raid/health.js');
+      const h = game.health;
+      h.parts.head.hp = 22; h.parts.thorax.hp = 51; h.parts.stomach.hp = 30;
+      h.parts.larm.hp = 0; h.parts.rarm.hp = 41; h.parts.lleg.hp = 18; h.parts.rleg.hp = 65;
+      h.addEffect(FX.HB, 'stomach'); h.addEffect(FX.LB, 'rarm'); h.addEffect(FX.FR, 'lleg');
+      h.addEffect(FX.FW, 'thorax', 300); h.painTimer = 20; h.painFor = 40; h.energy = 34; h.hydration = 12;
+      for (const key of ['salewa', 'ifak', 'bandage', 'esmarch', 'splint', 'cms', 'analgin', 'propital', 'water', 'iskra']) {
+        if (TPL[key]) autoPlace(new Item(key, { examined: true }), [game.stash]);
+      }
+      if (arg === 'raid' || arg === 'hud' || arg === 'pk' || arg === 'use') {
+        for (const key of ['salewa', 'bandage', 'esmarch', 'splint', 'cms', 'analgin']) {
+          if (TPL[key]) autoPlace(new Item(key, { examined: true }), [...game.equipment.carryGrids()]);
+        }
+        if (arg === 'pk') { h.addEffect(FX.PK, null, 120); h.parts.head.hp = 8; h.parts.thorax.hp = 20; }
+        deploy('factory');
+        const { currentRaid, openOverlay } = await import('./ui/raid-ui.js');
+        const raid = currentRaid();
+        if (!raid) return;
+        if (arg === 'raid') setTimeout(() => openOverlay(), 300);
+        if (arg === 'use') {
+          // a Salewa half way through a use on the stomach, for the HUD capture
+          const kit = game.equipment.carryGrids().flatMap((g) => g.items()).find((i) => i.tpl.key === 'salewa');
+          if (kit) { raid.beginUse(kit, 'stomach'); if (raid.using) raid.using.t = raid.using.dur * 0.55; }
+        }
+        return;
+      }
+      if (arg === 'pick') {
+        showPane('health');
+        const it = game.stash.items().find((i) => i.tpl.key === 'salewa');
+        setTimeout(() => hu.bodyPartDialog(it, h), 300);
+        return;
+      }
+      showPane('health');
+      void hu;
+    });
+    return;
+  }
   if (mode === 'rot') {
     // rotate every rotatable item in the stash so the sprite geometry can be
     // eyeballed in a single capture
@@ -480,7 +526,8 @@ function wireGlobalKeys() {
     if (!hideout) return;
     if (e.key === '1') showPane('stash');
     if (e.key === '2') showPane('traders');
-    if (e.key === '3') showPane('raid');
+    if (e.key === '3') showPane('health');
+    if (e.key === '4') showPane('raid');
   });
 }
 

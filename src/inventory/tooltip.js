@@ -102,7 +102,7 @@ function show(item) {
   if (tpl.dura != null && item.dura != null) row(dl, 'DURABILITY', `${Math.round(item.dura)} / ${tpl.dura}`);
   if (tpl.armorClass) row(dl, 'ARMOR CLASS', String(tpl.armorClass));
   if (tpl.armorMat) row(dl, 'MATERIAL', tpl.armorMat);
-  if (tpl.heal) row(dl, 'HEAL RATE', `${tpl.heal} hp`);
+  medRows(tpl, (k, v) => row(dl, k, v));
   // guns, parts, magazines and cartridges have their own rows
   if (!statRows(item, (k, v) => row(dl, k, v))) {
     if (tpl.dmg) row(dl, 'DAMAGE', String(tpl.dmg));
@@ -130,4 +130,29 @@ function show(item) {
 
   node.hidden = false;
   place();
+}
+
+/** what a med or a ration does, as the item card lists it */
+export function medRows(tpl, row) {
+  const m = tpl.med;
+  if (!m) return false;
+  const NAMES = { lb: 'light bleeding', hb: 'heavy bleeding', fr: 'fracture', ct: 'concussion', dp: 'destroyed part' };
+  if (m.t) row('USE TIME', `${m.t}s`);
+  if (m.rate) row('HEALS', `up to ${m.rate} hp per use`);
+  const rm = m.rm || {};
+  const removes = Object.keys(rm).map((k) => NAMES[k] + (rm[k].cost ? ` (${rm[k].cost})` : '')).filter(Boolean);
+  if (m.hemo) removes.push(`all bleeding for ${m.hemo}s`);
+  if (removes.length) row('REMOVES', removes.join(', '));
+  if (rm.dp) row('RESTORES', `${rm.dp.min}–${rm.dp.max}% of the part`);
+  if (m.pk) row('PAINKILLER', `${Math.round(m.pk / 60)}m ${m.pk % 60 ? (m.pk % 60) + 's' : ''}`.trim());
+  if (m.eh) {
+    const bits = [];
+    if (m.eh.en) bits.push(`energy ${m.eh.en > 0 ? '+' : ''}${m.eh.en}`);
+    if (m.eh.hy) bits.push(`hydration ${m.eh.hy > 0 ? '+' : ''}${m.eh.hy}`);
+    if (bits.length) row('EFFECT', bits.join(', '));
+  }
+  if (m.buff === 'BuffsPropital') row('STIM', 'regeneration 5m, tremor late');
+  if (m.buff === 'BuffsAdrenaline') row('STIM', 'stamina 1m, quick regen');
+  if (m.buff === 'BuffsZagustin') row('STIM', 'tremor late');
+  return true;
 }

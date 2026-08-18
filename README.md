@@ -17,6 +17,8 @@ No build step, no dependencies — plain ES modules, canvas and DOM.
 | the plan of the storey you are on — press `M`, or walk up a staircase and it follows | pre-raid brief |
 | ![traders](docs/traders.png) | ![stash](docs/stash.png) |
 | eight traders, loyalty-gated stock, three currencies | the stash |
+| ![health](docs/health.png) | ![health in raid](docs/health-hud.png) |
+| the HEALTH tab — seven parts, conditions, the Therapist | in raid: the doll in the corner, a Salewa going onto the stomach |
 
 ---
 
@@ -35,8 +37,8 @@ Everything is playable with the mouse alone.
 | **MAP / INVENTORY / SPRINT / LEAVE** buttons | bottom-right of the raid HUD |
 | hold the **exfil panel** | channel the extraction |
 
-Optional keyboard shortcuts still work: `TAB` inventory, `M` floor plan,
-`SHIFT` sprint, `F` extract, `ESC` leave, `1/2/3` for the hideout tabs.
+Optional keyboard shortcuts still work: `TAB` inventory, `H` health, `M` floor
+plan, `SHIFT` sprint, `F` extract, `ESC` leave, `1/2/3/4` for the hideout tabs.
 
 Doors mostly look after themselves — walk into a shut one and you open it on
 the way through. Four on Factory want a key, and one wants a shoulder.
@@ -180,6 +182,45 @@ with clear line of sight, then close to a firing distance and shoot. Your
 weapon draws ammunition of the matching caliber from whatever you are carrying,
 your armor soaks a share of incoming damage and wears down doing it, and a dead
 scav leaves a searchable body with its own gear in it.
+
+**The body.** Seven body parts at the game's own sizes — head 35, thorax 85,
+stomach 70, arms 60, legs 65, 440 in all — and a round lands on one of them,
+weighted the way hits spread on a standing target. Body armour covers the
+thorax and stomach, a helmet the head. A destroyed head or thorax is death; a
+destroyed limb passes a share of what hits it on to the rest of the body
+(0.49× for an arm, 0.7× a leg, 1.05× the stomach) and comes back only under a
+surgical kit, at 1 hp and a lowered ceiling for the raid. Hits roll for light
+and heavy bleeding and for fractures on the game's own probability curves
+(`globals.json`); every bleed drains every live part on its own clock (0.8 hp
+per 6 s light, 0.9 per 4 s heavy) and energy with it, a fracture is a limp at
+55% that will not sprint or an arm that shoots and searches slower, pain pulls
+the aim off and pulses the view, thirty seconds of it untreated brings a
+tremor that shakes the screen, a round ringing off the helmet muffles the
+world. Energy and hydration burn on the game's existence rates (five times as
+fast with the stomach gone) and hit zero into exhaustion and dehydration.
+
+Medicine reads its own template: a Salewa is 3 s a use, 85 hp a use, and
+spends 45 of its 400 to stop a light bleed and 175 for a heavy one, leaving a
+fresh wound that a sprint can tear open again; a bandage takes light bleeding
+only, a tourniquet or CALOK heavy; splints set fractures; a CMS puts a
+destroyed part back at 25–45%, the Surv12 at 60–72%; painkillers hide pain
+and fractures for their listed minutes and let you sprint on a broken leg
+(which hurts it); Zagustin stops all blood loss for three minutes, Propital
+regenerates a point a second for five and shakes your hands at the end,
+adrenaline is stamina. Right-click a med, USE, pick the part on the body
+doll — the parts it can help are lit, the rest say why not — and the use runs
+on the raid clock: walk if you like, but a sprint or a shot interrupts it.
+Rations and drinks restore energy and hydration by their `effects_health`.
+
+The HUD carries the doll in the corner, coloured part by part, with the
+conditions in a row under it and a timer on the ones that run out; `H` (or the
+inventory) opens the full block above the gear. What you bring home is what
+you had at the exit — bleeds and fractures included — and it mends on its own
+in the HEALTH tab at the game's off-raid rates (7.6 hp a minute over the
+body, a light bleed dries up in ten minutes, a heavy one in fifteen), or the
+Therapist treats it at 30 ₽ an hp plus 400 / 1200 / 1000 for a light bleed,
+a heavy bleed, a fracture — free until level 5 and thirty raids. Death or a
+walk-out puts every part back at 30%.
 
 **Extraction.** Anything carried into a raid loses its found-in-raid mark on
 insertion; anything carried out gains it. Die or run the clock out and only the

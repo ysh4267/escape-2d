@@ -6,6 +6,7 @@ import { Grid, Item, autoPlace, detach } from '../inventory/model.js';
 import { Equipment } from '../inventory/equipment.js';
 import { TPL, getTpl, CURRENCY_KEY, FX } from '../data/items.js';
 import { seedUidCounter } from './util.js';
+import { Health } from '../raid/health.js';
 import { emit, EV } from './events.js';
 
 export let SAVE_KEY = 'escape2d.save.v1';
@@ -34,6 +35,8 @@ export const game = {
   },
   stash: null,
   equipment: null,
+  /** the PMC's body: seven parts, conditions, energy and hydration */
+  health: null,
   /** live raid session, null outside of a raid */
   raid: null,
   settings: { autoSave: true },
@@ -42,6 +45,7 @@ export const game = {
 export function initState() {
   game.stash = new Grid(STASH_W, STASH_H, { tag: 'stash', label: 'STASH' });
   game.equipment = new Equipment();
+  game.health = new Health();
 }
 
 // ---------------------------------------------------------
@@ -206,6 +210,7 @@ export function save() {
       },
       stash: game.stash.toJSON(),
       eq: game.equipment.toJSON(),
+      h: game.health ? game.health.toJSON() : null,
     };
     for (const [key, sec] of Object.entries(SAVE_SECTIONS)) {
       const v = sec.dump();
@@ -231,6 +236,12 @@ export function load() {
     game.profile.traders = data.p?.traders || {};
     game.stash.loadJSON(data.stash);
     game.equipment.loadJSON(data.eq);
+    if (data.h) {
+      game.health = Health.fromJSON(data.h);
+      // the body kept mending while the tab was shut, up to a day of it
+      const away = (Date.now() - (data.h.ts || Date.now())) / 1000;
+      if (away > 5) game.health.regen(Math.min(away, 24 * 3600));
+    }
     if (data.x) {
       for (const [key, v] of Object.entries(data.x)) {
         try { SAVE_SECTIONS[key]?.restore(v); } catch (err) { console.error(`[load] section ${key}`, err); }

@@ -41,4 +41,5 @@ export const EV = {
   RAID_TOAST: 'raid:toast',
   RAID_LEVEL: 'raid:level',
   LEVEL_UP: 'profile:levelup',
+  HEALTH_CHANGED: 'health:changed',
 };

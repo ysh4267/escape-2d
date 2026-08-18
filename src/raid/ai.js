@@ -40,7 +40,9 @@ export class Scav {
     this.tier = tier;
     this.viewRange = 24 + tier * 3;
     this.viewCone = 1.15;              // radians, half-angle
-    this.damage = 9 + tier * 5;
+    // per hit, before armour; the body is seven parts now, so a round has to
+    // mean something to the one it lands on (a thorax is 85, a head 35)
+    this.damage = 16 + tier * 6;
     this.fireDelay = 1.5 - tier * 0.25;
     this.accuracy = 0.34 + tier * 0.09;
     this.cooldown = rng.float(0, 1.2);

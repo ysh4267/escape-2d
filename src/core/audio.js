@@ -203,6 +203,9 @@ const SEARCH_CUE = {
 
 let ctx = null;
 let master = null;
+/** a low-pass after the master: open normally, closed down by a concussion */
+let muffleNode = null;
+let muffled = false;
 const buses = { sfx: null, ui: null, ambient: null };
 let noiseBuf = null;
 let unlocked = false;
@@ -362,7 +365,12 @@ function ensure() {
 
   master = ctx.createGain();
   master.gain.value = enabled ? volume : 0;
-  master.connect(ctx.destination);
+  muffleNode = ctx.createBiquadFilter();
+  muffleNode.type = 'lowpass';
+  muffleNode.frequency.value = muffled ? 700 : 20000;
+  muffleNode.Q.value = 0.4;
+  master.connect(muffleNode);
+  muffleNode.connect(ctx.destination);
 
   for (const [name, level] of [['sfx', 1], ['ui', 0.85], ['ambient', 0]]) {
     const g = ctx.createGain();
@@ -650,6 +658,19 @@ export const sfx = {
 
   death() { play('death'); },
   extract() { play('extract_done'); },
+
+  /**
+   * A concussion: the world goes dull and far away. A low-pass on the whole
+   * mix, eased so it fades in and out rather than snapping.
+   */
+  muffle(on) {
+    on = !!on;
+    if (on === muffled) return;
+    muffled = on;
+    if (!ctx || !muffleNode) return;
+    muffleNode.frequency.cancelScheduledValues(ctx.currentTime);
+    muffleNode.frequency.setTargetAtTime(on ? 700 : 20000, ctx.currentTime, on ? 0.15 : 0.6);
+  },
 
   // ---- weapon handling: assembly, magazines, cartridges ----
   //

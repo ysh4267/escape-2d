@@ -7,6 +7,7 @@ import { hide as hideTooltip } from './tooltip.js';
 import { catLabel } from './view.js';
 import { isKnown } from './examine.js';
 import { statRows } from './statrows.js';
+import { medRows } from './tooltip.js';
 import { isDragging } from './dnd.js';
 import { sfx } from '../core/audio.js';
 import { on, EV } from '../core/events.js';
@@ -198,6 +199,7 @@ export function inspectDialog(item) {
     if (tpl.res && item.res != null) row('RESOURCE', `${Math.round(item.res)} / ${tpl.res.max}`);
     if (tpl.dura != null && item.dura != null) row('DURABILITY', `${Math.round(item.dura)} / ${tpl.dura}`);
     if (tpl.armorClass) row('ARMOR CLASS', String(tpl.armorClass));
+    medRows(tpl, row);
     if (!statRows(item, row)) {
       if (tpl.dmg) row('DAMAGE', String(tpl.dmg));
       if (tpl.pen) row('PENETRATION', String(tpl.pen));

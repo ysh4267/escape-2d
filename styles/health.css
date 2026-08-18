@@ -1,0 +1,150 @@
+/* =========================================================
+   ESCAPE 2D — health: the doll, the health panel, the HUD strip, the
+   body-part dialog and the hideout HEALTH pane
+   ========================================================= */
+
+/* ---------- the doll ---------- */
+.doll { display: block; width: 100%; height: auto; overflow: visible; }
+.doll__shape { fill: #cfd9dd; stroke: #05080a; stroke-width: 1.5; transition: fill .2s, stroke .2s; }
+.doll__part[data-state="fine"] .doll__shape { fill: #cfd9dd; }
+.doll__part[data-state="hurt"] .doll__shape { fill: var(--warn); }
+.doll__part[data-state="bad"]  .doll__shape { fill: var(--danger); }
+.doll__part[data-state="dead"] .doll__shape { fill: var(--hatch, #2a0d0b); stroke: #7a2b22; }
+.doll__part.is-bleeding .doll__shape { stroke: #e04a3a; stroke-width: 2.5; }
+.doll__part.is-fractured .doll__shape { stroke-dasharray: 4 3; }
+.doll__hp { font: 600 11px var(--font-mono); fill: #05080a; pointer-events: none; }
+.doll__part[data-state="dead"] .doll__hp { fill: #e6a99c; }
+.doll__part.is-pickable { cursor: pointer; outline: none; }
+.doll__part.is-pickable:hover .doll__shape,
+.doll__part.is-pickable:focus-visible .doll__shape { stroke: var(--white); stroke-width: 2.5; }
+.doll__part.is-off { opacity: .32; cursor: not-allowed; }
+.doll__part.is-selected .doll__shape { stroke: var(--pale); stroke-width: 3; }
+.doll--hud { width: 100%; height: 100%; }
+.doll--hud .doll__shape { stroke-width: 3; }
+.doll--hud .doll__part.is-bleeding .doll__shape { stroke-width: 4; }
+
+/* ---------- the health panel ---------- */
+.health { display: grid; grid-template-columns: 150px 1fr; gap: 16px; }
+.health--compact { grid-template-columns: 116px 1fr; gap: 12px; }
+.health__left { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.health__doll { width: 100%; padding: 6px 8px; }
+.health--compact .health__doll { padding: 2px 4px; }
+.health__total { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.health__total-k { font-size: 10px; letter-spacing: .2em; color: var(--tx-3); }
+.health__total-v { font-size: 22px; color: var(--tx-0); }
+.health__total-max { font-size: 11px; color: var(--tx-3); }
+.health__total.is-low .health__total-v { color: var(--danger); }
+.health__right { display: flex; flex-direction: column; min-width: 0; }
+.health__rows { display: flex; flex-direction: column; gap: 3px; }
+
+.hrow {
+  display: grid; grid-template-columns: 76px 1fr 54px 44px; align-items: center; gap: 8px;
+  padding: 3px 6px; border: 1px solid transparent; font-size: 11px;
+}
+.health--compact .hrow { grid-template-columns: 64px 1fr 50px 40px; gap: 6px; padding: 2px 4px; }
+.hrow.is-pickable { cursor: pointer; }
+.hrow.is-pickable:hover { border-color: var(--line-2); background: rgba(88,111,124,.12); }
+.hrow.is-selected { border-color: var(--pale); }
+.hrow.is-off { opacity: .4; cursor: not-allowed; }
+.hrow__name { letter-spacing: .14em; color: var(--tx-2); white-space: nowrap; }
+.hrow__bar { position: relative; height: 6px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); overflow: hidden; }
+.hrow__bar > i { display: block; height: 100%; background: #cfd9dd; transition: width .2s; }
+/* a surgery-lowered ceiling shows as a hatched cap on the right of the bar */
+.hrow__bar::after {
+  content: ''; position: absolute; top: 0; bottom: 0; right: 0; left: var(--cap, 100%);
+  background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(194,96,79,.4) 3px 5px);
+}
+.hrow[data-state="hurt"] .hrow__bar > i { background: var(--warn); }
+.hrow[data-state="bad"]  .hrow__bar > i { background: var(--danger); }
+.hrow[data-state="dead"] .hrow__bar > i { background: #5a1d18; }
+.hrow[data-state="dead"] .hrow__name { color: #b0665b; }
+.hrow__num { text-align: right; font-family: var(--font-mono); color: var(--tx-1); font-size: 11px; }
+.hrow__fx { display: flex; gap: 2px; }
+.fxi { width: 14px; height: 14px; color: var(--tx-3); }
+.fxi--bad { color: #e6a99c; }
+
+.health__vitals { margin-top: 10px; display: flex; flex-direction: column; gap: 3px; }
+.vrow {
+  display: grid; grid-template-columns: 18px 76px 1fr 54px; align-items: center; gap: 8px;
+  padding: 2px 6px; font-size: 11px; color: var(--tx-2);
+}
+.health--compact .vrow { grid-template-columns: 16px 64px 1fr 50px; gap: 6px; padding: 2px 4px; }
+.vrow .ico { color: var(--tx-3); width: 16px; height: 16px; }
+.vrow__k { letter-spacing: .14em; }
+.vrow__bar { height: 6px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); }
+.vrow__bar > i { display: block; height: 100%; background: var(--slate); transition: width .2s; }
+.vrow.is-low .vrow__bar > i { background: var(--warn); }
+.vrow.is-low .ico { color: var(--warn); }
+.vrow__num { text-align: right; font-family: var(--font-mono); font-size: 11px; }
+
+.health__fx { margin-top: 12px; border-top: 1px solid var(--line-1); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.health__fx-none { color: var(--tx-dim); font-size: 10.5px; letter-spacing: .16em; padding: 4px 6px; }
+.fxline {
+  display: grid; grid-template-columns: 18px 1fr auto auto; gap: 8px; align-items: center;
+  padding: 3px 6px; font-size: 11px; border-left: 2px solid transparent;
+}
+.fxline .ico { width: 16px; height: 16px; }
+.fxline--bad { color: #e6a99c; border-left-color: var(--danger-dk); }
+.fxline--good { color: var(--ok); border-left-color: #2c5a4a; }
+.fxline__name { letter-spacing: .06em; }
+.fxline__where { color: var(--tx-3); font-size: 10.5px; }
+.fxline__t { font-family: var(--font-mono); color: var(--tx-3); font-size: 10.5px; min-width: 34px; text-align: right; }
+
+.health__foot { margin-top: 14px; border-top: 1px solid var(--line-1); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.health__foot-row { display: flex; align-items: center; gap: 12px; }
+.health__foot-note { color: var(--tx-2); font-size: 11.5px; }
+
+/* the hideout pane: the body on the left, the stash on the right */
+.pane-grid--health { grid-template-columns: minmax(520px, 640px) 1fr; }
+#panel-health .panel__body { padding: 14px 16px; }
+
+/* ---------- pick a body part for a med ---------- */
+.bodypick { width: min(720px, 94vw); }
+.bodypick__body { display: flex; flex-direction: column; gap: 10px; }
+.bodypick__panel .health { align-items: start; }
+.bodypick__info {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 8px 10px; border: 1px solid var(--line-1); background: rgba(0,0,0,.3);
+  font-size: 12px;
+}
+.bodypick__part { letter-spacing: .18em; color: var(--pale); }
+.bodypick__note { color: var(--ok); }
+.bodypick__note.is-bad { color: var(--danger); }
+
+/* ---------- HUD ---------- */
+.hud-health { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 8px; pointer-events: auto; }
+.hud-body { width: 44px; height: 88px; filter: drop-shadow(0 0 4px rgba(0,0,0,.85)); }
+.hud-health__col { display: flex; flex-direction: column; gap: 5px; }
+.hud-health__num {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--tx-0); font-size: 20px; letter-spacing: .04em; font-variant-numeric: tabular-nums;
+}
+.hud-health__num .ico { color: var(--tx-3); }
+.hud-health.is-low .hud-health__num { color: var(--danger); animation: hp-pulse 1s ease-in-out infinite; }
+.hud-health.is-low .hud-health__num .ico { color: var(--danger); }
+@keyframes hp-pulse { 50% { opacity: .55; } }
+.hud-fx { display: flex; flex-wrap: wrap; gap: 4px; max-width: 250px; }
+.hudfx {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 2px 4px;
+  background: rgba(6,10,12,.82); border: 1px solid var(--line-1);
+  color: var(--tx-2); font-size: 10px;
+}
+.hudfx .ico { width: 15px; height: 15px; }
+.hudfx--bad { border-color: var(--danger-dk); color: #e6a99c; }
+.hudfx--good { border-color: #2c5a4a; color: var(--ok); }
+.hudfx b { font-family: var(--font-mono); font-size: 10px; font-weight: 600; }
+.hudfx__t { font-family: var(--font-mono); font-size: 9.5px; color: var(--tx-3); margin-left: 3px; }
+.hud-eh { display: flex; flex-direction: column; gap: 3px; }
+.hud-eh__row { display: flex; align-items: center; gap: 6px; color: var(--warn); }
+.hud-eh__row .ico { width: 14px; height: 14px; }
+.bar--eh { width: 110px; height: 4px; }
+.bar--eh > i { background: var(--warn); }
+.hud-eh.is-crit .hud-eh__row { color: var(--danger); }
+.hud-eh.is-crit .bar--eh > i { background: var(--danger); }
+
+/* the med channel sits above the interact / extract prompts */
+.med-prompt { bottom: 176px; }
+.med-prompt .interact-prompt__label { color: var(--ok); }
+.med-prompt .interact-prompt__label .ico { vertical-align: -4px; color: var(--ok); }
+.med-prompt .interact-prompt__bar > i { background: var(--ok); }

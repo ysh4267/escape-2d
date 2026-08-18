@@ -14,6 +14,7 @@ import { clamp, dist, uid } from '../core/util.js';
 import { game, addExp } from '../core/state.js';
 import { sfx } from '../core/audio.js';
 import { emit, EV } from '../core/events.js';
+import { Health, PART, HIT_WEIGHTS, FX, FX_INFO } from './health.js';
 
 export const RAID_STATUS = {
   RUNNING: 'running',
@@ -68,10 +69,16 @@ export class Raid {
     const p = this.navFor(spawn.level).snap(spawn.x, spawn.y) || [spawn.x, spawn.y];
     this.level = spawn.level;
     this.visited.add(this.level);
+    // the body comes into the raid as it left the last one; the raid only
+    // reads it through the model, and p.hp is a mirror for the HUD
+    this.health = game.health || (game.health = new Health());
+    this.health.events = [];
+    this.health.dead = false;
+    this.using = null;         // {item, part, t, dur} while a med is being applied
     this.player = {
       x: p[0], y: p[1],
       facing: -Math.PI / 2,
-      hp: 100, maxHp: 100,
+      hp: this.health.total, maxHp: this.health.max,
       stamina: 100,
       moving: false,
       sprint: false,
@@ -516,7 +523,8 @@ export class Raid {
 
   /** seconds to uncover one item from this container */
   searchStep(container) {
-    return clamp(container.def.search / 3, 0.35, 1.1);
+    // a broken arm rummages slower
+    return clamp(container.def.search / 3, 0.35, 1.1) * this.health.useMult();
   }
 
   /** how far through the search we are, 0..1 */
@@ -726,6 +734,8 @@ export class Raid {
       mult = 1 - clamp((w - OVERWEIGHT_AT) / (CRITICAL_AT - OVERWEIGHT_AT), 0, 1) * 0.45;
     }
     if (w > CRITICAL_AT) mult = 0.42;
+    // legs: a fracture or a destroyed leg is a limp unless the painkillers hide it
+    mult *= this.health.speedMult();
     const sprint = this.player.sprint && this.player.stamina > 1 ? SPRINT_MULT : 1;
     return BASE_SPEED * mult * sprint;
   }
@@ -740,6 +750,16 @@ export class Raid {
     }
 
     const p = this.player;
+
+    // the body: bleeds tick, thirst and hunger build, stims run out. A leg
+    // that will not carry a sprint ends the sprint here rather than in input.
+    if (!this.health.canSprint()) p.sprint = false;
+    this.health.tick(dt, { inRaid: true, sprinting: p.moving && p.sprint, rng: this.rng });
+    this.updateUse(dt);
+    this.drainHealthEvents();
+    p.hp = this.health.total;
+    p.maxHp = this.health.max;
+    if (this.health.dead) { this.finish(RAID_STATUS.KIA); return; }
 
     this.updateBreach(dt);
 
@@ -809,9 +829,10 @@ export class Raid {
       p.moving = false;
     }
 
-    // stamina
-    if (p.moving && p.sprint) p.stamina = clamp(p.stamina - 22 * dt, 0, 100);
-    else p.stamina = clamp(p.stamina + 15 * dt, 0, 100);
+    // stamina; adrenaline restores it faster, an empty stomach slower
+    const stam = this.health.staminaMult() * (this.health.energy < 20 ? 0.6 : 1);
+    if (p.moving && p.sprint) p.stamina = clamp(p.stamina - 22 * dt / stam, 0, 100);
+    else p.stamina = clamp(p.stamina + 15 * dt * stam, 0, 100);
     if (p.stamina <= 0) p.sprint = false;
 
     // visibility bookkeeping. Doors and stairwells are remembered the same way
@@ -943,9 +964,11 @@ export class Raid {
     const ammo = ammoTpl ? { tpl: ammoTpl } : null;
 
     const rpm = weapon.tpl.rpm || 400;
-    this.playerCooldown = Math.max(0.09, 60 / rpm);
+    this.playerCooldown = Math.max(0.09, 60 / rpm) * this.health.handlingMult();
     this.stats.shots++;
     sfx.fire(weapon.tpl);
+    // you cannot dress a wound and shoot at the same time
+    if (this.using) this.cancelUse('Interrupted');
 
     const p = this.player;
     p.facing = Math.atan2(ty - p.y, tx - p.x);
@@ -973,7 +996,8 @@ export class Raid {
 
     const d = dist(p.x, p.y, target.x, target.y);
     const ergo = weapon.tpl.ergo || 40;
-    const chance = clamp(0.94 - d * 0.018 + (ergo - 40) * 0.004, 0.22, 0.96);
+    // pain, a tremor and a broken arm all pull the shot off
+    const chance = clamp((0.94 - d * 0.018 + (ergo - 40) * 0.004) * this.health.aimMult(), 0.15, 0.96);
     const hit = this.rng.chance(chance);
     this.registerShot({ from: [p.x, p.y], to: [target.x, target.y], hostile: false, hit });
     if (!hit) {
@@ -1024,32 +1048,132 @@ export class Raid {
     this.scavs = this.scavs.filter((s) => s !== scav);
   }
 
-  damagePlayer(amount, source) {
+  /**
+   * A round landing on the player. Where it lands is rolled the way hits
+   * spread on a standing target; body armour covers the thorax and stomach,
+   * a helmet the head, and each soaks a share of what lands on what it
+   * covers and wears down for it. What gets through goes to that body part,
+   * which decides bleeding, fractures, and whether this was the one.
+   */
+  damagePlayer(amount, source, opts = {}) {
     const p = this.player;
+    const h = this.health;
     let dmg = amount;
     // what the round actually landed on, so the cue matches the deflection
     let struck = 'body';
+    const part = opts.part || this.rng.weighted(HIT_WEIGHTS, (e) => e[1])[0];
 
-    // body armor soaks a share of it and wears down
     const armor = game.equipment.item('armor') || game.equipment.item('rig');
-    if (armor && armor.tpl.armorClass && armor.dura > 0) {
+    if ((part === 'thorax' || part === 'stomach') && armor && armor.tpl.armorClass && armor.dura > 0) {
       const soak = clamp(armor.tpl.armorClass * 0.11, 0, 0.62);
       dmg *= 1 - soak;
       armor.dura = Math.max(0, armor.dura - amount * 0.09);
       struck = 'armor';
     }
     const helmet = game.equipment.item('head');
-    if (helmet && helmet.tpl.armorClass && helmet.dura > 0 && this.rng.chance(0.18)) {
+    if (part === 'head' && helmet && helmet.tpl.armorClass && helmet.dura > 0) {
       dmg *= 0.45;
       helmet.dura = Math.max(0, helmet.dura - amount * 0.12);
       struck = 'helmet';
+      // a round ringing off the helmet rattles the head inside it
+      if (!h.has(FX.CTIMM) && this.rng.chance(0.4)) h.addEffect(FX.CT, null, this.rng.float(6, 14));
     }
     sfx.hit(struck);
 
-    p.hp = Math.max(0, p.hp - dmg);
+    const res = h.hit(part, dmg, { rng: this.rng, bullet: true });
     p.lastHitAt = this.time;
     p.lastHitFrom = source ? Math.atan2(source.y - p.y, source.x - p.x) : 0;
-    if (p.hp <= 0) this.finish(RAID_STATUS.KIA);
+    p.lastHitPart = part;
+    p.hp = h.total;
+    p.maxHp = h.max;
+    this.drainHealthEvents();
+    if (res.killed || h.dead) this.finish(RAID_STATUS.KIA);
+    return res;
+  }
+
+  /** narrate what the body just did: a new bleed, a limb gone, a stim wearing off */
+  drainHealthEvents() {
+    const h = this.health;
+    if (!h.events.length) return;
+    for (const ev of h.events) {
+      if (ev.kind === 'fx') {
+        const info = FX_INFO[ev.type];
+        if (!info || !info.bad) continue;
+        const where = ev.part ? ` — ${PART[ev.part].name.toLowerCase()}` : '';
+        emit(EV.RAID_TOAST, { kind: 'bad', text: `${info.name}${where}` });
+      } else if (ev.kind === 'destroyed') {
+        emit(EV.RAID_TOAST, { kind: 'bad', text: `${PART[ev.part].name} destroyed` });
+      } else if (ev.kind === 'fxEnd') {
+        const info = FX_INFO[ev.type];
+        if (ev.type === FX.PK || ev.type === FX.HEMO || ev.type === FX.REGEN || ev.type === FX.ADR) {
+          emit(EV.RAID_TOAST, { kind: 'warn', text: `${info.name} wore off` });
+        }
+      }
+    }
+    h.events = [];
+  }
+
+  // ---------------------------------------------------------
+  // medicine
+  // ---------------------------------------------------------
+  /**
+   * Start applying a med. The use runs on the raid clock; walking is fine,
+   * a sprint or a shot interrupts it, and dropping the item cancels it. When
+   * it completes the health model applies the plan and the item is spent.
+   */
+  beginUse(item, part = null) {
+    if (this.status !== RAID_STATUS.RUNNING) return { ok: false, reason: 'Raid over' };
+    if (this.using) return { ok: false, reason: 'Already treating' };
+    const tpl = item.tpl;
+    if (!tpl.med) return { ok: false, reason: 'Not usable' };
+    if (Health.needsPart(tpl) && !part) part = this.health.bestPart(item);
+    const plan = this.health.plan(item, part);
+    if (!plan.ok) return plan;
+    // it has to be on you: a med in a crate is not in your hands
+    if (!this.carried(item)) return { ok: false, reason: 'Not in your gear' };
+    const dur = plan.time * this.health.useMult();
+    this.using = { item, part, t: 0, dur, plan };
+    this.player.sprint = false;
+    sfx.use(tpl);
+    return { ok: true, plan, dur };
+  }
+
+  cancelUse(why = null) {
+    if (!this.using) return;
+    this.using = null;
+    if (why) emit(EV.RAID_TOAST, { kind: 'warn', text: why });
+  }
+
+  updateUse(dt) {
+    const u = this.using;
+    if (!u) return;
+    if (!this.carried(u.item)) { this.cancelUse('Item lost'); return; }
+    if (this.player.sprint && this.player.moving) { this.cancelUse('Interrupted'); return; }
+    u.t += dt;
+    if (u.t < u.dur) return;
+    this.using = null;
+    const pl = this.health.apply(u.item, u.part, this.rng);
+    if (!pl.ok) { emit(EV.RAID_TOAST, { kind: 'warn', text: pl.reason }); return; }
+    const where = u.part ? ` — ${PART[u.part].name.toLowerCase()}` : '';
+    emit(EV.RAID_TOAST, { kind: 'ok', text: `${u.item.tpl.short || u.item.tpl.name}${where}: ${pl.note}` });
+    if ((u.item.res ?? 0) <= 0) detach(u.item);
+    if (pl.removes.includes(FX.HB) || pl.removes.includes(FX.LB)) addExp(pl.removes.includes(FX.HB) ? 40 : 25);
+    if (pl.removes.includes(FX.FR)) addExp(30);
+    emit(EV.INVENTORY_CHANGED);
+  }
+
+  /** is the item somewhere on the player, at any depth? */
+  carried(item) {
+    let cur = item, guard = 0;
+    while (cur && guard++ < 16) {
+      const hd = cur.holder;
+      if (!hd) return false;
+      if (hd.kind === 'slot') return true;
+      if (hd.grid.tag === 'pocket') return true;
+      if (hd.grid.tag === 'loot' || hd.grid.tag === 'stash') return false;
+      cur = hd.grid.owner;
+    }
+    return false;
   }
 
   holdExtract(dt) {
@@ -1076,6 +1200,11 @@ export class Raid {
     const survived = status === RAID_STATUS.SURVIVED;
     if (survived) sfx.extract();
     else if (status === RAID_STATUS.KIA) sfx.death();
+    this.using = null;
+    // the body you bring home: bleeds and fractures come with you out of a
+    // successful raid; a death or a walk-out puts you back at 30% everywhere
+    if (survived) this.health.afterRaid();
+    else this.health.afterDeath();
     const result = {
       status,
       extract: viaExtract,

@@ -674,6 +674,70 @@ try {
     stashHost.scrollTop = 0;
   }
 
+  head('the HEALTH tab: the doll, a med on a part, the Therapist');
+  {
+    const h = game.health;
+    // hurt the body the way a raid would, then open the tab
+    h.parts.thorax.hp = 40;
+    h.parts.rarm.hp = 30;
+    h.addEffect('lb', 'rarm');
+    h.addEffect('fr', 'lleg');
+    const it = new W.ESCAPE2D.Item('salewa', { examined: true });
+    const spot = game.stash.findSpot(it);
+    game.stash.place(it, spot.x, spot.y, spot.rot);
+    click($('#hideout-tabs .tab[data-tab="health"]'));
+    await until(() => $('#pane-health').classList.contains('is-active') && $('#health-panel-host .doll'));
+    await sleep(120);
+    check('the health pane is up with a seven-part doll', $$('#health-panel-host .doll .doll__part').length === 7);
+    check('the rows carry the numbers', $$('#health-panel-host .hrow').length === 7
+      && $('#health-panel-host .hrow[data-part="thorax"] .hrow__num').textContent === '40/85');
+    check('the bleeding arm is drawn bleeding', $('#health-panel-host .doll [data-part="rarm"]').classList.contains('is-bleeding'));
+    check('the fractured leg is listed', $$('#health-panel-host .fxline').some((n) => n.textContent.includes('Fracture') && n.textContent.includes('Left leg')));
+    check('the total reads the pool', $('#health-panel-host .health__total-v').textContent === String(Math.ceil(h.total)));
+    const treat = $('#btn-treat');
+    check('the Therapist button is live with a bill', treat && !treat.disabled && /Therapist/.test($('.health__foot-note').textContent),
+      $('.health__foot-note')?.textContent);
+
+    // USE the Salewa from the stash: the body-part dialog opens on the bleed
+    const tile = await until(() => $$('#health-stash-host .item').find((n) => n._item === it));
+    check('the Salewa is in the health pane stash', !!tile);
+    if (tile) {
+      fire(tile, 'contextmenu', { button: 2 });
+      const use = await until(() => Array.from(D.querySelectorAll('#context-menu .ctx__item')).find((b) => b.textContent.trim().startsWith('USE')));
+      check('the menu offers USE', !!use);
+      if (use) {
+        click(use);
+        const dlg = await until(() => $('.bodypick'));
+        check('a body-part dialog opens', !!dlg);
+        if (dlg) {
+          check('the bleeding arm is pre-selected and the healthy leg greyed',
+            $('.bodypick .hrow[data-part="rarm"]').classList.contains('is-selected')
+            && $('.bodypick .hrow[data-part="rleg"]').classList.contains('is-off'));
+          check('the note says what this use does', /stops the bleeding/.test($('.bodypick__info').textContent), $('.bodypick__info').textContent);
+          // pick the thorax instead and read the heal
+          click($('.bodypick .doll [data-part="thorax"]'));
+          await sleep(60);
+          check('picking the thorax on the doll switches the plan to a heal', /\+45 hp/.test($('.bodypick__info').textContent), $('.bodypick__info').textContent);
+          click($('.bodypick .hrow[data-part="rarm"]'));
+          await sleep(60);
+          const apply = Array.from(D.querySelectorAll('.bodypick .modal__foot .btn')).find((b) => b.textContent === 'APPLY');
+          click(apply);
+          await until(() => !$('.bodypick'));
+          await sleep(120);
+          check('APPLY stops the bleed and spends 45 of the kit', !h.has('lb', 'rarm') && it.res === 355, `${h.has('lb', 'rarm')} ${it.res}`);
+          check('the pane repainted', !$('#health-panel-host .doll [data-part="rarm"]').classList.contains('is-bleeding'));
+        }
+      }
+    }
+    // the Therapist, free while new
+    click($('#btn-treat'));
+    await sleep(150);
+    check('treatment restores everything', h.total === 440 && !h.has('fr'), String(h.total));
+    check('and the button goes quiet', $('#btn-treat').disabled && /Fit for duty/.test($('.health__foot-note').textContent));
+    click($('#hideout-tabs .tab[data-tab="stash"]'));
+    await sleep(120);
+  }
+
   head('final');
   check('still no runtime errors', $('#errbox').style.display === 'none',
         $('#errbox').textContent.slice(0, 600));

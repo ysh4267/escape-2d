@@ -17,6 +17,7 @@ import { loadAmmoDialog, loadIntoDialog } from '../inventory/ammo-dialogs.js';
 import { unloadAmmo, toggleFold, canFold, magazineOf } from '../inventory/weapon.js';
 import { emit, EV } from '../core/events.js';
 import { toast } from './shell.js';
+import { useInHideout } from './health-ui.js';
 
 let filterText = '';
 
@@ -150,6 +151,11 @@ export function buildMenu(item, where, extra = [], opts = {}) {
         label: 'OPEN', icon: 'box', key: 'DBL-CLICK',
         run: () => openContainerWindow(item),
       });
+    }
+    // meds and rations work on the body from the stash too, as in the game;
+    // the trader screen keeps to trading
+    if (item.tpl.med && where !== 'trade' && (item.res == null || item.res > 0)) {
+      actions.push({ label: 'USE', icon: 'health', run: () => useInHideout(item) });
     }
     if (item.tpl.stack > 1 && item.stack > 1) {
       actions.push({

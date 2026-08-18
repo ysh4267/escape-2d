@@ -5,6 +5,7 @@
 import { $, el, icon, fmtWeight, debounce } from '../core/util.js';
 import { MAPS, DEFAULT_MAP } from '../data/maps.js';
 import { game } from '../core/state.js';
+import { FX_INFO } from '../raid/health.js';
 
 let selected = DEFAULT_MAP;
 let onDeploy = () => {};
@@ -64,6 +65,17 @@ export function renderDeploy() {
       icon('map'), el('b', {}, l.name), el('span', { class: 'muted' }, `${n} containers`));
   })));
 
+  // the body goes in as it is: a fracture or an open bleed comes along
+  const h = game.health;
+  const conds = h ? h.flags().filter((f) => FX_INFO[f.type]?.bad).map((f) => FX_INFO[f.type].name + (f.n > 1 ? ` ×${f.n}` : '')) : [];
+  const hpRow = row('health', 'Health', `${Math.ceil(h?.total ?? 0)} / ${h?.max ?? 0}`);
+  if (h && h.total < h.max * 0.6) hpRow.querySelector('span').style.color = 'var(--danger)';
+  brief.append(block('CONDITION', [
+    hpRow,
+    row('energy', 'Energy · hydration', h ? `${Math.round(h.energy)} · ${Math.round(h.hydration)}` : '—'),
+    row('warn', 'Conditions', conds.length ? conds.join(', ') : 'none'),
+  ]));
+
   brief.append(block('LOADOUT', [
     row('weight', 'Carried weight', `${fmtWeight(weight)} kg`),
     row('box', 'Rig', game.equipment.item('rig')?.tpl.name || '—'),
@@ -79,6 +91,7 @@ export function renderDeploy() {
     note('Loot found in raid keeps its status when you extract; gear you brought does not.'),
     note('Extract and everything stays packed as you left it — unload in the stash when you want to.'),
     note('Die or run out of time and only your secure container comes back.'),
+    note('You have seven body parts. Bleeds, fractures and pain follow you home; the HEALTH tab and the Therapist put you right.'),
   ]));
 
   const go = el('button', { class: 'btn btn--primary btn--lg', style: { width: '100%', justifyContent: 'center' } },

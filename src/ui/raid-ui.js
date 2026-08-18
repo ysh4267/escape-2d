@@ -24,9 +24,11 @@ import { startExamine, examining, needsExamine, isKnown, cancelExamine } from '.
 import { paintExamine } from '../inventory/view.js';
 import { showScreen, raidToast, toast, refreshTopbar } from './shell.js';
 import { emit, on, EV } from '../core/events.js';
+import { mountHudHealth, drawHudHealth, useInRaid, renderHealthPanel } from './health-ui.js';
 
 let raid = null;
 let renderer = null;
+let overlayHealth = null;
 let rafId = 0;
 let lastT = 0;
 let overlayOpen = false;
@@ -67,6 +69,7 @@ export function startRaid({ mapDef, geo, onFinish }) {
   closeAllContainerWindows();
   closeAllModdingWindows();
   startAmbient();
+  mountHudHealth(raid.health);
   $('#btn-hud-sprint').classList.remove('is-on');
   raidToast(`Inserted — ${raid.player.spawnName}`, 'ok', 3400);
   raidToast(`${raid.containers.length} containers across ${raid.map.levels.length} floors`, 'info', 3400);
@@ -151,10 +154,26 @@ function loop(now) {
     dt,
     rawTime: raid.time,
     nearExtract: raid.nearExtract,
+    fx: {
+      pain: raid.health.inPain,
+      tremor: raid.health.tremor,
+      pk: raid.health.onPainkiller,
+      tunnel: raid.health.tunnel,
+      ct: raid.health.contused,
+      lowHp: raid.health.lowHp,
+    },
   });
+  sfx.muffle(raid.health.contused);
   drawHud();
   if (floorplanOpen()) drawFloorplan();
+  // the overlay's health block follows the body while it is open (a few
+  // times a second is plenty for numbers that move by the tick)
+  if (overlayOpen && overlayHealth && (now - overlayHealthAt) > 250) {
+    overlayHealthAt = now;
+    overlayHealth.refresh();
+  }
 }
+let overlayHealthAt = 0;
 
 function stairLabel(stair) {
   const exits = raid.stairExits(stair);
@@ -171,8 +190,7 @@ function stopLoop() {
 // ---------------------------------------------------------
 function drawHud() {
   const p = raid.player;
-  $('#hp-fill').style.width = `${(p.hp / p.maxHp) * 100}%`;
-  $('#hp-text').textContent = String(Math.round(p.hp));
+  drawHudHealth(raid);
 
   const w = game.equipment.weight();
   const wtBar = $('#wt-fill').parentElement;
@@ -371,6 +389,7 @@ function bindRaidInput(canvas) {
   const sprintBtn = $('#btn-hud-sprint');
   sprintBtn.addEventListener('click', () => {
     if (!raid) return;
+    if (!raid.player.sprint && !raid.health.canSprint()) { noSprint(); return; }
     raid.player.sprint = !raid.player.sprint;
     sprintBtn.classList.toggle('is-on', raid.player.sprint);
   });
@@ -394,6 +413,18 @@ function bindRaidInput(canvas) {
     buildFloorStrip();
     raidToast(name, 'info', 2200);
   });
+}
+
+/** why the legs will not carry a sprint right now */
+let noSprintAt = 0;
+function noSprint() {
+  const now = performance.now();
+  if (now - noSprintAt < 1200) return;
+  noSprintAt = now;
+  const h = raid.health;
+  const why = h.exhausted ? 'Too exhausted to sprint'
+    : h.badLegs() ? 'Cannot sprint on a broken leg' : 'Cannot sprint';
+  raidToast(why, 'warn');
 }
 
 /** clicking into the dark must not operate a door you have never seen */
@@ -421,9 +452,15 @@ function onKeyDown(e) {
     if (overlayOpen) closeOverlay();
     toggleFloorplan();
   } else if (e.key === 'Shift') {
-    raid.player.sprint = true;
+    if (!e.repeat && !raid.health.canSprint()) noSprint();
+    else raid.player.sprint = raid.health.canSprint();
   } else if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') {
     holdingF = true;
+  } else if (e.key === 'h' || e.key === 'H' || e.key === 'ㅗ') {
+    // the health block lives in the inventory overlay; H opens straight to it
+    closeFloorplan();
+    if (!overlayOpen) openOverlay();
+    $('#raid-health-host')?.scrollIntoView({ block: 'nearest' });
   } else if (e.key === 'Escape') {
     if (floorplanOpen()) closeFloorplan();
     else if (overlayOpen) closeOverlay();
@@ -502,6 +539,12 @@ function renderOverlay() {
 
   renderCarry(game.equipment, $('#raid-carry-host'));
   renderGearSlots(game.equipment, $('#raid-equipment-host'));
+  // the body, above the gear, the way the character screen stacks them
+  const hh = $('#raid-health-host');
+  if (hh) {
+    if (!overlayHealth || !hh.firstChild) overlayHealth = renderHealthPanel(hh, raid.health, { compact: false });
+    else overlayHealth.refresh();
+  }
   $('#raid-weight').textContent = fmtWeight(game.equipment.weight());
 
   for (const host of ['#loot-host', '#raid-carry-host', '#raid-equipment-host']) {
@@ -561,20 +604,13 @@ function activateRaidContext() {
       return actions;
     }
     const tpl = item.tpl;
-    if (tpl.res && (tpl.cat === 'meds' || tpl.cat === 'food' || tpl.cat === 'drink') && item.res > 0) {
+    if (tpl.med && (item.res == null || item.res > 0)) {
+      // medkits and dressings ask for a body part; pills, stims and rations
+      // just go down. The use itself runs on the raid clock (raid.beginUse).
       actions.push({
         label: 'USE', icon: 'health',
-        run: () => {
-          const heal = tpl.heal || 15;
-          const before = raid.player.hp;
-          raid.player.hp = Math.min(raid.player.maxHp, raid.player.hp + heal);
-          const used = Math.max(1, Math.round(raid.player.hp - before));
-          item.res = Math.max(0, item.res - (tpl.heal ? used : 20));
-          if (item.res <= 0) detach(item);
-          sfx.use(tpl);
-          raidToast(`Used ${tpl.name}`, 'ok');
-          dndContext.onChange();
-        },
+        disabled: !!raid.using,
+        run: () => useInRaid(raid, item),
       });
     }
     if (tpl.stack > 1 && item.stack > 1) {
@@ -648,6 +684,7 @@ function activateRaidContext() {
 // ---------------------------------------------------------
 on(EV.RAID_END, (result) => {
   stopLoop();
+  overlayHealth = null;
   holdingF = false;
   firing = false;
   cancelExamine();               // whatever was being inspected is moot now
@@ -657,6 +694,9 @@ on(EV.RAID_END, (result) => {
   closeAllModdingWindows();
   setInRaid(false);
   stopAmbient();
+  sfx.muffle(false);
+  // a shake or a wash left on the canvas by the last frame must not greet the next raid
+  if (renderer) { renderer.canvas.style.filter = ''; renderer.filterApplied = ''; }
   showResult(result);
 });
 
@@ -702,7 +742,8 @@ function showResult(result) {
     stat('CONTAINERS', String(result.searched)),
     stat('KILLS', String(result.kills ?? 0)),
     stat('ITEMS OUT', String(result.kept.length)),
-    stat('HAUL VALUE', `${fmtNum(result.value)} ₽`));
+    stat('HAUL VALUE', `${fmtNum(result.value)} ₽`),
+    stat('HEALTH', game.health ? `${Math.ceil(game.health.total)} / ${game.health.max}` : '—'));
 
   const lootHost = $('#result-loot');
   lootHost.parentElement.querySelector('h3').textContent =

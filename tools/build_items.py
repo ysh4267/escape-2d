@@ -152,6 +152,86 @@ def webp_size(data):
     return None
 
 
+# ---------------------------------------------------------
+# medical / provisions: what a med does, straight from the template
+#
+# EFT keeps the whole medical model on the item: how long a use takes,
+# how many HP one use of a medkit can put back, which conditions it removes
+# and what that costs out of its resource pool, and what a ration does to
+# energy and hydration. Stims name a buff set in globals (BuffsPropital ...)
+# which the client interprets by name.
+# ---------------------------------------------------------
+_MED_RM = {'LightBleeding': 'lb', 'HeavyBleeding': 'hb', 'Fracture': 'fr',
+           'Contusion': 'ct', 'DestroyedPart': 'dp'}
+
+
+def med_fields(props, cat):
+    m = {}
+    t = props.get('medUseTime') or props.get('foodUseTime')
+    if t:
+        m['t'] = float(t)
+    if props.get('hpResourceRate'):
+        m['rate'] = int(props['hpResourceRate'])
+    ed = props.get('effects_damage') or {}
+    rm = {}
+    if isinstance(ed, dict):
+        for k, v in ed.items():
+            v = v or {}
+            if k == 'Pain':
+                # a pain entry with a duration is the painkiller effect
+                if v.get('duration'):
+                    m['pk'] = int(v['duration'])
+                continue
+            if k in ('LightBleeding', 'HeavyBleeding') and v.get('duration'):
+                # zagustin: bleeding stopped and prevented for the duration
+                m['hemo'] = int(v['duration'])
+                continue
+            if k == 'Contusion' and v.get('duration'):
+                m['ctImmune'] = int(v['duration'])
+                continue
+            short = _MED_RM.get(k)
+            if not short:
+                continue
+            e = {}
+            if v.get('cost'):
+                e['cost'] = int(v['cost'])
+            if k == 'DestroyedPart':
+                e['min'] = int(v.get('healthPenaltyMin') or 0)
+                e['max'] = int(v.get('healthPenaltyMax') or 0)
+            rm[short] = e
+    if rm:
+        m['rm'] = rm
+    eh = props.get('effects_health') or {}
+    if isinstance(eh, dict):
+        en = (eh.get('Energy') or {}).get('value') or 0
+        hy = (eh.get('Hydration') or {}).get('value') or 0
+        if en or hy:
+            m['eh'] = {'en': int(en), 'hy': int(hy)}
+    if props.get('StimulatorBuffs'):
+        m['buff'] = props['StimulatorBuffs']
+
+    if cat in ('food', 'drink'):
+        kind = cat
+    elif m.get('rate'):
+        kind = 'medkit'
+    elif 'dp' in rm:
+        kind = 'surgery'
+    elif 'fr' in rm:
+        kind = 'splint'
+    elif 'hb' in rm:
+        kind = 'tourniquet'
+    elif 'lb' in rm:
+        kind = 'bandage'
+    elif m.get('buff') or m.get('hemo'):
+        kind = 'stim'
+    elif m.get('pk'):
+        kind = 'painkiller'
+    else:
+        kind = 'med'
+    m['kind'] = kind
+    return m
+
+
 def main():
     report = '--report' in sys.argv
     print('[1/5] loading source data')
@@ -345,6 +425,8 @@ def main():
                 tpl['heal'] = int(props['hpResourceRate'])
         elif props.get('MaxResource') and r['cat'] in ('food', 'drink', 'meds'):
             tpl['res'] = {'max': int(props['MaxResource'])}
+        if props and r['cat'] in ('meds', 'food', 'drink'):
+            tpl['med'] = med_fields(props, r['cat'])
         if props.get('MaximumNumberOfUsage'):
             tpl['uses'] = int(props['MaximumNumberOfUsage'])
         # examination: most templates are known on sight, the rest have to be
@@ -434,6 +516,10 @@ def main():
         for k, v in extra.items():
             if k == 'res':
                 tpl.setdefault('res', {'max': v})
+            elif k == 'heal':
+                # the template's own hpResourceRate wins; the authored number
+                # is only a fallback for an item missing from the dump
+                tpl.setdefault('heal', v)
             else:
                 tpl[k] = v
 

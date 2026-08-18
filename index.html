@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="styles/base.css">
 <link rel="stylesheet" href="styles/inventory.css">
 <link rel="stylesheet" href="styles/screens.css">
+<link rel="stylesheet" href="styles/health.css">
 </head>
 <body>
 
@@ -44,6 +45,23 @@
   <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/><path d="M18 7a7.5 7.5 0 0 1 0 10"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
   <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
+  <!-- health: vitals and conditions, drawn as line glyphs like the rest -->
+  <symbol id="i-energy" viewBox="0 0 24 24"><path d="M6 3v6a3 3 0 0 0 6 0V3"/><path d="M9 3v18"/><path d="M17 3c-1.7 1.2-2.5 3.5-2.5 6.5V13H17v8"/></symbol>
+  <symbol id="i-water" viewBox="0 0 24 24"><path d="M12 3s-6.5 7.4-6.5 11.5a6.5 6.5 0 0 0 13 0C18.5 10.4 12 3 12 3z"/></symbol>
+  <symbol id="i-fx-lb" viewBox="0 0 24 24"><path d="M12 5s-4.5 5.6-4.5 8.7a4.5 4.5 0 0 0 9 0C16.5 10.6 12 5 12 5z"/></symbol>
+  <symbol id="i-fx-hb" viewBox="0 0 24 24"><path d="M9 3s-4.5 5.4-4.5 8.4a4.5 4.5 0 0 0 9 0C13.5 8.4 9 3 9 3z"/><path d="M16.5 11s-3.5 4.2-3.5 6.5a3.5 3.5 0 0 0 7 0C20 15.2 16.5 11 16.5 11z"/></symbol>
+  <symbol id="i-fx-fw" viewBox="0 0 24 24"><rect x="2.5" y="9" width="19" height="6" rx="2" transform="rotate(-45 12 12)"/><path d="M10 12h4M12 10v4"/></symbol>
+  <symbol id="i-fx-fr" viewBox="0 0 24 24"><path d="M4.5 7.5a2 2 0 1 1 3-3l2.5 2.5"/><path d="M19.5 16.5a2 2 0 1 1-3 3L14 17"/><path d="M8.5 6.5l3 3-2.5 2 3 1.5-2 2.5 3.5 1.5"/></symbol>
+  <symbol id="i-fx-pain" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 6l-3.2 4.3L21 12l-5.2 1.7L19 18l-5.2-2.2L12 21l-1.8-5.2L5 18l3.2-4.3L3 12l5.2-1.7L5 6l5.2 2.2z"/></symbol>
+  <symbol id="i-fx-tremor" viewBox="0 0 24 24"><path d="M3 8c2-2.5 4 2.5 6 0s4-2.5 6 0 4 2.5 6 0"/><path d="M3 12.5c2-2.5 4 2.5 6 0s4-2.5 6 0 4 2.5 6 0"/><path d="M3 17c2-2.5 4 2.5 6 0s4-2.5 6 0 4 2.5 6 0"/></symbol>
+  <symbol id="i-fx-ct" viewBox="0 0 24 24"><circle cx="9.5" cy="12" r="5"/><path d="M17.5 8.5a5 5 0 0 1 0 7"/><path d="M20.5 5.5a9.5 9.5 0 0 1 0 13"/></symbol>
+  <symbol id="i-fx-pk" viewBox="0 0 24 24"><rect x="2.5" y="9" width="19" height="6" rx="3" transform="rotate(-45 12 12)"/><path d="M9.5 14.5l5-5"/></symbol>
+  <symbol id="i-fx-dehy" viewBox="0 0 24 24"><path d="M12 3s-6.5 7.4-6.5 11.5a6.5 6.5 0 0 0 13 0C18.5 10.4 12 3 12 3z"/><path d="M4 20L20 4"/></symbol>
+  <symbol id="i-fx-exh" viewBox="0 0 24 24"><path d="M6 3v6a3 3 0 0 0 6 0V3"/><path d="M9 3v18"/><path d="M17 3c-1.7 1.2-2.5 3.5-2.5 6.5V13H17v8"/><path d="M3 21L21 3"/></symbol>
+  <symbol id="i-fx-buff" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16.5v-9M8.5 11l3.5-3.5 3.5 3.5"/></symbol>
+  <symbol id="i-fx-tunnel" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-fx-dp" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 8l8 8M16 8l-8 8"/></symbol>
+  <symbol id="i-fx-lowhp" viewBox="0 0 24 24"><path d="M12 20.5s-8-5-8-11a4.3 4.3 0 0 1 8-2.2A4.3 4.3 0 0 1 20 9.5c0 6-8 11-8 11z"/><path d="M4.5 12h4l1.5-3 2 6 1.5-3h6"/></symbol>
 </svg>
 
 <div id="app">
@@ -67,6 +85,7 @@
       <nav class="tabs" id="hideout-tabs">
         <button class="tab is-active" data-tab="stash"><svg class="ico"><use href="#i-stash"/></svg><span>STASH</span></button>
         <button class="tab" data-tab="traders"><svg class="ico"><use href="#i-trader"/></svg><span>TRADERS</span></button>
+        <button class="tab" data-tab="health"><svg class="ico"><use href="#i-health"/></svg><span>HEALTH</span></button>
         <button class="tab" data-tab="raid"><svg class="ico"><use href="#i-map"/></svg><span>RAID</span></button>
       </nav>
       <div class="topbar__stats">
@@ -156,6 +175,26 @@
         </div>
       </div>
 
+      <!-- ---- HEALTH PANE ---- -->
+      <div class="pane" id="pane-health">
+        <div class="pane-grid pane-grid--health">
+          <div class="panel" id="panel-health">
+            <div class="panel__head">
+              <h2>HEALTH</h2>
+              <div class="panel__meta hint">seven parts · conditions · therapist</div>
+            </div>
+            <div class="panel__body panel__body--scroll" id="health-panel-host"></div>
+          </div>
+          <div class="panel" id="panel-health-stash">
+            <div class="panel__head">
+              <h2>STASH</h2>
+              <div class="panel__meta hint">right-click a med: USE</div>
+            </div>
+            <div class="panel__body panel__body--scroll" id="health-stash-host"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ---- RAID PANE ---- -->
       <div class="pane" id="pane-raid">
         <div class="deploy">
@@ -172,10 +211,20 @@
 
     <div class="raid-hud">
       <div class="hud-left">
-        <div class="hud-vitals">
-          <div class="vital"><svg class="ico"><use href="#i-health"/></svg>
-            <div class="bar"><i id="hp-fill"></i></div><span id="hp-text">100</span>
+        <!-- the body in the corner, coloured part by part, with what is
+             wrong with it in a row underneath: the game's own health strip -->
+        <div class="hud-health" id="hud-health">
+          <div class="hud-body" id="hud-body"></div>
+          <div class="hud-health__col">
+            <div class="hud-health__num"><svg class="ico"><use href="#i-health"/></svg><span id="hp-text">440</span></div>
+            <div class="hud-fx" id="hud-fx"></div>
+            <div class="hud-eh" id="hud-eh" hidden>
+              <div class="hud-eh__row"><svg class="ico"><use href="#i-energy"/></svg><div class="bar bar--eh"><i id="hud-en"></i></div></div>
+              <div class="hud-eh__row"><svg class="ico"><use href="#i-water"/></svg><div class="bar bar--eh"><i id="hud-hy"></i></div></div>
+            </div>
           </div>
+        </div>
+        <div class="hud-vitals">
           <div class="vital"><svg class="ico"><use href="#i-weight"/></svg>
             <div class="bar bar--weight"><i id="wt-fill"></i></div><span id="wt-text">0.0 kg</span>
           </div>
@@ -204,7 +253,7 @@
         </div>
         <div class="hud-keys">
           <span><b>LMB</b> move &nbsp; on a container: search &nbsp; on a door: open</span>
-          <span><b>M</b> floor plan &nbsp; <b>TAB</b> inventory &nbsp; <b>F</b> extract</span>
+          <span><b>M</b> floor plan &nbsp; <b>TAB</b> inventory &nbsp; <b>F</b> extract &nbsp; <b>H</b> health</span>
         </div>
       </div>
     </div>
@@ -214,6 +263,12 @@
     <div class="interact-prompt" id="interact-prompt" hidden>
       <div class="interact-prompt__label"><span id="interact-label">—</span></div>
       <div class="interact-prompt__bar"><i id="interact-fill"></i></div>
+    </div>
+
+    <!-- a med being applied: name, part, and how far along the use is -->
+    <div class="interact-prompt med-prompt" id="med-prompt" hidden>
+      <div class="interact-prompt__label"><svg class="ico"><use href="#i-health"/></svg> <span id="med-label">—</span></div>
+      <div class="interact-prompt__bar"><i id="med-fill"></i></div>
     </div>
 
     <button class="extract-prompt" id="extract-prompt" hidden>
@@ -275,8 +330,11 @@
           <div class="panel__body panel__body--scroll" id="raid-carry-host"></div>
         </div>
         <div class="panel" id="panel-raid-gear">
-          <div class="panel__head"><h2>GEAR</h2></div>
-          <div class="panel__body panel__body--scroll" id="raid-equipment-host"></div>
+          <div class="panel__head"><h2>GEAR</h2><div class="panel__meta hint">right-click a med: USE</div></div>
+          <div class="panel__body panel__body--scroll">
+            <div id="raid-health-host"></div>
+            <div id="raid-equipment-host"></div>
+          </div>
         </div>
       </div>
     </div>
