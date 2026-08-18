@@ -37,7 +37,9 @@
   <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 12H4"/><path d="M10 6l-6 6 6 6"/></symbol>
   <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
   <!-- the PMC standing behind the gear slots, as on the character screen -->
-  <symbol id="i-pmc" viewBox="0 0 160 350"><g fill="currentColor" stroke="none"><circle cx="80" cy="36" r="22"/><path d="M80 60c-15 0-27 5-35 13-7 8-11 18-12 30l-3 45h100l-3-45c-1-12-5-22-12-30-8-8-20-13-35-13z"/><rect x="20" y="80" width="20" height="106" rx="10"/><rect x="120" y="80" width="20" height="106" rx="10"/><path d="M30 148h100l-6 78H36z"/><path d="M42 220h32v112a16 16 0 0 1-32 0z"/><path d="M86 220h32v112a16 16 0 0 1-32 0z"/></g></symbol>
+  <!-- the PMC standing behind the gear slots: the character screen's own
+       silhouette, traced from its health tab (the man with the rifle low) -->
+  <symbol id="i-pmc" viewBox="0 0 1090 1448"><path d="M584,61 549,76 529,116 498,141 496,148 499,151 514,146 525,149 524,173 533,182 533,191 541,212 537,217 527,220 518,234 500,236 480,248 476,253 476,265 465,286 449,294 436,319 427,346 419,387 413,398 414,406 377,458 374,470 343,520 314,546 280,554 199,670 186,674 168,703 162,720 122,781 118,795 92,833 91,841 98,847 99,853 72,897 61,900 41,891 33,899 53,915 52,928 57,933 78,924 149,817 162,806 205,747 225,730 227,717 241,701 250,702 260,713 287,756 336,757 339,752 332,736 295,680 294,674 306,666 307,660 315,652 327,656 358,652 376,635 390,600 412,571 420,572 428,589 440,599 433,620 432,650 425,678 427,695 419,739 419,757 422,762 422,836 427,842 413,953 415,958 427,959 432,964 435,999 429,1006 435,1018 432,1034 435,1042 435,1073 428,1081 414,1082 413,1097 417,1108 410,1135 420,1157 391,1204 387,1224 396,1233 407,1237 436,1233 453,1217 464,1196 483,1190 495,1175 494,1150 506,1137 511,1119 511,1081 503,1051 503,1028 513,983 511,961 515,936 525,920 527,887 538,865 543,844 552,826 557,822 565,822 594,835 612,860 632,908 636,941 646,966 645,981 653,995 652,1019 668,1056 673,1123 681,1142 677,1158 678,1170 696,1188 690,1252 693,1261 704,1268 731,1271 750,1262 759,1249 762,1221 758,1180 772,1148 767,1132 765,1102 759,1089 761,1060 753,1039 755,988 740,942 739,886 747,864 747,848 741,843 725,843 720,838 735,751 727,733 717,671 708,653 710,633 698,593 704,584 718,580 721,575 726,528 731,517 742,513 759,518 764,526 772,565 769,613 779,626 780,633 766,648 748,660 744,666 743,678 750,685 755,702 769,705 798,703 807,695 825,651 843,626 847,586 843,526 836,511 819,428 804,392 806,377 761,283 758,271 740,258 720,234 709,231 699,220 668,213 661,181 665,165 660,156 660,148 667,138 667,129 656,117 647,91 615,67Z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3 4h2.5l2.6 11.5h9.4L20 7H6.2"/><circle cx="9.5" cy="19" r="1.4"/><circle cx="17.5" cy="19" r="1.4"/></symbol>
   <symbol id="i-sell" viewBox="0 0 24 24"><path d="M3 12h13"/><path d="M12 7l5 5-5 5"/><path d="M20 4v16"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.8-6 10-6 10 6 10 6-3.8 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
@@ -74,6 +76,26 @@
   <symbol id="i-fx-buff" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16.5v-9M8.5 11l3.5-3.5 3.5 3.5"/></symbol>
   <symbol id="i-fx-tunnel" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-fx-dp" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 8l8 8M16 8l-8 8"/></symbol>
+  <symbol id="i-asterisk" viewBox="0 0 24 24"><path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7" stroke-width="3.2"/></symbol>
+  <!-- ghosts of what goes in each gear slot, drawn faint in the empty box like the game's -->
+  <symbol id="i-g-headset" viewBox="0 0 24 24"><path d="M4 14v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="12.5" width="4" height="7" rx="1"/><rect x="17" y="12.5" width="4" height="7" rx="1"/><path d="M19 19.5c0 2-3 3-6 3"/></symbol>
+  <symbol id="i-g-cap" viewBox="0 0 24 24"><path d="M5 14a7 7 0 0 1 14 0v3H5z"/><path d="M2 17h20"/><path d="M12 7V4"/></symbol>
+  <symbol id="i-g-mask" viewBox="0 0 24 24"><path d="M12 3c-4 0-7 3-7 8v5c0 3.5 3 6 7 6s7-2.5 7-6v-5c0-5-3-8-7-8z"/><path d="M8.5 11h7v3h-7z"/></symbol>
+  <symbol id="i-g-armband" viewBox="0 0 24 24"><path d="M5 6c4 3 10 3 14 0v12c-4-3-10-3-14 0z"/><path d="M9.5 12h5"/></symbol>
+  <symbol id="i-g-dogtag" viewBox="0 0 24 24"><rect x="9" y="4" width="10" height="16" rx="3" transform="rotate(20 14 12)"/><path d="M4 4c3 1 5 3 6 6"/></symbol>
+  <symbol id="i-g-armor" viewBox="0 0 24 24"><path d="M7 4h10l2 4v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8z"/><path d="M9 4v4h6V4M9 13h6"/></symbol>
+  <symbol id="i-g-goggles" viewBox="0 0 24 24"><path d="M3 11h18v5a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3z"/><path d="M12 11v8M4 11c2-3 14-3 16 0"/></symbol>
+  <symbol id="i-g-rifle" viewBox="0 0 24 24"><path d="M2 12h13l2-2h4l1 2v2h-3l-2 2h-3l-1 3H10l1-3H2z"/><path d="M15 14v3M6 12v-1.5"/></symbol>
+  <symbol id="i-g-pistol" viewBox="0 0 24 24"><path d="M3 8h17v4h-9l-1 6H6l1-6H3z"/><path d="M15 12v-2M5 8V6.5"/></symbol>
+  <symbol id="i-g-knife" viewBox="0 0 24 24"><path d="M4 20l8-8"/><path d="M12 12l8-9v3.5L14 14z"/><path d="M9 15l2 2"/></symbol>
+  <symbol id="i-g-rig" viewBox="0 0 24 24"><path d="M6 4l6 6 6-6M6 4v16h12V4"/><path d="M8 13h8M8 17h8"/></symbol>
+  <symbol id="i-g-pack" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="14" rx="3"/><path d="M9 7V5a3 3 0 0 1 6 0v2M5 13h14M9 21v-4h6v4"/></symbol>
+  <symbol id="i-g-pouch" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M8 7V5h8v2M3 12h18"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L5 13.5h6L10 22l9-11.5h-6z"/></symbol>
+  <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 1 6 0v9.5a5 5 0 1 1-6 0z"/><path d="M12 9v7"/><circle cx="12" cy="17.5" r="1.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l4.5-4.5"/><path d="M12 5v1.5M19 12h-1.5M5 12h1.5"/></symbol>
+  <symbol id="i-biohazard" viewBox="0 0 24 24"><circle cx="12" cy="13" r="3"/><path d="M12 3.5a5 5 0 0 1 4.3 7.5M12 3.5a5 5 0 0 0-4.3 7.5"/><path d="M4 18.5a5 5 0 0 1 3.4-8M20 18.5a5 5 0 0 0-3.4-8"/><path d="M8 20.5a5 5 0 0 0 8 0"/></symbol>
+  <symbol id="i-radiation" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 3a9 9 0 0 1 7.8 4.5L15 10a3.5 3.5 0 0 0-3-1.8z"/><path d="M4.2 7.5A9 9 0 0 1 12 3v5.2A3.5 3.5 0 0 0 9 10z"/><path d="M12 21a9 9 0 0 1-7.8-4.5L9 14a3.5 3.5 0 0 0 6 0l4.8 2.5A9 9 0 0 1 12 21z"/></symbol>
   <symbol id="i-fx-lowhp" viewBox="0 0 24 24"><path d="M12 20.5s-8-5-8-11a4.3 4.3 0 0 1 8-2.2A4.3 4.3 0 0 1 20 9.5c0 6-8 11-8 11z"/><path d="M4.5 12h4l1.5-3 2 6 1.5-3h6"/></symbol>
 </svg>
 
@@ -225,19 +247,6 @@
 
     <div class="raid-hud">
       <div class="hud-left">
-        <!-- the body in the corner, coloured part by part, with what is
-             wrong with it in a row underneath: the game's own health strip -->
-        <div class="hud-health" id="hud-health">
-          <div class="hud-body" id="hud-body"></div>
-          <div class="hud-health__col">
-            <div class="hud-health__num"><svg class="ico"><use href="#i-health"/></svg><span id="hp-text">440</span></div>
-            <div class="hud-fx" id="hud-fx"></div>
-            <div class="hud-eh" id="hud-eh" hidden>
-              <div class="hud-eh__row"><svg class="ico"><use href="#i-energy"/></svg><div class="bar bar--eh"><i id="hud-en"></i></div></div>
-              <div class="hud-eh__row"><svg class="ico"><use href="#i-water"/></svg><div class="bar bar--eh"><i id="hud-hy"></i></div></div>
-            </div>
-          </div>
-        </div>
         <div class="hud-vitals">
           <div class="vital"><svg class="ico"><use href="#i-weight"/></svg>
             <div class="bar bar--weight"><i id="wt-fill"></i></div><span id="wt-text">0.0 kg</span>
@@ -271,6 +280,14 @@
           <span><b>M</b> floor plan &nbsp; <b>TAB</b> inventory &nbsp; <b>F</b> extract &nbsp; <b>H</b> health</span>
         </div>
       </div>
+    </div>
+
+    <!-- the body in the top-left corner the way the game keeps it: the
+         outline man, each part stroked in its own colour, and the conditions
+         stacked beside him -->
+    <div class="hud-health" id="hud-health">
+      <div class="hud-body" id="hud-body"></div>
+      <div class="hud-fx" id="hud-fx"></div>
     </div>
 
     <div class="raid-toast" id="raid-toast"></div>

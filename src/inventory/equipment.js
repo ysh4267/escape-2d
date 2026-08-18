@@ -36,19 +36,38 @@ import { SLOT_ACCEPTS } from '../data/items.js';
  * back, so keep `primary` ahead of `secondary`.
  */
 export const SLOT_DEFS = [
-  { key: 'ears',      label: 'EARPIECE',     icon: 'info',      w: 2, h: 2, area: 'ears' },
-  { key: 'head',      label: 'HEADWEAR',     icon: 'body',      w: 2, h: 2, area: 'head' },
-  { key: 'face',      label: 'FACE COVER',   icon: 'body',      w: 2, h: 2, area: 'face' },
-  { key: 'armor',     label: 'BODY ARMOR',   icon: 'box',       w: 2, h: 2, area: 'armor' },
-  { key: 'eyes',      label: 'EYEWEAR',      icon: 'eye',       w: 2, h: 2, area: 'eyes' },
-  { key: 'primary',   label: 'ON SLING',     icon: 'crosshair', w: 4, h: 2, area: 'sling', wide: true },
-  { key: 'holster',   label: 'HOLSTER',      icon: 'crosshair', w: 2, h: 2, area: 'holster' },
-  { key: 'secondary', label: 'ON BACK',      icon: 'crosshair', w: 4, h: 2, area: 'back', wide: true },
-  { key: 'scabbard',  label: 'SHEATH',       icon: 'discard',   w: 2, h: 2, area: 'sheath' },
-  { key: 'rig',       label: 'TACTICAL RIG', icon: 'box',       w: 2, h: 2, carry: true },
-  { key: 'backpack',  label: 'BACKPACK',     icon: 'box',       w: 2, h: 2, carry: true },
-  { key: 'secure',    label: 'POUCH',        icon: 'stash',     w: 2, h: 2, carry: true },
+  { key: 'ears',      label: 'EARPIECE',     icon: 'g-headset', w: 2, h: 2, area: 'ears' },
+  { key: 'head',      label: 'HEADWEAR',     icon: 'g-cap',     w: 2, h: 2, area: 'head' },
+  { key: 'face',      label: 'FACE COVER',   icon: 'g-mask',    w: 2, h: 2, area: 'face' },
+  { key: 'armor',     label: 'BODY ARMOR',   icon: 'g-armor',   w: 2, h: 2, area: 'armor' },
+  { key: 'eyes',      label: 'EYEWEAR',      icon: 'g-goggles', w: 2, h: 2, area: 'eyes' },
+  { key: 'primary',   label: 'ON SLING',     icon: 'g-rifle',   w: 4, h: 2, area: 'sling', wide: true },
+  { key: 'holster',   label: 'HOLSTER',      icon: 'g-pistol',  w: 2, h: 2, area: 'holster' },
+  { key: 'secondary', label: 'ON BACK',      icon: 'g-rifle',   w: 4, h: 2, area: 'back', wide: true },
+  { key: 'scabbard',  label: 'SHEATH',       icon: 'g-knife',   w: 2, h: 2, area: 'sheath' },
+  { key: 'rig',       label: 'TACTICAL RIG', icon: 'g-rig',     w: 2, h: 2, carry: true },
+  { key: 'backpack',  label: 'BACKPACK',     icon: 'g-pack',    w: 2, h: 2, carry: true },
+  { key: 'secure',    label: 'POUCH',        icon: 'g-pouch',   w: 2, h: 2, carry: true },
 ];
+
+/**
+ * The slots the character screen draws that this game has nothing to put in:
+ * the armband and the dogtag under the earpiece, the three special slots by
+ * the pockets. Drawn so the screen reads like the real one; they take no
+ * drops.
+ */
+function decorSlot(label, glyph, { wide = false, short = false, cls = '' } = {}) {
+  const cell = el('div', { class: `slot-cell slot-cell--decor ${cls}` });
+  const head = el('div', { class: 'slot__head' }, el('span', { class: 'slot__name' }, label));
+  head.append(el('span', { class: 'slot__more is-decor' }, icon('chev-right')));
+  cell.append(head);
+  const node = el('div', { class: `slot is-empty is-decor${short ? ' slot--short' : ''}` });
+  node.style.width = `calc(var(--cell) * ${wide ? 4 : 2} + 2px)`;
+  node.style.height = short ? `calc(var(--cell) * 0.7 + 2px)` : `calc(var(--cell) * 2 + 2px)`;
+  if (glyph) node.append(el('div', { class: 'slot__hint' }, glyph === 'spec' ? el('span', { class: 'slot__spec' }, 'SPEC') : icon(glyph)));
+  cell.append(node);
+  return cell;
+}
 
 export class Equipment {
   constructor() {
@@ -190,6 +209,12 @@ export function renderGearSlots(equipment, host, opts = {}) {
     cell.style.gridArea = d.area;
     body.append(cell);
   }
+  // row two, column one: ARMBAND over DOGTAG, as on the real screen
+  const aux = el('div', { class: 'equip__aux' },
+    decorSlot('ARMBAND', 'g-armband', { short: true }),
+    decorSlot('DOGTAG', 'g-dogtag', { short: true, cls: 'slot-cell--dogtag' }));
+  aux.style.gridArea = 'aux';
+  body.append(aux);
 
   // what is carried: the rig, then the pockets, then the bags — the pockets
   // belong here rather than in the inventory panel, because they are part of
@@ -207,6 +232,18 @@ export function renderGearSlots(equipment, host, opts = {}) {
   for (const g of equipment.pockets) row.append(renderGrid(g, opts));
   pockets.append(row);
   carry.append(pockets);
+  // SPECIAL SLOTS: three cells with the game's SPEC watermark; nothing here fills them
+  const special = el('div', { class: 'slot-cell slot-cell--special' },
+    el('div', { class: 'slot__head' }, el('span', { class: 'slot__name' }, 'SPECIAL SLOTS')));
+  const srow = el('div', { class: 'pockets pockets--special' });
+  for (let i = 0; i < 3; i++) {
+    const c = el('div', { class: 'slot is-empty is-decor slot--spec' }, el('div', { class: 'slot__hint' }, el('span', { class: 'slot__spec' }, 'SPEC')));
+    c.style.width = 'calc(var(--cell) + 2px)';
+    c.style.height = 'calc(var(--cell) + 2px)';
+    srow.append(c);
+  }
+  special.append(srow);
+  carry.append(special);
 
   carry.append(slotCell('backpack'), slotCell('secure'));
 

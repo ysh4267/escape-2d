@@ -558,8 +558,8 @@ try {
 
     const carry = $$('.equip__carry > .slot-cell')
       .map((c) => c.querySelector('.slot__name')?.textContent);
-    check('the carried block reads RIG, POCKETS, BACKPACK, POUCH',
-          carry.join('|') === 'TACTICAL RIG|POCKETS|BACKPACK|POUCH', carry.join('|'));
+    check('the carried block reads RIG, POCKETS, SPECIAL SLOTS, BACKPACK, POUCH',
+          carry.join('|') === 'TACTICAL RIG|POCKETS|SPECIAL SLOTS|BACKPACK|POUCH', carry.join('|'));
 
     const cell = parseFloat(getComputedStyle(D.documentElement).getPropertyValue('--cell'));
     const pk = $$('#equipment-host .pockets .grid');
@@ -570,11 +570,15 @@ try {
           !$$('#carry-host .cnt__name').some((n) => /POCKET/i.test(n.textContent)));
 
     head('every slot carries the reference header bar');
+    // + the four carried heads + ARMBAND, DOGTAG and SPECIAL SLOTS, drawn for the look
     const heads = $$('#equipment-host .slot-cell > .slot__head');
-    check('a header bar per slot, pockets included', heads.length === cells.length + 4,
-          `${heads.length} heads, ${cells.length} body slots + 4`);
-    const gearHeads = $$('#equipment-host .slot-cell').filter((c) => c.querySelector('.slot'));
+    check('a header bar per slot, pockets and the decorative three included', heads.length === cells.length + 4 + 3,
+          `${heads.length} heads, ${cells.length} body slots + 7`);
+    const gearHeads = $$('#equipment-host .slot-cell:not(.slot-cell--decor)').filter((c) => c.querySelector('.slot:not(.is-decor)'));
     check('every gear slot has a chevron', gearHeads.every((c) => c.querySelector('.slot__more')));
+    check('ARMBAND, DOGTAG and SPECIAL SLOTS are on the screen, hatched, and take nothing',
+          $$('#equipment-host .slot-cell--decor .slot.is-decor').length === 2 && $$('#equipment-host .slot--spec').length === 3
+          && $$('#equipment-host .slot.is-decor').every((n) => !n._slot));
     const emptyOne = gearHeads.find((c) => c.querySelector('.slot.is-empty'));
     check('an empty slot is hatched and its chevron is dead',
           !!emptyOne && emptyOne.querySelector('.slot__more').disabled,
@@ -686,17 +690,21 @@ try {
     const spot = game.stash.findSpot(it);
     game.stash.place(it, spot.x, spot.y, spot.rot);
     click($('#hideout-tabs .tab[data-tab="health"]'));
-    await until(() => $('#pane-health').classList.contains('is-active') && $('#health-panel-host .doll'));
+    await until(() => $('#pane-health').classList.contains('is-active') && $('#health-panel-host .hb-figure'));
     await sleep(120);
-    check('the health pane is up with a seven-part doll', $$('#health-panel-host .doll .doll__part').length === 7);
-    check('the rows carry the numbers', $$('#health-panel-host .hrow').length === 7
-      && $('#health-panel-host .hrow[data-part="thorax"] .hrow__num').textContent === '40/85');
-    check('the bleeding arm is drawn bleeding', $('#health-panel-host .doll [data-part="rarm"]').classList.contains('is-bleeding'));
-    check('the fractured leg is listed', $$('#health-panel-host .fxline').some((n) => n.textContent.includes('Fracture') && n.textContent.includes('Left leg')));
-    check('the total reads the pool', $('#health-panel-host .health__total-v').textContent === String(Math.ceil(h.total)));
+    check('the health tab is up: the figure with seven parts on him', $$('#health-panel-host .hb-figure .hb-region').length === 7);
+    check('seven label tabs with bars carry the numbers', $$('#health-panel-host .hb__stage .hb-part').length === 7
+      && $('#health-panel-host .hb-part[data-part="thorax"] .hb-bar__t').textContent === '40/85');
+    check('the bleeding arm carries its tile and its zone glows', !!$('#health-panel-host .hb-part[data-part="rarm"] .fxi[data-fx="lb"]')
+      && parseFloat($('#health-panel-host .hb-glow[data-part="rarm"]').style.opacity) > 0);
+    check('the fractured leg carries its tile', !!$('#health-panel-host .hb-part[data-part="lleg"] .fxi[data-fx="fr"]'));
+    check('a hurt part is not green: the thorax at 40/85 is yellow', $('#health-panel-host .hb-part[data-part="thorax"] .hb-bar').dataset.band === 'y');
+    check('the total reads the pool', $('#health-panel-host .hb-total__v').textContent === String(Math.ceil(h.total)));
+    check('the vitals read the six the game shows: temperature, pressure, poison, radiation, water, energy',
+      $$('#health-panel-host .hb-vitals .hb-vital').length === 6 && /36\.6/.test($('#health-panel-host .hb-vital[data-key="temp"]').textContent));
     const treat = $('#btn-treat');
-    check('the Therapist button is live with a bill', treat && !treat.disabled && /Therapist/.test($('.health__foot-note').textContent),
-      $('.health__foot-note')?.textContent);
+    check('the Therapist button is live with a bill', treat && !treat.disabled && /Therapist/.test($('.hb__foot-note').textContent),
+      $('.hb__foot-note')?.textContent);
 
     // USE the Salewa from the stash: the body-part dialog opens on the bleed
     const tile = await until(() => $$('#health-stash-host .item').find((n) => n._item === it));
@@ -711,21 +719,21 @@ try {
         check('a body-part dialog opens', !!dlg);
         if (dlg) {
           check('the bleeding arm is pre-selected and the healthy leg greyed',
-            $('.bodypick .hrow[data-part="rarm"]').classList.contains('is-selected')
-            && $('.bodypick .hrow[data-part="rleg"]').classList.contains('is-off'));
+            $('.bodypick .hl__row[data-part="rarm"]').classList.contains('is-selected')
+            && $('.bodypick .hl__row[data-part="rleg"]').classList.contains('is-off'));
           check('the note says what this use does', /stops the bleeding/.test($('.bodypick__info').textContent), $('.bodypick__info').textContent);
           // pick the thorax instead and read the heal
-          click($('.bodypick .doll [data-part="thorax"]'));
+          click($('.bodypick .hl__row[data-part="thorax"]'));
           await sleep(60);
-          check('picking the thorax on the doll switches the plan to a heal', /\+45 hp/.test($('.bodypick__info').textContent), $('.bodypick__info').textContent);
-          click($('.bodypick .hrow[data-part="rarm"]'));
+          check('picking the thorax row switches the plan to a heal', /\+45 hp/.test($('.bodypick__info').textContent), $('.bodypick__info').textContent);
+          click($('.bodypick .hl__row[data-part="rarm"]'));
           await sleep(60);
           const apply = Array.from(D.querySelectorAll('.bodypick .modal__foot .btn')).find((b) => b.textContent === 'APPLY');
           click(apply);
           await until(() => !$('.bodypick'));
           await sleep(120);
           check('APPLY stops the bleed and spends 45 of the kit', !h.has('lb', 'rarm') && it.res === 355, `${h.has('lb', 'rarm')} ${it.res}`);
-          check('the pane repainted', !$('#health-panel-host .doll [data-part="rarm"]').classList.contains('is-bleeding'));
+          check('the tab repainted: the bleed tile is gone', !$('#health-panel-host .hb-part[data-part="rarm"] .fxi[data-fx="lb"]'));
         }
       }
     }
@@ -733,7 +741,7 @@ try {
     click($('#btn-treat'));
     await sleep(150);
     check('treatment restores everything', h.total === 440 && !h.has('fr'), String(h.total));
-    check('and the button goes quiet', $('#btn-treat').disabled && /Fit for duty/.test($('.health__foot-note').textContent));
+    check('and the button goes quiet', $('#btn-treat').disabled && /Fit for duty/.test($('.hb__foot-note').textContent));
     click($('#hideout-tabs .tab[data-tab="stash"]'));
     await sleep(120);
   }

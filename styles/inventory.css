@@ -234,26 +234,22 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
   gap: 10px;
   grid-template-areas:
     "ears  head   face"
-    ".     armor  eyes"
+    "aux   armor  eyes"
     "sling sling  holster"
     "back  back   sheath";
 }
-/* row two, column one is ARMBAND and DOGTAG on the real screen. This game has
-   neither, so the gap is left as it is and the PMC shows through it. */
+/* row two, column one: ARMBAND over DOGTAG, drawn for the look of the screen */
+.equip__aux { display: flex; flex-direction: column; gap: 10px; align-self: start; }
 .equip__pmc {
-  /* head to thigh over the first three rows, as on the real screen, rather
-     than the full four — legs running down behind the long-gun bars just read
-     as two grey stripes */
-  grid-area: 1 / 1 / 4 / 3;
-  /* both 100%: the viewBox scales itself to fit, so he never sticks out past
-     the two columns he stands behind and widens the panel */
+  /* the character screen's own silhouette (the man with the rifle low),
+     standing behind the middle column, head behind HEADWEAR, boots at the
+     bottom of the last row */
+  grid-area: 1 / 1 / 5 / 3;
   width: 100%; height: 100%;
   justify-self: stretch; align-self: stretch;
   fill: currentColor; stroke: none;
-  color: var(--pale);
-  /* the slots are translucent, so he has to be strong enough to read through
-     them and not only in the gap where ARMBAND would be */
-  opacity: .16;
+  color: #9a9ea0;
+  opacity: .22;
   pointer-events: none;
 }
 .equip__body > .slot-cell { position: relative; z-index: 1; }
@@ -273,13 +269,15 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .slot-cell--pockets { align-items: flex-start; }
 
 .slot__head {
+  /* the game's header bar: a flat dark plate with a light hairline on top and
+     a dark one under, the name in bold condensed capitals, a chevron right */
   display: flex; align-items: center; gap: 4px;
-  height: 18px; padding: 0 3px 0 7px;
-  background: linear-gradient(180deg, rgba(104,111,113,.9), rgba(64,70,72,.9));
-  border: 1px solid rgba(0,0,0,.45);
-  border-bottom: 0;
-  color: #e6edec;
-  font-size: 10px; font-weight: 700; letter-spacing: .14em;
+  height: 17px; padding: 0 3px 0 5px; margin-bottom: 2px;
+  background: linear-gradient(180deg, #343635 0, #343635 1px, #1d1d1d 1px, #181a19 100%);
+  border-bottom: 1px solid #080a09;
+  color: #dce5ec;
+  font-family: "Bahnschrift", "Oswald", "Roboto Condensed", var(--font-ui); font-stretch: semi-condensed;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0;
   white-space: nowrap;
 }
 .slot__name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
@@ -288,35 +286,44 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
   width: 16px; height: 16px; padding: 0;
   background: none; border: 0; color: inherit; cursor: pointer;
 }
-.slot__more .ico { width: 13px; height: 13px; stroke-width: 2.4; }
-.slot__more[disabled] { opacity: .35; cursor: default; }
+.slot__more .ico { width: 11px; height: 11px; stroke-width: 2.6; color: #f3f6ff; }
+.slot__more[disabled] { opacity: .8; cursor: default; }
 .slot__more:not([disabled]):hover { color: #fff; }
+.slot__more.is-decor { opacity: .8; }
 .slot-cell--pockets .slot__head { min-width: calc(var(--cell) * 2 + 2px); }
 
 .slot {
   position: relative;
   /* like .grid: its size comes from the gear it holds, never from the row */
   flex: none;
-  background: rgba(0,0,0,.4);
-  border: 1px solid var(--line-1);
+  /* a filled slot: a plain dark box a shade lighter than the panel */
+  background: #2e3235;
+  border: 1px solid; border-color: #2f2d2e #020202 #020202 #2f2d2e;
   min-height: calc(var(--cell) + 2px);
   transition: border-color .12s, background .12s;
 }
-/* an empty slot is hatched, as in the game, so it reads as "nothing here"
-   rather than as an empty grid you could drop into anywhere */
+/* an empty slot is the game's 45-degree hatch - eight dark, eight darker -
+   inside an inset frame, with a ghost of what goes there in the middle */
 .slot.is-empty {
-  background-image: repeating-linear-gradient(45deg,
-    rgba(184,219,217,.055) 0 5px, rgba(184,219,217,0) 5px 11px);
+  background-color: #080808;
+  background-image: repeating-linear-gradient(-45deg, #080808 0 8px, #121212 8px 16px);
 }
-.slot:hover { border-color: var(--line-2); }
+.slot:hover { border-color: #4a4c4d #151515 #151515 #4a4c4d; }
 .slot.is-ok  { border-color: var(--ok);     background-color: rgba(127,179,154,.13); }
 .slot.is-bad { border-color: var(--danger); background-color: rgba(194,96,79,.13); }
+.slot.is-decor { cursor: default; }
+.slot.is-decor:hover { border-color: #2f2d2e #020202 #020202 #2f2d2e; }
+.slot-cell--dogtag .slot.is-empty { background: #09161b; }
 .slot__hint {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  color: var(--line-2); pointer-events: none;
+  color: #3a3a3a; pointer-events: none;
 }
-.slot__hint .ico { width: 22px; height: 22px; opacity: .5; }
+.slot__hint .ico { width: 62%; height: 62%; max-width: 78px; max-height: 78px; opacity: .9; stroke-width: 1.2; }
+.slot--short .slot__hint .ico { width: 34px; height: 34px; }
+.slot__spec { font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: .1em; color: #3a3a3a; text-shadow: 0 0 1px #000; }
+.slot-cell--special .slot__head { min-width: calc(var(--cell) * 2 + 2px); }
+.pockets--special { display: flex; gap: 4px; }
 .slot .item { z-index: 2; }
 
 .pockets { display: flex; gap: 4px; }

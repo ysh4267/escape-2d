@@ -1,150 +1,269 @@
 /* =========================================================
-   ESCAPE 2D — health: the doll, the health panel, the HUD strip, the
-   body-part dialog and the hideout HEALTH pane
+   ESCAPE 2D — health, drawn the way the game draws it
+   the character screen's HEALTH tab (the board), the strip beside the quick
+   bar (the list), the outline man in the HUD corner, the body-part dialog
    ========================================================= */
 
-/* ---------- the doll ---------- */
-.doll { display: block; width: 100%; height: auto; overflow: visible; }
-.doll__shape { fill: #cfd9dd; stroke: #05080a; stroke-width: 1.5; transition: fill .2s, stroke .2s; }
-.doll__part[data-state="fine"] .doll__shape { fill: #cfd9dd; }
-.doll__part[data-state="hurt"] .doll__shape { fill: var(--warn); }
-.doll__part[data-state="bad"]  .doll__shape { fill: var(--danger); }
-.doll__part[data-state="dead"] .doll__shape { fill: var(--hatch, #2a0d0b); stroke: #7a2b22; }
-.doll__part.is-bleeding .doll__shape { stroke: #e04a3a; stroke-width: 2.5; }
-.doll__part.is-fractured .doll__shape { stroke-dasharray: 4 3; }
-.doll__hp { font: 600 11px var(--font-mono); fill: #05080a; pointer-events: none; }
-.doll__part[data-state="dead"] .doll__hp { fill: #e6a99c; }
-.doll__part.is-pickable { cursor: pointer; outline: none; }
-.doll__part.is-pickable:hover .doll__shape,
-.doll__part.is-pickable:focus-visible .doll__shape { stroke: var(--white); stroke-width: 2.5; }
-.doll__part.is-off { opacity: .32; cursor: not-allowed; }
-.doll__part.is-selected .doll__shape { stroke: var(--pale); stroke-width: 3; }
-.doll--hud { width: 100%; height: 100%; }
-.doll--hud .doll__shape { stroke-width: 3; }
-.doll--hud .doll__part.is-bleeding .doll__shape { stroke-width: 4; }
-
-/* ---------- the health panel ---------- */
-.health { display: grid; grid-template-columns: 150px 1fr; gap: 16px; }
-.health--compact { grid-template-columns: 116px 1fr; gap: 12px; }
-.health__left { display: flex; flex-direction: column; gap: 8px; align-items: center; }
-.health__doll { width: 100%; padding: 6px 8px; }
-.health--compact .health__doll { padding: 2px 4px; }
-.health__total { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.health__total-k { font-size: 10px; letter-spacing: .2em; color: var(--tx-3); }
-.health__total-v { font-size: 22px; color: var(--tx-0); }
-.health__total-max { font-size: 11px; color: var(--tx-3); }
-.health__total.is-low .health__total-v { color: var(--danger); }
-.health__right { display: flex; flex-direction: column; min-width: 0; }
-.health__rows { display: flex; flex-direction: column; gap: 3px; }
-
-.hrow {
-  display: grid; grid-template-columns: 76px 1fr 54px 44px; align-items: center; gap: 8px;
-  padding: 3px 6px; border: 1px solid transparent; font-size: 11px;
+:root {
+  /* the game's greys and its bar palette */
+  --eft-panel: #101112;
+  --eft-tab-a: #1e2022;
+  --eft-tab-b: #131617;
+  --eft-tab-edge: #2b2e31;
+  --eft-line: #343738;
+  --eft-text: #aeb9c1;
+  --eft-dim: #787f82;
+  --eft-red: #d80000;
+  --eft-lime: #9ad323;
+  --eft-lime-dk: #c1e812;
+  --eft-blue: #5ab1e6;
+  --eft-yellow: #dbdbbd;
+  --eft-font: "Bahnschrift", "Oswald", "Roboto Condensed", "Arial Narrow", var(--font-ui);
 }
-.health--compact .hrow { grid-template-columns: 64px 1fr 50px 40px; gap: 6px; padding: 2px 4px; }
-.hrow.is-pickable { cursor: pointer; }
-.hrow.is-pickable:hover { border-color: var(--line-2); background: rgba(88,111,124,.12); }
-.hrow.is-selected { border-color: var(--pale); }
-.hrow.is-off { opacity: .4; cursor: not-allowed; }
-.hrow__name { letter-spacing: .14em; color: var(--tx-2); white-space: nowrap; }
-.hrow__bar { position: relative; height: 6px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); overflow: hidden; }
-.hrow__bar > i { display: block; height: 100%; background: #cfd9dd; transition: width .2s; }
-/* a surgery-lowered ceiling shows as a hatched cap on the right of the bar */
-.hrow__bar::after {
-  content: ''; position: absolute; top: 0; bottom: 0; right: 0; left: var(--cap, 100%);
-  background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(194,96,79,.4) 3px 5px);
+
+/* ---------- a part block: tab, bar, conditions ---------- */
+.hb-part { display: flex; flex-direction: column; gap: 3px; font-family: var(--eft-font); font-stretch: semi-condensed; }
+.hb-tab {
+  height: 1.6em; padding: 0 .45em; line-height: 1.6em; box-sizing: border-box;
+  /* the plate: a lighter hairline on top, a dark body, a faint diagonal weave */
+  background:
+    repeating-linear-gradient(135deg, rgba(255,255,255,.02) 0 3px, transparent 3px 6px),
+    linear-gradient(180deg, var(--eft-tab-edge) 0, var(--eft-tab-edge) 1px, var(--eft-tab-a) 1px, var(--eft-tab-b) 100%);
+  color: var(--eft-text); font-size: 1em; font-weight: 600; letter-spacing: 0; text-transform: uppercase; white-space: nowrap;
+  clip-path: polygon(0 0, calc(100% - 1.05em) 0, 100% 100%, 0 100%);
+  text-shadow: 0 1px 0 rgba(0,0,0,.6);
 }
-.hrow[data-state="hurt"] .hrow__bar > i { background: var(--warn); }
-.hrow[data-state="bad"]  .hrow__bar > i { background: var(--danger); }
-.hrow[data-state="dead"] .hrow__bar > i { background: #5a1d18; }
-.hrow[data-state="dead"] .hrow__name { color: #b0665b; }
-.hrow__num { text-align: right; font-family: var(--font-mono); color: var(--tx-1); font-size: 11px; }
-.hrow__fx { display: flex; gap: 2px; }
-.fxi { width: 14px; height: 14px; color: var(--tx-3); }
-.fxi--bad { color: #e6a99c; }
-
-.health__vitals { margin-top: 10px; display: flex; flex-direction: column; gap: 3px; }
-.vrow {
-  display: grid; grid-template-columns: 18px 76px 1fr 54px; align-items: center; gap: 8px;
-  padding: 2px 6px; font-size: 11px; color: var(--tx-2);
+.hb-bar {
+  position: relative; height: 1.15em; box-sizing: border-box;
+  /* a double frame - grey outside, near-black inside - on a black track */
+  background: #000102; border: 1px solid var(--eft-line); box-shadow: inset 0 0 0 1px #111314;
+  font-size: .95em; line-height: 1;
 }
-.health--compact .vrow { grid-template-columns: 16px 64px 1fr 50px; gap: 6px; padding: 2px 4px; }
-.vrow .ico { color: var(--tx-3); width: 16px; height: 16px; }
-.vrow__k { letter-spacing: .14em; }
-.vrow__bar { height: 6px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); }
-.vrow__bar > i { display: block; height: 100%; background: var(--slate); transition: width .2s; }
-.vrow.is-low .vrow__bar > i { background: var(--warn); }
-.vrow.is-low .ico { color: var(--warn); }
-.vrow__num { text-align: right; font-family: var(--font-mono); font-size: 11px; }
-
-.health__fx { margin-top: 12px; border-top: 1px solid var(--line-1); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; }
-.health__fx-none { color: var(--tx-dim); font-size: 10.5px; letter-spacing: .16em; padding: 4px 6px; }
-.fxline {
-  display: grid; grid-template-columns: 18px 1fr auto auto; gap: 8px; align-items: center;
-  padding: 3px 6px; font-size: 11px; border-left: 2px solid transparent;
+.hb-bar > i {
+  position: absolute; left: 3px; top: 3px; bottom: 3px;
+  width: calc((100% - 6px) * var(--fk, 1));
+  background: linear-gradient(180deg, #008a01, #004501);
+  transition: width .18s;
 }
-.fxline .ico { width: 16px; height: 16px; }
-.fxline--bad { color: #e6a99c; border-left-color: var(--danger-dk); }
-.fxline--good { color: var(--ok); border-left-color: #2c5a4a; }
-.fxline__name { letter-spacing: .06em; }
-.fxline__where { color: var(--tx-3); font-size: 10.5px; }
-.fxline__t { font-family: var(--font-mono); color: var(--tx-3); font-size: 10.5px; min-width: 34px; text-align: right; }
+.hb-bar[data-band="g"] > i { background: linear-gradient(180deg, #008a01, #004501); }
+.hb-bar[data-band="y"] > i { background: linear-gradient(180deg, #8e7500, #453900); }
+.hb-bar[data-band="o"] > i { background: linear-gradient(180deg, #904f02, #472702); }
+.hb-bar[data-band="r"] > i { background: linear-gradient(180deg, #983402, #4f1d04); }
+.hb-bar__t {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: #ffffff; font-family: var(--eft-font); font-stretch: semi-condensed; font-size: .82em; font-weight: 600; letter-spacing: 0;
+  font-variant-numeric: tabular-nums slashed-zero;
+  text-shadow: 0 0 2px #000, 0 0 1px #000, 0 1px 1px #000;
+}
+.hb-bar__x { display: none; position: absolute; right: .3em; top: 50%; transform: translateY(-50%); color: #b90000; font-size: .62em; line-height: 1; }
+/* a surgery-lowered ceiling shows as a hatch on the dead end of the bar */
+.hb-bar.is-capped::after {
+  content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 18%;
+  background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(255,255,255,.08) 3px 5px);
+  pointer-events: none;
+}
+.hb-part[data-state="dead"] .hb-bar { border-color: var(--eft-red); box-shadow: none; background: #000; }
+.hb-part[data-state="dead"] .hb-bar__t { color: #ff0000; }
+.hb-part[data-state="dead"] .hb-bar > i { display: none; }
+.hb-part[data-state="dead"] .hb-bar__t { color: var(--eft-red); }
+.hb-part[data-state="dead"] .hb-bar__x { display: block; }
+.hb-fx { display: flex; gap: .2em; min-height: 0; }
+.hb-fx:empty { display: none; }
+.hb-part.is-off { opacity: .38; }
+.hb-part.is-pickable { cursor: pointer; }
+.hb-part.is-pickable:not(.is-off):hover .hb-tab { background: linear-gradient(90deg, #4c5052, #303234 60%); color: #fff; }
+.hb-part.is-selected .hb-tab { background: linear-gradient(90deg, #5a5e60, #3a3d3f 60%); color: #fff; box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); }
+.hb-part.is-selected .hb-bar { border-color: #9a9d9f; }
 
-.health__foot { margin-top: 14px; border-top: 1px solid var(--line-1); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-.health__foot-row { display: flex; align-items: center; gap: 12px; }
-.health__foot-note { color: var(--tx-2); font-size: 11.5px; }
+/* the condition tiles: the game's sprites are little painted tiles - a
+   coloured field on a dark rounded square with a bevel - so each condition
+   keeps its own field colour here and the glyph sits inside it */
+.fxi, .hudfx {
+  position: relative; display: inline-grid; place-items: center;
+  width: 1.4em; height: 1.3em; border-radius: 2px;
+  background: linear-gradient(180deg, #4a4d4f, #2a2c2d); border: 1px solid #0a0a0a;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), inset 0 -1px 0 rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.6);
+  color: #f2f2f2;
+}
+.fxi .ico, .hudfx .ico { width: 78%; height: 78%; stroke-width: 2.4; }
+.fxi--bad, .hudfx--bad { background: linear-gradient(180deg, #7a1414, #4a0808); }
+.fxi--good, .hudfx--good { background: linear-gradient(180deg, #7f9a1c, #465610); }
+[data-fx="lb"] { background: linear-gradient(180deg, #6a1010, #3f0808) !important; color: #ff3b3b; }
+[data-fx="hb"] { background: linear-gradient(180deg, #d42020, #8f1010) !important; color: #ffe0e0; }
+[data-fx="fw"] { background: linear-gradient(180deg, #f27a63, #c94b38) !important; color: #f6dcc0; }
+[data-fx="fr"] { background: linear-gradient(180deg, #7a1616, #4d0c0c) !important; color: #ffd8d8; }
+[data-fx="pain"] { background: linear-gradient(180deg, #5c0d0d, #3a0606) !important; color: #ffb56b; }
+[data-fx="tremor"] { background: linear-gradient(180deg, #5c0d0d, #3a0606) !important; color: #ff4040; }
+[data-fx="ct"] { background: linear-gradient(180deg, #202020, #060606) !important; color: #b8b8b8; }
+[data-fx="tunnel"] { background: linear-gradient(180deg, #333, #151515) !important; color: #5fd0e0; }
+[data-fx="pk"] { background: linear-gradient(180deg, #4668a6, #2c4472) !important; color: #f6f0c8; }
+[data-fx="dehy"], [data-fx="thirst"] { background: linear-gradient(180deg, #7a5a34, #4a3620) !important; color: #6fc0ff; }
+[data-fx="exh"], [data-fx="hunger"] { background: linear-gradient(180deg, #3a3a3a, #1c1c1c) !important; color: #ffffff; }
+[data-fx="dp"] { background: linear-gradient(180deg, #2a0a0a, #0e0303) !important; color: #ff2a2a; }
+[data-fx="lowhp"] { background: linear-gradient(180deg, #8a1010, #4a0606) !important; color: #ffd0d0; }
+[data-fx="hemo"], [data-fx="regen"], [data-fx="adr"], [data-fx="ctimm"] { background: linear-gradient(180deg, #86a327, #4c5f12) !important; color: #fff; }
+.fxi b, .hudfx b {
+  position: absolute; right: -1px; bottom: -3px; font-family: var(--font-mono); font-size: .62em; font-weight: 700;
+  color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 1px 1px 0 #000;
+}
+.hudfx i { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); margin-left: 4px; font-style: normal; font-family: var(--font-mono); font-size: 10px; color: #cfd2d3; text-shadow: 0 0 2px #000; white-space: nowrap; }
 
-/* the hideout pane: the body on the left, the stash on the right */
-.pane-grid--health { grid-template-columns: minmax(520px, 640px) 1fr; }
-#panel-health .panel__body { padding: 14px 16px; }
+/* ---------- the total: asterisk, big lime number, /max ---------- */
+.hb-total { display: flex; align-items: baseline; gap: .25em; font-family: var(--eft-font); font-stretch: semi-condensed; }
+.hb-total__ico { width: 1.15em; height: 1.15em; align-self: center; color: var(--eft-lime-dk); stroke-width: 3.2; }
+.hb-total__v { font-size: 1.9em; font-weight: 400; color: var(--eft-lime); letter-spacing: -.01em; line-height: 1; text-shadow: 0 0 6px rgba(183,220,71,.25); }
+.hb-total__rate { font-size: .8em; color: var(--eft-blue); align-self: flex-start; margin-top: .1em; }
+.hb-total__rate.is-down { color: #e0553f; }
+.hb-total__max { font-size: 1em; color: var(--eft-dim); }
+.hb-total.is-low .hb-total__v { color: #e0553f; text-shadow: 0 0 6px rgba(224,85,63,.3); }
 
-/* ---------- pick a body part for a med ---------- */
-.bodypick { width: min(720px, 94vw); }
-.bodypick__body { display: flex; flex-direction: column; gap: 10px; }
-.bodypick__panel .health { align-items: start; }
-.bodypick__info {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  padding: 8px 10px; border: 1px solid var(--line-1); background: rgba(0,0,0,.3);
+/* ---------- vitals: temperature, pressure, poison, radiation, water, energy ---------- */
+.hb-vitals {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: .35em 1.2em;
+  font-family: var(--eft-font); font-stretch: semi-condensed; color: var(--eft-text);
+}
+.hb-vital { display: flex; align-items: center; gap: .45em; white-space: nowrap; }
+.hb-vital .ico { width: 1.35em; height: 1.35em; color: #c9cccd; stroke-width: 1.8; flex: none; }
+.hb-vital__v { display: flex; align-items: baseline; gap: .12em; font-size: 1.15em; line-height: 1; }
+.hb-vital__v b { font-weight: 400; }
+.hb-vital__v small { font-size: .62em; color: var(--eft-dim); align-self: flex-start; margin-left: .15em; }
+.hb-vital__v small.is-up { color: var(--eft-blue); }
+.hb-vital__v small.is-down { color: #e0553f; }
+.hb-vital__max { font-size: .7em; color: var(--eft-dim); }
+.hb-num { display: inline-flex; }
+.hb-num i { font-style: normal; color: #3a3d3f; }
+.hb-vital__v, .hb-total { font-variant-numeric: tabular-nums slashed-zero; }
+.hb-num b { font-weight: 400; }
+.hb-vital--poison .ico { color: #a2da89; }
+.hb-vital--poison .hb-num b { color: #a2da89; }
+.hb-vital--rad .ico { color: #da9500; }
+.hb-vital--rad .hb-num b { color: #da9500; }
+.hb-vital[data-key="hydration"] .ico { color: var(--eft-blue); }
+.hb-vital[data-key="hydration"] .hb-num b { color: var(--eft-blue); }
+.hb-vital[data-key="energy"] .ico { color: var(--eft-yellow); }
+.hb-vital[data-key="energy"] .hb-num b { color: var(--eft-yellow); }
+.hb-vital.is-low .hb-num b { color: #e0553f; }
+
+/* ---------- the BOARD ---------- */
+/* the board is sized so the whole tab - figure, total, vitals - fits the viewport without a scroll */
+.hb { container-type: inline-size; display: flex; flex-direction: column; gap: 1.2cqw; width: 100%; max-width: min(100%, calc((100vh - 250px) * 1090 / 1448)); margin: 0 auto; }
+.hb__stage {
+  position: relative; width: 100%; aspect-ratio: 1090 / 1448;
+  background: radial-gradient(ellipse 70% 40% at 50% 8%, rgba(60,63,65,.55), transparent 70%), linear-gradient(180deg, #131415 0%, #060707 100%);
+  font-size: 2.15cqw;
+  overflow: hidden;
+}
+.hb-figure { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hb-figure__body { fill: #1f2224; }
+.hb-figure__xray { opacity: .9; mix-blend-mode: screen; }
+.hb-glow { fill: #ff1a10; opacity: 0; mix-blend-mode: screen; transition: opacity .3s; }
+.hb-figure__edge { fill: none; stroke: rgba(160,168,172,.22); stroke-width: 2; }
+.hb-region { fill: transparent; stroke: none; }
+.hb-region.is-pickable { cursor: pointer; }
+.hb-region.is-pickable:not(.is-off):hover { fill: rgba(255,255,255,.08); }
+.hb-region.is-selected { fill: rgba(255,255,255,.14); }
+.hb-region.is-off { fill: rgba(0,0,0,.35); cursor: not-allowed; }
+.hb__stage .hb-part { position: absolute; }
+.hb__stage .hb-total { position: absolute; left: 50%; top: 92.5%; transform: translate(-50%, -50%); font-size: 1.55em; }
+.hb .hb-vitals { padding: 0 3cqw; font-size: 2.6cqw; }
+.hb__foot { margin-top: 1cqw; border-top: 1px solid var(--eft-line); padding-top: 1.4cqw; display: flex; flex-direction: column; gap: 8px; }
+.hb__foot-row { display: flex; align-items: center; gap: 12px; }
+.hb__foot-note { color: var(--tx-2); font-size: 11.5px; }
+
+/* ---------- the LIST: one row a part ---------- */
+.hl {
+  display: flex; flex-direction: column;
+  background: rgba(16,17,18,.92); border: 1px solid #2c2e30;
   font-size: 12px;
 }
-.bodypick__part { letter-spacing: .18em; color: var(--pale); }
-.bodypick__note { color: var(--ok); }
-.bodypick__note.is-bad { color: var(--danger); }
+.hl__row { padding: 6px 8px 7px; border-bottom: 1px solid #2a2c2d; position: relative; }
+.hl__row:last-of-type { border-bottom: 0; }
+.hl__row .hb-part { gap: 3px; }
+.hl__row .hb-tab { height: 18px; line-height: 18px; font-size: 12px; }
+.hl__row .hb-bar { height: 15px; font-size: 12px; }
+.hl__row .hb-fx { position: absolute; left: 100%; top: 6px; margin-left: 6px; }
+.hl__row.is-pickable { cursor: pointer; }
+.hl__row.is-pickable:not(.is-off):hover { background: rgba(255,255,255,.04); }
+.hl__row.is-selected { background: rgba(255,255,255,.07); }
+.hl__foot { display: flex; justify-content: center; padding: 8px 8px 6px; border-top: 1px solid #2a2c2d; }
+.hl__foot .hb-total { font-size: 16px; }
+.hl__vitals { display: flex; justify-content: space-around; padding: 4px 8px 8px; font-size: 13px; }
+.hl__vitals .hb-vital { gap: 6px; }
+.hl__vitals .hb-vital__v { font-size: 15px; }
+.hl__vitals .hb-vital .ico { width: 16px; height: 16px; }
+.hl__conds { border-top: 1px solid #2a2c2d; padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
+.hl__cond { display: grid; grid-template-columns: 18px 1fr auto auto; gap: 8px; align-items: center; font-size: 11px; color: var(--eft-text); font-family: var(--eft-font); }
+.hl__cond .fxi { width: 17px; height: 17px; }
+.hl__cond-name { letter-spacing: .04em; }
+.hl__cond-where { color: var(--eft-dim); font-size: 10.5px; }
+.hl__cond-t { font-family: var(--font-mono); color: var(--eft-dim); font-size: 10.5px; min-width: 34px; text-align: right; }
+.hl__cond--none { color: var(--eft-dim); font-size: 10.5px; letter-spacing: .14em; grid-template-columns: 1fr; }
+/* the in-raid overlay: the strip fills its column, the condition squares tuck inside */
+#raid-health-host { margin-bottom: 12px; }
+#raid-health-host .hl__row .hb-fx { position: static; margin: 0; }
+
+/* the hideout pane: the board on the left, the stash on the right */
+.pane-grid--health { grid-template-columns: minmax(520px, 640px) 1fr; }
+#panel-health .panel__body { padding: 12px 14px 16px; }
+
+/* ---------- the body-part dialog ---------- */
+.bodypick { width: min(360px, 94vw); background: #0d0e0f; }
+.bodypick__head { background: linear-gradient(90deg, #303335, #1a1c1d); color: #eee; }
+.bodypick__body { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.bodypick__item { display: flex; align-items: center; gap: 10px; color: var(--eft-text); font-family: var(--eft-font); font-size: 13px; letter-spacing: .04em; }
+.bodypick__item img { height: 40px; width: auto; }
+.bodypick__list .hl { border-color: #34373a; }
+.bodypick__list .hl__row .hb-fx { position: absolute; right: 8px; left: auto; top: 8px; margin: 0; }
+.bodypick__info {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 8px 10px; border: 1px solid var(--eft-line); background: rgba(0,0,0,.35);
+  font-size: 12px; font-family: var(--eft-font); color: var(--eft-text);
+}
+.bodypick__part { letter-spacing: .12em; color: #fff; }
+.bodypick__note { color: #a7d36a; }
+.bodypick__note.is-bad { color: #e0553f; }
 
 /* ---------- HUD ---------- */
-.hud-health { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 8px; pointer-events: auto; }
-.hud-body { width: 44px; height: 88px; filter: drop-shadow(0 0 4px rgba(0,0,0,.85)); }
-.hud-health__col { display: flex; flex-direction: column; gap: 5px; }
-.hud-health__num {
-  display: flex; align-items: center; gap: 6px;
-  color: var(--tx-0); font-size: 20px; letter-spacing: .04em; font-variant-numeric: tabular-nums;
+.hud-health {
+  position: absolute; left: 26px; top: 8px;
+  display: flex; align-items: flex-start; gap: 14px;
+  pointer-events: none;
 }
-.hud-health__num .ico { color: var(--tx-3); }
-.hud-health.is-low .hud-health__num { color: var(--danger); animation: hp-pulse 1s ease-in-out infinite; }
-.hud-health.is-low .hud-health__num .ico { color: var(--danger); }
+.hud-body { width: 100px; height: 218px; }
+.hudfig { display: block; width: 100%; height: 100%; overflow: visible; }
+.hudfig__part { stroke-width: 2.4; stroke-linejoin: round; fill: rgba(165,160,160,.3); stroke: rgba(165,160,160,.85); transition: stroke .25s, fill .25s; }
+.hud-health.is-low .hudfig { animation: hp-pulse 1s ease-in-out infinite; }
 @keyframes hp-pulse { 50% { opacity: .55; } }
-.hud-fx { display: flex; flex-wrap: wrap; gap: 4px; max-width: 250px; }
-.hudfx {
-  display: inline-flex; align-items: center; gap: 2px;
-  padding: 2px 4px;
-  background: rgba(6,10,12,.82); border: 1px solid var(--line-1);
-  color: var(--tx-2); font-size: 10px;
-}
-.hudfx .ico { width: 15px; height: 15px; }
-.hudfx--bad { border-color: var(--danger-dk); color: #e6a99c; }
-.hudfx--good { border-color: #2c5a4a; color: var(--ok); }
-.hudfx b { font-family: var(--font-mono); font-size: 10px; font-weight: 600; }
-.hudfx__t { font-family: var(--font-mono); font-size: 9.5px; color: var(--tx-3); margin-left: 3px; }
-.hud-eh { display: flex; flex-direction: column; gap: 3px; }
-.hud-eh__row { display: flex; align-items: center; gap: 6px; color: var(--warn); }
-.hud-eh__row .ico { width: 14px; height: 14px; }
-.bar--eh { width: 110px; height: 4px; }
-.bar--eh > i { background: var(--warn); }
-.hud-eh.is-crit .hud-eh__row { color: var(--danger); }
-.hud-eh.is-crit .bar--eh > i { background: var(--danger); }
+/* the tiles stand in a column at his shoulder, touching, top level with his head */
+.hud-fx { display: flex; flex-direction: column; gap: 0; }
+.hudfx { width: 24px; height: 22px; font-size: 16px; border-radius: 2px; }
+.hudfx b { font-size: 10px; right: 0; bottom: -2px; }
 
 /* the med channel sits above the interact / extract prompts */
 .med-prompt { bottom: 176px; }
 .med-prompt .interact-prompt__label { color: var(--ok); }
 .med-prompt .interact-prompt__label .ico { vertical-align: -4px; color: var(--ok); }
 .med-prompt .interact-prompt__bar > i { background: var(--ok); }
+
+/* ---------- the character screens in the game's own greys ----------
+   The stash and health panes and the in-raid inventory: near-black panels,
+   flat dark heads, the grid drawn as the game draws it (#171716 cells on
+   #121212 lines). The trader and deploy screens keep the project's palette. */
+#pane-stash .panel, #pane-health .panel, #raid-inventory .panel {
+  background: linear-gradient(180deg, rgba(11,12,13,.95) 0%, rgba(6,7,8,.95) 100%);
+  border-color: #2a2c2d;
+}
+#pane-stash .panel__head, #pane-health .panel__head, #raid-inventory .panel__head {
+  background: linear-gradient(180deg, rgba(40,42,44,.5) 0%, rgba(20,21,22,0) 100%);
+  border-bottom-color: #2a2c2d;
+}
+#pane-stash .panel__head h2, #pane-health .panel__head h2, #raid-inventory .panel__head h2 { color: #dce5ec; }
+#pane-stash .grid, #pane-health .grid, #raid-inventory .grid {
+  background-color: #171716;
+  background-image:
+    linear-gradient(to right,  #121212 1px, transparent 1px),
+    linear-gradient(to bottom, #121212 1px, transparent 1px);
+  border-color: #303030;
+}
+#pane-stash .grid::after, #pane-health .grid::after, #raid-inventory .grid::after { opacity: .35; }
+#pane-stash .equip__pmc { grid-area: 1 / 1 / 5 / 4; opacity: .3; color: #8e9295; }

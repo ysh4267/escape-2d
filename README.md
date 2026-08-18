@@ -18,7 +18,7 @@ No build step, no dependencies — plain ES modules, canvas and DOM.
 | ![traders](docs/traders.png) | ![stash](docs/stash.png) |
 | eight traders, loyalty-gated stock, three currencies | the stash |
 | ![health](docs/health.png) | ![health in raid](docs/health-hud.png) |
-| the HEALTH tab — seven parts, conditions, the Therapist | in raid: the doll in the corner, a Salewa going onto the stomach |
+| the HEALTH tab as the game draws it — the x-ray figure, a tab and a bar a part, the total, the vitals | in raid: the outline man top-left with the conditions at his shoulder, a Salewa going onto the stomach |
 
 ---
 
@@ -60,12 +60,17 @@ the way through. Four on Factory want a key, and one wants a shoulder.
 | **ctrl + drag** onto a free cell | split the stack |
 | **alt + click** | equip into the matching slot |
 
-Two panels, as in the game. GEAR is the character screen, laid out the way the
-real one is — earpiece, headwear and face cover across the top, body armour and
-eyewear beneath, the two long-gun bars spanning the first two columns with the
-holster and sheath beside them, and the rig, pockets, backpack and pouch in
-their own column. INVENTORY next to it is where the rig and the bags open up so
-you can actually shuffle loot.
+Two panels, as in the game. GEAR is the character screen, drawn the way the
+real one is drawn — earpiece, headwear and face cover across the top, armband
+and dogtag under the earpiece, body armour and eyewear beneath, the two
+long-gun bars spanning the first two columns with the holster and sheath
+beside them, and the rig, pockets, special slots, backpack and pouch in their
+own column; flat dark header bars with a chevron, the game's 45° hatch and a
+ghost of what goes there in every empty slot, and the character screen's own
+silhouette (the man with the rifle low, traced from its health tab) standing
+behind the middle column. Armband, dogtag and the special slots are there for
+the look of the screen; nothing in this game goes in them. INVENTORY next to
+it is where the rig and the bags open up so you can actually shuffle loot.
 
 ---
 
@@ -345,9 +350,23 @@ doll — the parts it can help are lit, the rest say why not — and the use run
 on the raid clock: walk if you like, but a sprint or a shot interrupts it.
 Rations and drinks restore energy and hydration by their `effects_health`.
 
-The HUD carries the doll in the corner, coloured part by part, with the
-conditions in a row under it and a timer on the ones that run out; `H` (or the
-inventory) opens the full block above the gear. What you bring home is what
+It all looks the way the game looks. The HEALTH tab is the character screen's
+own: the x-ray figure with a cut-corner label tab and a bar for each of the
+seven parts hung around him where the game hangs them (RIGHT ARM on the
+viewer's left, HEAD beside the head), the bar green / yellow / orange / red by
+how much of the part is left and a red frame with red digits and a cross when
+it is gone, condition tiles under the bar, an injured zone glowing red on the
+figure, the total under his feet as the yellow-green number behind the EMS
+cross, and the six vitals below — temperature, pressure, poison, radiation,
+water, energy — with their dim leading zeros and per-minute arrows. In raid
+the outline man stands top-left as he does in the game, each part stroked
+grey, going red as it is hurt, solid black when destroyed and solid green
+while a med goes onto it, with the condition tiles in a touching column at
+his shoulder and a count on the ones that repeat; picking a part for a med is
+the strip the game drops from the quick bar — a tab and a bar a row, L.LEG
+and R.LEG, the parts the med can help lit and the rest dim; `H` (or the
+inventory) opens the same strip with the pool and the vitals above the gear.
+What you bring home is what
 you had at the exit — bleeds and fractures included — and it mends on its own
 in the HEALTH tab at the game's off-raid rates (7.6 hp a minute over the
 body, a light bleed dries up in ten minutes, a heavy one in fifteen), or the
@@ -479,7 +498,10 @@ Battlestate Games; this project is not affiliated with or endorsed by them.
 - **Item templates, names and handbook prices** — the public
   [SPT](https://github.com/sp-tarkov/server) database dumps.
 - **What the places are called, and door behaviour** — the Escape From Tarkov
-  wiki.
+  wiki. The health tab's figure is the wiki's capture of the character
+  screen's own (`HealthOverview.png`), traced for the outline
+  (`src/ui/silhouette.js`) and cut out for the x-ray inside it
+  (`assets/ui/pmc-xray.webp`).
 - **Sound effects** — third-party audio whose rights stay with their owner. It
   ships sealed.
 - **3D models** — the weapons' and parts' meshes and diffuse textures are
