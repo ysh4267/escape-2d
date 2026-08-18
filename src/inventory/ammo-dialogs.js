@@ -50,7 +50,12 @@ export function magazinesFor(ammo, grids) {
 }
 
 /** load `mag` from the ammo stacks in `sources`; `onDone` after any change */
-export function loadAmmoDialog(mag, sources, onDone) {
+/**
+ * `opts.timed(stacks, n)` — when given (in raid) the dialog hands the chosen
+ * stacks and count to it instead of loading on the spot, so the rounds can go
+ * in one at a time on the raid clock; it returns true when it took the job.
+ */
+export function loadAmmoDialog(mag, sources, onDone, opts = {}) {
   const stacks = ammoStacksFor(mag, sources);
   // group by template so the picker shows one row per round type
   const byTpl = new Map();
@@ -105,6 +110,11 @@ export function loadAmmoDialog(mag, sources, onDone) {
     accept.addEventListener('click', () => {
       const rec = byTpl.get(chosen);
       if (!rec || value <= 0) return;
+      if (opts.timed) {
+        done();
+        if (opts.timed(rec.stacks, value)) onDone?.();
+        return;
+      }
       let left = value;
       for (const s of rec.stacks) {
         if (left <= 0) break;
@@ -130,7 +140,7 @@ export function loadAmmoDialog(mag, sources, onDone) {
 }
 
 /** put this stack into one of the magazines you own */
-export function loadIntoDialog(ammo, sources, onDone) {
+export function loadIntoDialog(ammo, sources, onDone, opts = {}) {
   const mags = magazinesFor(ammo, sources).filter(({ mag }) => mag.ammoFree > 0);
   openModal((box, done) => {
     box.classList.add('split', 'ammoload');
@@ -146,6 +156,7 @@ export function loadIntoDialog(ammo, sources, onDone) {
         el('button', {
           class: 'btn btn--sm btn--primary',
           onclick: () => {
+            if (opts.timed) { done(); if (opts.timed(mag, [ammo], ammo.stack)) onDone?.(); return; }
             const r = loadAmmo(mag, ammo, ammo.stack);
             done();
             if (r.ok) onDone?.();

@@ -448,21 +448,29 @@ try {
   head('combat');
   state.initState();
   const eq4 = state.game.equipment;
+  const wpC = await import('../src/inventory/weapon.js');
   moveToSlot(new Item('rig_blackrock'), eq4.get('rig'));
-  moveToSlot(new Item('w_ak74n'), eq4.get('primary'));
+  const akC = wpC.spawnWeapon('w_ak74n', { loaded: true });
+  moveToSlot(akC, eq4.get('primary'));
   autoPlace(new Item('am_545ps', { stack: 60 }), eq4.carryGrids());
+  autoPlace(wpC.spawnMag('mag_6l23', 'am_545ps'), eq4.carryGrids());
   const raid4 = new Raid({ mapDef, geo, seed: 4242 });
-  // raids place no hostiles while the farming loop is being built, so combat
-  // coverage asks for them explicitly rather than relying on the raid default
-  check('raids start with no hostiles', raid4.scavs.length === 0, String(raid4.scavs.length));
-  raid4.spawnScavs(7);
-  check('scavs spawned on request', raid4.scavs.length >= 4, String(raid4.scavs.length));
+  // hostiles are back on since the gunplay pass: a raid starts with them
+  check('raids start with hostiles', raid4.scavs.length >= 4, String(raid4.scavs.length));
+  check('every scav carries a loaded gun of its own', raid4.scavs.every(s => s.weapon && wpC.roundsInWeapon(s.weapon) > 0),
+        raid4.scavs.map(s => s.weapon?.tpl.key || '-').join(','));
+  check('a scav has the same seven-part body', raid4.scavs.every(s => s.health && s.health.total === 440));
+  check('a scav\'s gun is worn the way the server rolls it',
+        raid4.scavs.every(s => s.weapon.maxDura >= 85 && s.weapon.maxDura <= 100 && s.weapon.dura < s.weapon.maxDura));
+  raid4.spawnScavs(4);
   check('scavs spawn away from the player',
         raid4.scavs.every(s => Math.hypot(s.x - raid4.player.x, s.y - raid4.player.y) >= 30));
   check('scavs stand on walkable floor', raid4.scavs.every(s => nav.walkable(s.x, s.y)));
   check('active weapon resolves', raid4.activeWeapon()?.tpl.key === 'w_ak74n');
   const ammo0 = raid4.ammoCount('5.45x39');
   check('ammo counted', ammo0 === 60, String(ammo0));
+  const inGun0 = wpC.roundsInWeapon(akC);
+  check('the gun came in loaded: a full magazine, one chambered', inGun0 === 30 && akC.chamber.length === 1, String(inGun0));
 
   // stand somewhere with a clear shot at one of them
   let victim = null;
@@ -479,16 +487,32 @@ try {
     }
   }
   check('found a firing position on a scav', !!victim);
-  let outcome = null, guard = 0;
+  // stand still long enough for the aim to settle, then fire semi until it drops;
+  // an empty gun is reloaded from the spare magazine on the raid clock
+  raid4.gun.tick(2, akC);
+  let outcome = null, guard = 0, reloads = 0;
+  const outcomes = {};
   while (guard++ < 400 && victim && victim.alive) {
     raid4.playerCooldown = 0;
+    raid4.gun.release(akC);
     outcome = raid4.playerFire(victim.x, victim.y);
-    if (outcome === 'noammo' || outcome === 'noweapon') break;
+    outcomes[outcome] = (outcomes[outcome] || 0) + 1;
+    if (outcome === 'noammo') {
+      const r = raid4.gun.reload(akC);
+      if (!r.ok) break;
+      reloads++;
+      raid4.gun.tick(r.dur + 0.1, akC);   // the swap lands
+      continue;
+    }
+    if (outcome === 'malf') { const r = raid4.gun.reload(akC); if (r.ok) raid4.gun.tick(r.dur + 0.1, akC); continue; }
+    if (outcome === 'noweapon') break;
   }
-  check('firing consumes ammo', raid4.ammoCount('5.45x39') < ammo0, String(raid4.ammoCount('5.45x39')));
-  check('a scav can be killed', victim && !victim.alive, `outcome=${outcome}`);
-  check('a killed scav leaves a searchable body',
-        raid4.containers.some(c => c.type === 'deadscav' && c.region === 'Body'));
+  check('firing consumes the rounds in the gun', wpC.roundsInWeapon(akC) < inGun0 || reloads > 0, JSON.stringify(outcomes));
+  check('a scav can be killed', victim && !victim.alive, `outcome=${outcome} ${JSON.stringify(outcomes)}`);
+  check('the gun wore with the shots', akC.dura < 100, String(akC.dura));
+  const body4 = raid4.containers.find(c => c.type === 'deadscav' && c.region === 'Body');
+  check('a killed scav leaves a searchable body', !!body4);
+  check('the body holds the gun the scav was firing', !!body4 && body4.grid.items().some(i => i.isWeapon), body4 ? body4.grid.items().map(i => i.tpl.key).join(',') : '');
   check('kill counted', raid4.stats.kills >= 1, String(raid4.stats.kills));
 
   const hp0 = raid4.player.hp;
@@ -504,7 +528,9 @@ try {
   const raid5 = new Raid({ mapDef, geo, seed: 5150 });
   raid5.spawnScavs(7);
   for (let i = 0; i < 900; i++) raid5.update(1 / 30);
-  check('30 simulated seconds are stable', raid5.status === 'running', raid5.status);
+  // an unarmed player standing still among thirteen armed scavs may well be
+  // dead inside thirty seconds now; the point is that nothing threw
+  check('30 simulated seconds are stable', raid5.status === 'running' || raid5.status === 'kia', raid5.status);
   check('scavs stayed on walkable floor', raid5.scavs.every(s => nav.walkable(s.x, s.y)),
         raid5.scavs.filter(s => !nav.walkable(s.x, s.y)).length + ' off-mesh');
   check('scavs actually moved', raid5.scavs.some(s => s.path.length > 0 || s.state !== 'patrol'));
@@ -889,6 +915,198 @@ try {
     check('the chart lists every 7.62x39 round, penetration first', (() => { const rows = ch.chartRows('7.62x39'); return rows.length >= 8 && rows[0].tpl.ammo.pen >= rows[1].tpl.ammo.pen; })());
     check('barrels carry the TT accuracy the receiver lacks', wp.weaponStats(wp.spawnWeapon('w_tt')).moa > 0);
     check('durability burn aggregates', wp.weaponStats(wp.spawnWeapon('w_akm')).dburn > 1);
+  }
+
+  {
+    head('gunplay: what the parts and the round do in the field');
+    const gp = await import('../src/raid/gunplay.js');
+    const wpG = await import('../src/inventory/weapon.js');
+    const rngG = (await import('../src/core/rng.js')).makeRng(99);
+    // spread: an AKM standing still, settled, has the sight on a man at 20 m
+    const akm = wpG.spawnWeapon('w_akm', { loaded: true });
+    const stA = wpG.weaponStats(akm);
+    const aimA = new gp.Aim();
+    aimA.settled = 3;
+    const sSettled = gp.spreadFor(stA, aimA, {});
+    check('a settled aim is tight', sSettled < 0.02, sSettled.toFixed(4));
+    check('and hits a standing man at 20 m every time', gp.hitChance(sSettled, 20) === 1, gp.hitChance(sSettled, 20).toFixed(2));
+    aimA.settled = 0;
+    const sFresh = gp.spreadFor(stA, aimA, {});
+    check('right after moving the aim is wider', sFresh > sSettled * 2, `${sFresh.toFixed(3)} vs ${sSettled.toFixed(3)}`);
+    check('a sprint is worse still', gp.spreadFor(stA, aimA, { moving: true, sprinting: true }) > sFresh + 0.05);
+    check('ergonomics decides how fast it settles', gp.settleTime(26) > gp.settleTime(60));
+    // recoil: a string of automatic fire climbs the aim; it comes back
+    aimA.settled = 3;
+    for (let i = 0; i < 6; i++) gp.kick(aimA, stA);
+    const sString = gp.spreadFor(stA, aimA, { string: 6 });
+    check('six shots of recoil open the group', sString > sSettled * 3, `${sString.toFixed(3)} vs ${sSettled.toFixed(3)}`);
+    check('so the sixth shot at 20 m is not a sure hit', gp.hitChance(sString, 20) < 0.8, gp.hitChance(sString, 20).toFixed(2));
+    for (let i = 0; i < 40; i++) aimA.tick(0.05, { moving: false, facing: 0 });
+    check('two seconds later the recoil has recovered', aimA.recoil < 0.005, aimA.recoil.toFixed(4));
+    // a suppressor and a compensator: less recoil, less noise
+    const stAkm = wpG.weaponStats(akm);
+    const pbs = new Item('mod_pbs_1');
+    const muzzleSlot = akm.slots.find(sl => sl.name === 'mod_muzzle');
+    const stray = new Grid(6, 6);
+    wpG.installMod(muzzleSlot, pbs, [stray]);
+    check('a suppressor is heard as one', gp.isSuppressed(akm));
+    const stSup = wpG.weaponStats(akm);
+    check('and cuts the vertical recoil', stSup.vRecoil < stAkm.vRecoil, `${stAkm.vRecoil} -> ${stSup.vRecoil}`);
+    check('and the distance a shot carries', gp.hearRange(stSup, true) < gp.hearRange(stAkm, false) / 2);
+    check('a suppressed AKM burns durability faster', gp.wearPerShot(stSup, items.TPL.am_762ps) > gp.wearPerShot(stAkm, items.TPL.am_762ps));
+
+    // the round on the body: PS through a PACA, BP through a 6B13
+    const { Health } = await import('../src/raid/health.js');
+    const paca = new Item('ar_paca');
+    const ps = items.TPL.am_762ps;
+    let pens = 0, wearTotal = 0;
+    for (let i = 0; i < 200; i++) {
+      const piece = new Item('ar_paca');
+      const r = gp.strikeArmor(piece, ps, 61, rngG);
+      if (r.penetrated) pens++;
+      wearTotal += r.wear;
+    }
+    check('7.62 PS goes through a fresh PACA nearly always', pens > 180, `${pens}/200`);
+    check('the PACA wears with every round', wearTotal / 200 > 2, (wearTotal / 200).toFixed(2));
+    const bp = items.TPL.am_545bp;
+    let pens2 = 0, pens4 = 0;
+    for (let i = 0; i < 300; i++) { const piece = new Item('ar_iotv'); if (gp.strikeArmor(piece, bp, 48, rngG).penetrated) pens2++; }
+    for (let i = 0; i < 300; i++) { const piece = new Item('ar_6b13'); if (gp.strikeArmor(piece, bp, 48, rngG).penetrated) pens4++; }
+    check('5.45 BP (45 pen) beats a fresh class 4 (40) nearly always', pens4 > 260, `${pens4}/300`);
+    check('and a fresh class 5 (50) less than half the time', pens2 > 60 && pens2 < 180, `${pens2}/300`);
+    const buck = items.TPL.am_12buck;
+    let pens3 = 0;
+    for (let i = 0; i < 100; i++) { const piece = new Item('ar_6b13'); if (gp.strikeArmor(piece, buck, 39, rngG).penetrated) pens3++; }
+    check('buckshot does not go through class 4', pens3 === 0, `${pens3}/100`);
+    const wornB13 = new Item('ar_6b13'); wornB13.dura = 5;
+    check('a nearly spent plate is worth much less', gp.armorValue(wornB13) < gp.armorValue(new Item('ar_6b13')) * 0.5, gp.armorValue(wornB13).toFixed(1));
+    void paca;
+    // landRound: a hit through the model into a body, armour worn
+    const bodyH = new Health();
+    const vest = new Item('ar_paca');
+    const land = gp.landRound({ ammo: ps, health: bodyH, armor: vest, rng: rngG, part: 'thorax' });
+    check('a round to the thorax lands on the thorax', land.part === 'thorax' && bodyH.hp('thorax') < 85, String(bodyH.hp('thorax')));
+    check('the vest over it took wear', vest.dura < 50, String(vest.dura));
+    const headH = new Health();
+    gp.landRound({ ammo: ps, health: headH, rng: rngG, part: 'head' });
+    check('a 7.62 to a bare head is the end', headH.dead);
+    const bluntH = new Health();
+    const plate = new Item('ar_6b13');
+    let bluntSeen = false;
+    for (let i = 0; i < 40 && !bluntSeen; i++) {
+      const p2 = new Item('ar_6b13');
+      const r = gp.landRound({ ammo: buck, health: bluntH, armor: p2, rng: rngG, part: 'thorax' });
+      if (!r.penetrated) bluntSeen = r.dmg < 39 * 0.5 && r.dmg > 0;
+    }
+    check('a stopped pellet bruises rather than wounds', bluntSeen);
+    void plate;
+
+    // wear and stoppages
+    check('a fresh gun above the safe line cannot mechanically fail', gp.malfunctionChance(akm, ps) === 0);
+    const wreck = wpG.spawnWeapon('w_akm', { loaded: true }); wreck.dura = 40;
+    check('a worn gun can', gp.malfunctionChance(wreck, ps) > 0.01, gp.malfunctionChance(wreck, ps).toFixed(3));
+    const junk = wpG.spawnWeapon('w_akm', { loaded: true }); junk.dura = 5;
+    check('and a wreck often', gp.malfunctionChance(junk, ps) > gp.malfunctionChance(wreck, ps) * 2, `${gp.malfunctionChance(junk, ps).toFixed(3)} vs ${gp.malfunctionChance(wreck, ps).toFixed(3)}`);
+    check('overheating adds to it', gp.malfunctionChance(akm, ps, 180) > 0.05 && gp.heatSpreadMult(200) === 1.5);
+    const kinds = new Set();
+    for (let i = 0; i < 200; i++) kinds.add(gp.rollMalfunction(wreck, ps, rngG).kind);
+    check('stoppages come in kinds', kinds.has('jam') && kinds.has('misfire') && kinds.has('feed'), [...kinds].join(','));
+    // the magazine check
+    const mag30 = wpG.spawnMag('mag_ak55', 'am_762ps', 14);
+    check('the game\'s words for a hefted magazine', gp.magGuess(14, 30) === 'ABOUT HALF' && gp.magGuess(30, 30) === 'FULL' && gp.magGuess(0, 30) === 'EMPTY' && gp.magGuess(3, 30) === 'ALMOST EMPTY');
+    void mag30;
+    check('the load time follows the magazine', gp.loadTimePerRound(wpG.spawnMag('mag_gen_m3')) < gp.loadTimePerRound(wpG.spawnMag('mag_ak55')));
+    check('the selector walks the weapon\'s modes', gp.weaponModes(akm).join(',') === 'single,fullauto' && gp.weaponModes(wpG.spawnWeapon('w_pm')).join(',') === 'single');
+  }
+
+  {
+    head('gunplay: in a raid');
+    const wpR = await import('../src/inventory/weapon.js');
+    const gpR = await import('../src/raid/gunplay.js');
+    state.initState();
+    const eqR = state.game.equipment;
+    moveToSlot(new Item('rig_blackrock'), eqR.get('rig'));
+    const akR = wpR.spawnWeapon('w_akm', { loaded: true });
+    moveToSlot(akR, eqR.get('primary'));
+    const spare = wpR.spawnMag('mag_ak55', 'am_762ps', 30);
+    autoPlace(spare, eqR.carryGrids());
+    autoPlace(new Item('am_762ps', { stack: 40 }), eqR.carryGrids());
+    const raidR = new Raid({ mapDef, geo, seed: 909 });
+    raidR.scavs = [];   // nobody shoots back in this one
+    const g = raidR.gun;
+    const st = g.state(akR);
+    check('a gun starts on its first mode', st.mode === 'single');
+    check('the magazine that came in is known exactly', g.magReadout(akR).exact && g.magReadout(akR).text === '29', JSON.stringify(g.magReadout(akR)));
+    // semi: a held trigger fires once
+    raidR.gun.tick(2, akR);
+    const tx = raidR.player.x + Math.cos(raidR.player.facing) * 10, ty = raidR.player.y + Math.sin(raidR.player.facing) * 10;
+    let r1 = raidR.playerFire(tx, ty, { held: false });
+    raidR.playerCooldown = 0;
+    let r2 = raidR.playerFire(tx, ty, { held: true });
+    check('semi fires on the pull, not on the hold', r1 === 'miss' && r2 === 'semi', `${r1} ${r2}`);
+    check('a shot makes the count uncertain', !g.magReadout(akR).exact && g.magReadout(akR).text === '?', JSON.stringify(g.magReadout(akR)));
+    check('one round left the gun', wpR.roundsInWeapon(akR) === 29, String(wpR.roundsInWeapon(akR)));
+    // auto: a held trigger keeps firing at the cyclic rate
+    g.cycleMode(akR);
+    check('B throws the selector', st.mode === 'fullauto');
+    g.release(akR);
+    let fired = 0;
+    for (let i = 0; i < 12; i++) { raidR.playerCooldown = 0; if (raidR.playerFire(tx, ty, { held: i > 0 }) === 'miss') fired++; }
+    check('auto fires on the hold', fired === 12, String(fired));
+    check('the cyclic rate sets the cooldown', Math.abs(raidR.playerCooldown - 0.1) < 0.02, raidR.playerCooldown.toFixed(3));
+    check('the gun heated', st.heat > 10, st.heat.toFixed(1));
+    check('and wore', akR.dura < 100, akR.dura.toFixed(3));
+    // T: the check tells you the game's words, then a shot spoils it again
+    let r = g.checkMag(akR);
+    check('the check runs on the clock', r.ok && g.busy && g.action.kind === 'check');
+    check('while it runs the trigger does nothing', raidR.playerFire(tx, ty) === 'busy');
+    g.tick(r.dur + 0.05, akR);
+    check('and reads the magazine by heft', !g.busy && g.magReadout(akR).text === 'ABOUT HALF', g.magReadout(akR).text);
+    // R: the swap for the fuller spare, the old one back in the rig
+    const oldMag = akR.magazine;
+    r = g.reload(akR);
+    check('R starts a reload', r.ok && g.action.kind === 'reload', r.reason || '');
+    g.tick(r.dur + 0.05, akR);
+    check('the fullest spare went in', akR.magazine === spare && !g.busy);
+    check('the old one is back in the rig', oldMag.holder?.kind === 'grid');
+    check('and the new count is known', g.magReadout(akR).exact);
+    check('nothing fuller: R has nothing to do', !g.reload(akR).ok);
+    // a tube gun: shells one at a time from the pocket
+    const mp = wpR.spawnWeapon('w_mp133');
+    moveToSlot(mp, eqR.get('secondary'));
+    model.detach(akR);
+    autoPlace(new Item('am_12buck', { stack: 10 }), eqR.carryGrids());
+    check('the shotgun is in hand', raidR.activeWeapon() === mp);
+    r = g.reload(mp);
+    check('R on an empty tube starts feeding shells', r.ok && g.action.step, r.reason || '');
+    const dur = r.dur;
+    g.tick(dur + 0.2, mp);
+    check('the tube is full and one is chambered', mp.magazine.ammoCount === 5 && mp.chamber.length === 1, `${mp.magazine.ammoCount} +${mp.chamber.length}`);
+    check('the shells came out of the pocket', raidR.ammoCount('12/70') === 4, String(raidR.ammoCount('12/70')));
+    // a stoppage: a wreck of a gun, cleared with R
+    const wreckR = wpR.spawnWeapon('w_akm', { loaded: true }); wreckR.dura = 3;
+    model.detach(mp);
+    moveToSlot(wreckR, eqR.get('primary'));
+    const stW = g.state(wreckR);
+    let malf = null;
+    for (let i = 0; i < 200 && !malf; i++) { raidR.playerCooldown = 0; g.release(wreckR); if (raidR.playerFire(tx, ty) === 'malf') malf = stW.malf; }
+    check('a wreck stops', !!malf, malf ? malf.kind : 'never');
+    check('a stopped gun will not fire', raidR.playerFire(tx, ty) === 'malf');
+    r = g.reload(wreckR);
+    check('R clears it, in time', r.ok && g.action.kind === 'clear');
+    g.tick(r.dur + 0.05, wreckR);
+    check('and it fires again', !stW.malf && ['miss', 'hit', 'kill', 'noammo', 'malf'].includes((raidR.playerCooldown = 0, g.release(wreckR), raidR.playerFire(tx, ty))));
+    // rounds by hand in the field: on the clock, one at a time
+    const magR = wpR.spawnMag('mag_ak55', null, 0);
+    autoPlace(magR, eqR.carryGrids());
+    const stacks = eqR.carryGrids().flatMap(gr => gr.items()).filter(i => i.tplId === 'am_762ps');
+    r = g.loadRounds(magR, stacks, 5);
+    check('loading a magazine in raid takes time', r.ok && r.dur > 3, String(r.dur));
+    g.tick(1, null);
+    check('the first round is in after the first step', magR.ammoCount >= 1, String(magR.ammoCount));
+    g.tick(r.dur, null);
+    check('and all five in the end', magR.ammoCount === 5 && !g.busy, String(magR.ammoCount));
+    void gpR;
   }
 
   head('health: the body and what hits it');

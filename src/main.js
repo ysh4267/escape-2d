@@ -10,7 +10,7 @@ import { buildAssortments } from './data/traders.js';
 import { buildLootPools } from './data/loot.js';
 import { loadGeometry } from './raid/nav.js';
 import { game, initState, load, save, saveSoon, addMoney, netWorthRub, wipe } from './core/state.js';
-import { Item, autoPlace, moveToSlot } from './inventory/model.js';
+import { Item, autoPlace, moveToSlot, detach } from './inventory/model.js';
 import { spawnWeapon } from './inventory/weapon.js';
 import { initDnd, isDragging } from './inventory/dnd.js';
 import { initTooltip } from './inventory/tooltip.js';
@@ -280,6 +280,81 @@ function runDevHooks() {
       }
       showPane('health');
       void hu;
+    });
+    return;
+  }
+  if (mode === 'gun') {
+    // the gunplay pass in one capture: an AKM in hand with a spare magazine
+    // and a vest on, dropped into Factory with a scav put in front of the
+    // muzzle. `gun:fight` fires a string on auto; `gun:reload` is caught in a
+    // magazine change; `gun:malf` a wreck of a gun with a stoppage to clear;
+    // `gun:tube` the MP-133 being fed shells.
+    import('./inventory/weapon.js').then(async (wp) => {
+      const eq = game.equipment;
+      if (!eq.item('rig')) moveToSlot(new Item('rig_blackrock', { examined: true }), eq.get('rig'));
+      if (!eq.item('armor')) moveToSlot(new Item('ar_paca', { examined: true }), eq.get('armor'));
+      const gunKey = arg === 'tube' ? 'w_mp133' : 'w_akm';
+      const gun = wp.spawnWeapon(gunKey, { loaded: arg === 'tube' ? false : true, examined: true });
+      if (arg === 'malf') { gun.dura = 3; gun.maxDura = 60; }
+      if (eq.item('primary')) detach(eq.item('primary'));
+      moveToSlot(gun, eq.get('primary'));
+      if (gunKey === 'w_akm') {
+        for (let i = 0; i < 2; i++) autoPlace(wp.spawnMag('mag_ak55', 'am_762ps', 30), eq.carryGrids());
+        autoPlace(new Item('am_762ps', { stack: 40, examined: true }), eq.carryGrids());
+      } else {
+        autoPlace(new Item('am_12buck', { stack: 20, examined: true }), eq.carryGrids());
+      }
+      deploy('factory');
+      const { currentRaid } = await import('./ui/raid-ui.js');
+      const raid = currentRaid();
+      if (!raid) return;
+      window.__raid = raid;   // for the capture scripts to read
+      const p = raid.player;
+      // a scav a dozen metres away with a clear line, where the shot goes
+      let spot = null, ang = p.facing;
+      outer: for (const r of [12, 10, 8, 14, 6]) {
+        for (let k = 0; k < 12; k++) {
+          const a = p.facing + (k * Math.PI) / 6;
+          const c = raid.nav.snap(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 2);
+          if (c && Math.hypot(c[0] - p.x, c[1] - p.y) > r * 0.7 && raid.nav.lineClear(p.x, p.y, c[0], c[1])) { spot = c; ang = a; break outer; }
+        }
+      }
+      for (let k = 0; k < 300 && !spot; k++) {
+        const c = raid.randomWalkable(p.x, p.y, 14);
+        if (c && Math.hypot(c[0] - p.x, c[1] - p.y) > 5 && raid.nav.lineClear(p.x, p.y, c[0], c[1])) { spot = c; ang = Math.atan2(c[1] - p.y, c[0] - p.x); }
+      }
+      const s = raid.scavs[0];
+      if (s && spot) {
+        s.x = spot[0]; s.y = spot[1]; s.level = raid.level; s.facing = ang + Math.PI;
+        // it stands there and takes it: no wandering off, no shooting back
+        s.update = function () { this.hitFlash = Math.max(0, this.hitFlash - 0.05); this.hp = this.health.total; };
+        p.facing = ang;
+      }
+      raid.gun.tick(3, gun);
+      if (arg === 'fight' && s) {
+        // three aimed shots, semi, and the last tracer left hanging for the
+        // capture; the scav wears a class 4 plate so it is still standing
+        s.armor = new Item('ar_6b13');
+        s.helmet = new Item('hl_6b47');
+        let n = 0;
+        const t = setInterval(() => {
+          if (n++ >= 3 || raid.status !== 'running' || !s.alive) return clearInterval(t);
+          raid.playerCooldown = 0;
+          raid.gun.release(gun);
+          raid.playerFire(s.x, s.y, { held: false });
+          const last = raid.shots[raid.shots.length - 1];
+          if (last) last.t = 30;
+        }, 400);
+      } else if (arg === 'reload') {
+        gun.magazine.rounds = [{ t: 'am_762ps', n: 3 }];
+        setTimeout(() => { const r = raid.gun.reload(gun); if (r.ok) raid.gun.action.t = r.dur * 0.45; }, 300);
+      } else if (arg === 'malf') {
+        setTimeout(() => {
+          for (let i = 0; i < 300 && !raid.gun.state(gun).malf; i++) { raid.playerCooldown = 0; raid.gun.release(gun); raid.playerFire(s ? s.x : p.x + 5, s ? s.y : p.y, { held: false }); }
+        }, 300);
+      } else if (arg === 'tube') {
+        setTimeout(() => { const r = raid.gun.reload(gun); if (r.ok) raid.gun.action.t = r.dur * 0.4; }, 300);
+      }
     });
     return;
   }

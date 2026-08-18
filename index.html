@@ -233,7 +233,7 @@
             <div class="bar bar--stam"><i id="stam-fill"></i></div>
           </div>
           <div class="vital vital--ammo"><svg class="ico"><use href="#i-crosshair"/></svg>
-            <span id="ammo-weapon">unarmed</span><span id="ammo-count" class="ammo-count">—</span>
+            <span id="ammo-weapon">unarmed</span><span id="ammo-mode" class="ammo-mode" hidden>SEMI</span><span id="ammo-count" class="ammo-count">—</span>
           </div>
         </div>
       </div>
@@ -254,6 +254,7 @@
         </div>
         <div class="hud-keys">
           <span><b>LMB</b> move &nbsp; on a container: search &nbsp; on a door: open</span>
+          <span><b>R</b> reload / clear &nbsp; <b>B</b> fire mode &nbsp; <b>T</b> check mag</span>
           <span><b>M</b> floor plan &nbsp; <b>TAB</b> inventory &nbsp; <b>F</b> extract &nbsp; <b>H</b> health</span>
         </div>
       </div>
@@ -264,6 +265,12 @@
     <div class="interact-prompt" id="interact-prompt" hidden>
       <div class="interact-prompt__label"><span id="interact-label">—</span></div>
       <div class="interact-prompt__bar"><i id="interact-fill"></i></div>
+    </div>
+
+    <!-- the gun: a reload, a magazine check, a stoppage being cleared -->
+    <div class="interact-prompt gun-prompt" id="gun-prompt" hidden>
+      <div class="interact-prompt__label"><svg class="ico"><use href="#i-crosshair"/></svg> <span id="gun-label">—</span></div>
+      <div class="interact-prompt__bar"><i id="gun-fill"></i></div>
     </div>
 
     <!-- a med being applied: name, part, and how far along the use is -->

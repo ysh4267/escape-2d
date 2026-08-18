@@ -3,7 +3,8 @@
 // =========================================================
 
 import { Grid, Item, autoPlace, detach } from '../inventory/model.js';
-import { takeRound, isFunctional } from '../inventory/weapon.js';
+import { isFunctional, spawnWeapon, spawnMag, weaponStats } from '../inventory/weapon.js';
+import { Gunplay, landRound, spreadFor, hitChance, hearRange as shotHearRange, isSuppressed, pelletSpread, MOVING_TARGET_SWAY } from './gunplay.js';
 import { CONTAINERS, poolsFor, EMPTY_CHANCE, POOLS } from '../data/loot.js';
 import { TPL, BY_ID } from '../data/items.js';
 import { areaAt, levelInfo } from '../data/maps.js';
@@ -14,7 +15,7 @@ import { clamp, dist, uid } from '../core/util.js';
 import { game, addExp } from '../core/state.js';
 import { sfx } from '../core/audio.js';
 import { emit, EV } from '../core/events.js';
-import { Health, PART, HIT_WEIGHTS, FX, FX_INFO } from './health.js';
+import { Health, PART, FX, FX_INFO } from './health.js';
 
 export const RAID_STATUS = {
   RUNNING: 'running',
@@ -33,6 +34,29 @@ const SPRINT_MULT = 1.72;
 const OVERWEIGHT_AT = 35;      // kg, speed starts dropping
 const CRITICAL_AT = 65;        // kg, heavily slowed
 const LOOSE_SPAWN_CHANCE = 0.45;   // how often a loose-loot spot is occupied
+const SCAV_COUNT = 6;              // hostiles on the plant at the start
+
+/**
+ * What the scavs bring, by tier: [gun, round, weight] picks, spare magazine
+ * count, and the chance / choice of a vest and a helmet. The bottom tier is
+ * the pistol-and-shotgun crowd with the cheapest rounds; the top carries an
+ * AK with a proper round and something on its chest. `skill` scales their
+ * spread (1 = a steady shooter).
+ */
+const SCAV_LOADOUTS = [
+  {
+    guns: [['w_pm', 'am_9x18pst', 5], ['w_tt', 'am_762tt', 4], ['w_mp133', 'am_12buck', 4], ['w_kedr', 'am_9x18pst', 3], ['w_vpo136', 'am_762ps', 2]],
+    mags: [0, 1], armor: [0.25, ['ar_paca']], helmet: null, skill: 2.4,
+  },
+  {
+    guns: [['w_akm', 'am_762ps', 4], ['w_aks74u', 'am_545ps', 4], ['w_kedrb', 'am_9x18pst', 2], ['w_mp153', 'am_12buck', 3], ['w_vpo136', 'am_762ps', 2], ['w_pb', 'am_9x18pst', 1]],
+    mags: [1, 2], armor: [0.5, ['ar_paca', 'ar_module', 'ar_6b23']], helmet: [0.3, ['hl_6b47']], skill: 1.8,
+  },
+  {
+    guns: [['w_ak74n', 'am_545bp', 4], ['w_akm', 'am_762bp', 3], ['w_aks74u', 'am_545bp', 2], ['w_saiga', 'am_flechette', 2]],
+    mags: [1, 3], armor: [0.75, ['ar_6b23', 'ar_zhuk', 'ar_6b13']], helmet: [0.5, ['hl_6b47', 'hl_fast']], skill: 1.4,
+  },
+];
 
 export class Raid {
   constructor({ mapDef, geo, seed }) {
@@ -56,6 +80,7 @@ export class Raid {
     this.scavs = [];
     this.shots = [];
     this.playerCooldown = 0;
+    this.gun = new Gunplay(this);
     this.stats = { searched: 0, found: 0, distance: 0, kills: 0, shots: 0, floors: 1 };
 
     this.level = mapDef.startLevel;
@@ -349,6 +374,8 @@ export class Raid {
       this.visited.add(level);
       this.stats.floors = this.visited.size;
     }
+    // a floor reached for the first time gets its own few hostiles
+    if (!this.scavLevels?.has(level)) this.spawnScavs(this.rng.int(2, 4), level);
     sfx.footstep(false, true, 'metal');
     emit(EV.RAID_LEVEL, { level, name: this.levelInfo(level).name });
     return true;
@@ -385,27 +412,84 @@ export class Raid {
 
   // ---------------------------------------------------------
   /**
-   * Hostiles are switched off while the farming loop is being built out - a
-   * raid is currently a looting exercise and being shot mid-search only gets
-   * in the way of tuning it. Everything downstream (the AI, the combat, the
-   * bodies they leave) is intact and comes back by raising this to 7.
+   * Hostiles on a floor. The raid starts with SCAV_COUNT on the insertion
+   * floor; the first time the player reaches another floor a few more are
+   * put there (see useStairs), so the plant is not empty upstairs and the
+   * nav grids of floors never visited are never built for nobody.
    */
-  spawnScavs(count = 0) {
+  spawnScavs(count = SCAV_COUNT, level = this.level) {
     const rng = this.rng;
-    const spots = this.geo.markers.spawns.filter((s) => s.level === this.level);
+    const nav = this.navFor(level);
+    const spots = this.geo.markers.spawns.filter((s) => s.level === level);
+    this.scavLevels = this.scavLevels || new Set();
+    this.scavLevels.add(level);
     for (let i = 0; i < count; i++) {
       let pos = null;
       for (let tries = 0; tries < 80 && !pos; tries++) {
         const s = rng.pick(spots);
         if (!s) break;
-        const p = this.nav.snap(s.x, s.y, 12);
+        const p = nav.snap(s.x, s.y, 12);
         if (!p) continue;
-        if (dist(p[0], p[1], this.player.x, this.player.y) < 34) continue;
+        if (level === this.level && dist(p[0], p[1], this.player.x, this.player.y) < 34) continue;
         pos = p;
       }
       if (!pos) continue;
-      this.scavs.push(new Scav({ x: pos[0], y: pos[1], rng, tier: rng.int(0, 2) }));
+      const tier = rng.int(0, 2);
+      this.scavs.push(new Scav({ x: pos[0], y: pos[1], rng, tier, level, loadout: this.scavLoadout(tier) }));
     }
+  }
+
+  /** the hostiles on the floor the player is on */
+  scavsHere() {
+    return this.scavs.filter((s) => !s.level || s.level === this.level);
+  }
+
+  /**
+   * What a scav of this tier carries into the fight, as real items: the gun
+   * it fires (loaded, its magazine the one it will empty at you), a spare
+   * magazine or two, and the vest and helmet the round has to get through.
+   * Everything here is what its body gives up afterwards - the gun with the
+   * rounds it did not fire, the vest with the holes you put in it.
+   */
+  scavLoadout(tier) {
+    const rng = this.rng;
+    const t = SCAV_LOADOUTS[clamp(tier, 0, SCAV_LOADOUTS.length - 1)];
+    const [gunKey, ammoKey] = rng.weighted(t.guns, (e) => e[2] || 1);
+    const weapon = spawnWeapon(gunKey, { rng, loaded: true, ammo: ammoKey });
+    // a scav's gun is a scav's gun: the ceiling itself is worn (the server
+    // rolls 85-100 for the max and 30-45 under it, never below 15%)
+    const max = rng.int(85, 100);
+    weapon.maxDura = max;
+    weapon.dura = Math.max(Math.round(max * 0.15), max - rng.int(30, 45));
+    weapon.raidLoot = true;
+    for (const d of weapon.descendants()) d.raidLoot = true;
+    const spares = [];
+    const magTpl = weapon.magazine?.tplId;
+    if (magTpl && weapon.tpl.wpn?.reload !== 'InternalMagazine') {
+      for (let i = 0; i < rng.int(t.mags[0], t.mags[1]); i++) {
+        const m = spawnMag(magTpl, ammoKey, rng.int(Math.ceil((TPL[magTpl].magSize || 1) * 0.4), TPL[magTpl].magSize || 1));
+        m.raidLoot = true;
+        spares.push(m);
+      }
+    }
+    // a tube gun's scav has a pocket of shells instead
+    let loose = null;
+    if (weapon.tpl.wpn?.reload === 'InternalMagazine') {
+      loose = new Item(ammoKey, { stack: rng.int(6, 14) });
+      loose.raidLoot = true;
+    }
+    let armor = null, helmet = null;
+    if (t.armor && rng.chance(t.armor[0])) {
+      armor = new Item(rng.pick(t.armor[1]));
+      armor.dura = Math.round(armor.tpl.dura * rng.float(0.35, 0.95));
+      armor.raidLoot = true;
+    }
+    if (t.helmet && rng.chance(t.helmet[0])) {
+      helmet = new Item(rng.pick(t.helmet[1]));
+      helmet.dura = Math.round(helmet.tpl.dura * rng.float(0.35, 0.95));
+      helmet.raidLoot = true;
+    }
+    return { weapon, ammoKey, spares, loose, armor, helmet, skill: t.skill };
   }
 
   randomWalkable(nearX, nearY, radius) {
@@ -869,9 +953,14 @@ export class Raid {
       }
     }
 
-    // hostiles
+    // the gun in hand: aim settles, heat bleeds off, a reload runs
     this.playerCooldown = Math.max(0, this.playerCooldown - dt);
-    for (const s of this.scavs) s.update(dt, this);
+    this.gun.tick(dt, this.activeWeapon());
+
+    // hostiles on this floor; a scav that bled out on the floor is a body
+    // like any other. Scavs on other floors wait where they are.
+    for (const s of this.scavsHere()) s.update(dt, this);
+    for (const s of [...this.scavs]) if (s.alive && s.health?.dead) this.killScav(s, { bled: true });
     for (let i = this.shots.length - 1; i >= 0; i--) {
       this.shots[i].t -= dt;
       if (this.shots[i].t <= 0) this.shots.splice(i, 1);
@@ -948,46 +1037,66 @@ export class Raid {
     return n;
   }
 
-  /** fire toward a world point; returns a short status for the HUD */
-  playerFire(tx, ty) {
+  /** the grids a reload / a stow may use */
+  carryGridsFor() { return game.equipment.carryGrids(); }
+  nestedGridsFor() { return game.equipment.nestedGrids(); }
+  toast(text, kind = 'warn') { emit(EV.RAID_TOAST, { kind, text }); }
+  onInventoryChanged() { emit(EV.INVENTORY_CHANGED); }
+
+  /**
+   * Fire toward a world point; returns a short status for the HUD. `held`
+   * marks a frame of a held trigger, which only an automatic (or a burst in
+   * progress) keeps firing on - semi fires once per pull.
+   *
+   * The shot is the whole gunplay model in one place: the selector, the
+   * chamber, a stoppage, then a spread from the weapon's stats and the
+   * shooter's state, a hit roll against the closest hostile in the cone, and
+   * the round landing on that body through whatever it is wearing.
+   */
+  playerFire(tx, ty, { held = false } = {}) {
     if (this.status !== RAID_STATUS.RUNNING) return 'over';
     const weapon = this.activeWeapon();
-    if (!weapon) { emit(EV.RAID_TOAST, { kind: 'warn', text: 'No weapon equipped' }); return 'noweapon'; }
-    if (this.playerCooldown > 0) return 'cooldown';
-
-    // the round comes out of the chamber / magazine of the gun; a gun with
-    // nothing in it draws a loose round of its calibre from the rig for now -
-    // the reload itself is combat work and comes with the shooting pass
-    const cal = weapon.tpl.cal;
-    let ammoTpl = takeRound(weapon);
-    if (!ammoTpl && cal) {
-      const ammo = this.findAmmo(cal);
-      if (!ammo) { emit(EV.RAID_TOAST, { kind: 'bad', text: `Out of ${cal}` }); return 'noammo'; }
-      ammoTpl = ammo.tpl;
-      ammo.stack -= 1;
-      if (ammo.stack <= 0) detach(ammo);
-    }
-    const ammo = ammoTpl ? { tpl: ammoTpl } : null;
-
-    const rpm = weapon.tpl.rpm || 400;
-    this.playerCooldown = Math.max(0.09, 60 / rpm) * this.health.handlingMult();
-    this.stats.shots++;
-    sfx.fire(weapon.tpl);
-    // you cannot dress a wound and shoot at the same time
-    if (this.using) this.cancelUse('Interrupted');
-
+    if (!weapon) { if (!held) emit(EV.RAID_TOAST, { kind: 'warn', text: 'No weapon equipped' }); return 'noweapon'; }
     const p = this.player;
     p.facing = Math.atan2(ty - p.y, tx - p.x);
 
-    // the closest hostile inside a narrow cone toward the cursor wins the shot
+    const pull = this.gun.pull(weapon, { held });
+    if (pull.status === 'dry') {
+      if (!held) {
+        const cal = weapon.tpl.cal;
+        const s = this.gun.state(weapon);
+        s.knowMag(true);   // an empty click tells you exactly what is in it
+        emit(EV.RAID_TOAST, { kind: 'bad', text: weapon.magazine ? `${weapon.tpl.short || 'Weapon'} is empty — R to reload` : `No magazine${cal ? ` (${cal})` : ''}` });
+      }
+      return 'noammo';
+    }
+    if (pull.status === 'malf') {
+      if (!held || this.time - (this.malfToastAt || -9) > 2.5) {
+        this.malfToastAt = this.time;
+        emit(EV.RAID_TOAST, { kind: 'bad', text: `${pull.malf.label} — R to clear` });
+      }
+      return 'malf';
+    }
+    if (pull.status !== 'fired') return pull.status;
+
+    const ammoTpl = pull.ammo;
+    this.stats.shots++;
+    // you cannot dress a wound and shoot at the same time
+    if (this.using) this.cancelUse('Interrupted');
+    // every scav in earshot turns toward the shot
+    this.noise(p.x, p.y, pull.hearRange);
+
+    // the closest hostile inside the cone toward the cursor wins the shot;
+    // the cone is the spread itself, no narrower
+    const cone = Math.max(0.22, pull.spread * 1.5);
     let target = null, bestScore = Infinity;
-    for (const s of this.scavs) {
+    for (const s of this.scavsHere()) {
       if (!s.alive) continue;
       const d = dist(p.x, p.y, s.x, s.y);
-      if (d > 34) continue;
+      if (d > 40) continue;
       const ang = Math.atan2(s.y - p.y, s.x - p.x);
       const off = Math.abs(((ang - p.facing + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-      if (off > 0.22) continue;
+      if (off > cone) continue;
       if (!this.nav.lineClear(p.x, p.y, s.x, s.y)) continue;
       const score = d + off * 20;
       if (score < bestScore) { bestScore = score; target = s; }
@@ -1001,65 +1110,130 @@ export class Raid {
     }
 
     const d = dist(p.x, p.y, target.x, target.y);
-    const ergo = weapon.tpl.ergo || 40;
-    // pain, a tremor and a broken arm all pull the shot off
-    const chance = clamp((0.94 - d * 0.018 + (ergo - 40) * 0.004) * this.health.aimMult(), 0.15, 0.96);
-    const hit = this.rng.chance(chance);
-    this.registerShot({ from: [p.x, p.y], to: [target.x, target.y], hostile: false, hit });
-    if (!hit) {
+    const a = ammoTpl.ammo || {};
+    const proj = a.proj || 1;
+    // one roll per projectile: a shell's pellets each find their own way,
+    // with the gun's shotgun dispersion on top of the spread
+    let hits = 0, kills = 0, lastLand = null;
+    const chance = hitChance(pull.spread + pelletSpread(weapon, proj) + (target.moving ? MOVING_TARGET_SWAY : 0), d);
+    for (let i = 0; i < proj; i++) {
+      if (!this.rng.chance(chance)) continue;
+      hits++;
+      const land = this.hitScav(target, ammoTpl);
+      lastLand = land;
+      if (land.killed) { kills++; break; }
+    }
+    this.registerShot({ from: [p.x, p.y], to: [target.x, target.y], hostile: false, hit: hits > 0 });
+    if (!hits) {
       sfx.impact(this.rng.pick(['concrete', 'metal', 'ricochet']));
       return 'miss';
     }
-    sfx.hit('body');
-
-    // the round's own damage; a shell's pellets are folded into one number
-    const a = ammo?.tpl.ammo || {};
-    const proj = a.proj || 1;
-    const base = ammo ? (a.dmg || ammo.tpl.dmg || 40) * (proj > 1 ? proj * 0.5 : 1) : 40;
-    const died = target.takeHit(base * this.rng.float(0.85, 1.15), this);
-    if (died) { this.killScav(target); return 'kill'; }
+    sfx.hit(lastLand.struck);
+    if (kills) { this.killScav(target); return 'kill'; }
     return 'hit';
   }
 
-  killScav(scav) {
+  /**
+   * A round landing on a scav: through its vest or helmet, into its body.
+   * The scav wakes up to being shot even when it never saw the shooter.
+   */
+  hitScav(scav, ammoTpl, dmgMul = 1) {
+    const land = landRound({
+      ammo: ammoTpl, health: scav.health, armor: scav.armor, helmet: scav.helmet, rng: this.rng, dmgMul,
+    });
+    scav.onHit(this, land);
+    return { ...land, killed: scav.health.dead };
+  }
+
+  /**
+   * A shot heard: every scav on this floor within `range` turns toward it.
+   * A suppressor is what keeps this short.
+   */
+  noise(x, y, range) {
+    for (const s of this.scavsHere()) {
+      if (!s.alive) continue;
+      if (dist(x, y, s.x, s.y) > range) continue;
+      s.hear(this, x, y);
+    }
+  }
+
+  /**
+   * A scav's shot at the player: from its own gun, its own round, through
+   * the same spread model with its tier's skill on it. Returns what the HUD
+   * needs to know (hit / miss / dry).
+   */
+  scavFire(scav) {
+    const weapon = scav.weapon;
+    if (!weapon) return 'noweapon';
+    const p = this.player;
+    const st = scav.gunState;
+    const w = weapon.tpl.wpn || {};
+    const ammoTpl = scav.takeRound();
+    if (!ammoTpl) return 'dry';
+    const stats = weaponStats(weapon);
+    scav.muzzle = 1;
+    weapon.dura = Math.max(0, (weapon.dura ?? 100) - 0.02);
+    const suppressed = isSuppressed(weapon);
+    sfx.hostileFire(weapon.tpl, { suppressed });
+    this.noise(scav.x, scav.y, shotHearRange(stats, suppressed) * 0.6);
+    const d = dist(scav.x, scav.y, p.x, p.y);
+    const spread = spreadFor(stats, scav.aim, {
+      moving: scav.moving, targetMoving: p.moving, skill: scav.skill, string: st.string,
+    });
+    scav.aim.recoil += (stats.vRecoil || 0) * 0.000085;
+    st.string += 1;
+    st.lastShot = this.time;
+    const a = ammoTpl.ammo || {};
+    const proj = a.proj || 1;
+    const chance = hitChance(spread + pelletSpread(weapon, proj), d);
+    let hits = 0;
+    for (let i = 0; i < proj; i++) {
+      if (!this.rng.chance(chance)) continue;
+      hits++;
+      this.damagePlayer(0, scav, { ammo: ammoTpl });
+      if (this.status !== RAID_STATUS.RUNNING) break;
+    }
+    this.registerShot({ from: [scav.x, scav.y], to: [p.x, p.y], hostile: true, hit: hits > 0 });
+    if (!hits) this.onNearMiss();
+    return hits ? 'hit' : 'miss';
+  }
+
+  killScav(scav, { bled = false } = {}) {
+    if (scav.state === 'dead') return;
+    scav.state = 'dead';
+    scav.hp = 0;
     this.stats.kills++;
     addExp(120);
-    emit(EV.RAID_TOAST, { kind: 'ok', text: 'Scav down' });
+    emit(EV.RAID_TOAST, { kind: 'ok', text: bled ? 'Scav bled out' : 'Scav down' });
     const def = CONTAINERS.deadscav;
     const body = {
       id: uid('c'), type: 'deadscav', def,
-      x: scav.x, y: scav.y, level: this.level, rot: this.rng.float(-0.4, 0.4),
+      x: scav.x, y: scav.y, level: scav.level || this.level, rot: this.rng.float(-0.4, 0.4),
       region: 'Body', searched: false,
       found: new Set(), order: [],
       grid: new Grid(def.w, def.h, { tag: 'loot', label: def.name }),
     };
-    this.rollLoot(body);
-    // scavs carry a little gear of their own
-    for (const pool of [POOLS.gear_misc, POOLS.mags, POOLS.weapons_low]) {
-      if (!this.rng.chance(0.5)) continue;
-      const entry = this.rng.weighted(pool, (e) => e[1]);
-      if (!entry) continue;
-      const tpl = TPL[entry[0]];
-      if (!tpl) continue;
-      const it = new Item(entry[0]);
-      it.raidLoot = true;
-      for (const d of it.descendants()) d.raidLoot = true;
-      if (tpl.dura != null) it.dura = Math.round(tpl.dura * this.rng.float(0.2, 0.8));
-      // a scav's gun is a scav's gun: the ceiling itself is worn (the server
-      // rolls 85-100 for the max and 30-45 under it, never below 15%), and
-      // there is usually something in the magazine
-      if (tpl.wpn?.maxDura) {
-        const max = this.rng.int(85, 100);
-        it.maxDura = max;
-        it.dura = Math.max(Math.round(max * 0.15), max - this.rng.int(30, 45));
-        const mag = it.magazine;
-        if (mag && this.rng.chance(0.7)) {
-          const a = tpl.wpn.defAmmo || mag.tpl.ammoFilter?.[0];
-          if (a) mag.rounds.push({ t: a, n: this.rng.int(1, mag.tpl.magSize) });
-        }
-      }
+    // what it carried goes in first: the gun with what it did not fire, the
+    // magazines, the vest and helmet with the holes in them, then the odds
+    // and ends every body has
+    const kit = [scav.weapon, ...(scav.spares || []), scav.loose, scav.armor, scav.helmet].filter(Boolean);
+    for (const it of kit) {
+      if (it.holder) detach(it);
       const spot = body.grid.findSpot(it);
       if (spot) body.grid.place(it, spot.x, spot.y, spot.rot);
+    }
+    scav.weapon = null; scav.spares = []; scav.loose = null; scav.armor = null; scav.helmet = null;
+    this.rollLoot(body);
+    if (this.rng.chance(0.5)) {
+      const entry = this.rng.weighted(POOLS.gear_misc, (e) => e[1]);
+      const tpl = entry && TPL[entry[0]];
+      if (tpl) {
+        const it = new Item(entry[0]);
+        it.raidLoot = true;
+        if (tpl.dura != null) it.dura = Math.round(tpl.dura * this.rng.float(0.2, 0.8));
+        const spot = body.grid.findSpot(it);
+        if (spot) body.grid.place(it, spot.x, spot.y, spot.rot);
+      }
     }
     // like every other container, a body has to be searched item by item
     this.finalizeContainer(body);
@@ -1069,41 +1243,33 @@ export class Raid {
   }
 
   /**
-   * A round landing on the player. Where it lands is rolled the way hits
-   * spread on a standing target; body armour covers the thorax and stomach,
-   * a helmet the head, and each soaks a share of what lands on what it
-   * covers and wears down for it. What gets through goes to that body part,
-   * which decides bleeding, fractures, and whether this was the one.
+   * A round landing on the player. `opts.ammo` is the round (a scav's shot);
+   * without one `amount` stands in as a plain hit of that much (the tests,
+   * and anything that is not a bullet). Where it lands is rolled the way
+   * hits spread on a standing target unless `opts.part` says; the vest
+   * covers the thorax and stomach, the helmet the head, and the round has
+   * to beat the armour's class - what is stopped bruises, what gets through
+   * hurts, and either way the plate wears (gunplay.js). What lands goes to
+   * that body part, which decides bleeding, fractures, and whether this was
+   * the one.
    */
   damagePlayer(amount, source, opts = {}) {
     const p = this.player;
     const h = this.health;
-    let dmg = amount;
-    // what the round actually landed on, so the cue matches the deflection
-    let struck = 'body';
-    const part = opts.part || this.rng.weighted(HIT_WEIGHTS, (e) => e[1])[0];
-
+    const ammo = opts.ammo || { ammo: { dmg: amount, pen: opts.pen ?? 30, armorDmg: 40, frag: 0 } };
     const armor = game.equipment.item('armor') || game.equipment.item('rig');
-    if ((part === 'thorax' || part === 'stomach') && armor && armor.tpl.armorClass && armor.dura > 0) {
-      const soak = clamp(armor.tpl.armorClass * 0.11, 0, 0.62);
-      dmg *= 1 - soak;
-      armor.dura = Math.max(0, armor.dura - amount * 0.09);
-      struck = 'armor';
-    }
     const helmet = game.equipment.item('head');
-    if (part === 'head' && helmet && helmet.tpl.armorClass && helmet.dura > 0) {
-      dmg *= 0.45;
-      helmet.dura = Math.max(0, helmet.dura - amount * 0.12);
-      struck = 'helmet';
-      // a round ringing off the helmet rattles the head inside it
-      if (!h.has(FX.CTIMM) && this.rng.chance(0.4)) h.addEffect(FX.CT, null, this.rng.float(6, 14));
-    }
-    sfx.hit(struck);
-
-    const res = h.hit(part, dmg, { rng: this.rng, bullet: true });
+    const land = landRound({
+      ammo, health: h, rng: this.rng, part: opts.part || null,
+      armor: armor?.tpl.armorClass ? armor : null, helmet: helmet?.tpl.armorClass ? helmet : null,
+    });
+    // a round ringing off the helmet rattles the head inside it
+    if (land.struck === 'helmet' && !h.has(FX.CTIMM) && this.rng.chance(0.4)) h.addEffect(FX.CT, null, this.rng.float(6, 14));
+    sfx.hit(land.struck);
+    const res = land.res;
     p.lastHitAt = this.time;
     p.lastHitFrom = source ? Math.atan2(source.y - p.y, source.x - p.x) : 0;
-    p.lastHitPart = part;
+    p.lastHitPart = land.part;
     p.hp = h.total;
     p.maxHp = h.max;
     this.drainHealthEvents();

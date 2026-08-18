@@ -15,7 +15,8 @@ import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
 import { openContainerWindow, refreshContainerWindows, closeAllContainerWindows } from '../inventory/window.js';
 import { openModdingWindow, closeAllModdingWindows, moddingContext } from '../inventory/modding.js';
 import { loadAmmoDialog, loadIntoDialog } from '../inventory/ammo-dialogs.js';
-import { unloadAmmo, toggleFold, canFold, magazineOf, roundsInWeapon, setInRaid, canDetachPart, unpackAmmoBox } from '../inventory/weapon.js';
+import { unloadAmmo, toggleFold, canFold, magazineOf, setInRaid, canDetachPart, unpackAmmoBox } from '../inventory/weapon.js';
+import { MODE_LABEL, weaponModes } from '../raid/gunplay.js';
 import { sfx, startAmbient, stopAmbient } from '../core/audio.js';
 import { dndContext, quickTransfer, isDragging } from '../inventory/dnd.js';
 import { setContextProvider, splitDialog, inspectDialog, confirmDialog } from '../inventory/dialogs.js';
@@ -109,7 +110,7 @@ function loop(now) {
     if (holdingF && raid.nearExtract) raid.holdExtract(dt);
     if (firing && aim && !overlayOpen) {
       const enemy = raid.scavAt(aim[0], aim[1], 2.4);
-      raid.playerFire(enemy ? enemy.x : aim[0], enemy ? enemy.y : aim[1]);
+      raid.playerFire(enemy ? enemy.x : aim[0], enemy ? enemy.y : aim[1], { held: true });
     }
     // the base gait is a jog, so normal movement uses the run set; a heavy
     // load drops the player to the slower walk cadence. The surface under the
@@ -147,7 +148,7 @@ function loop(now) {
     nearStairs: raid.nearStairs,
     path: raid.path,
     seen: raid.seen,
-    scavs: raid.scavs,
+    scavs: raid.scavsHere(),
     shots: raid.shots,
     hoverEnemy: raid.hoverEnemy,
     time: now / 1000,
@@ -204,23 +205,7 @@ function drawHud() {
   // button mirrors the actual state every frame instead of tracking clicks
   $('#btn-hud-sprint').classList.toggle('is-on', raid.player.sprint);
 
-  const weapon = raid.activeWeapon();
-  const ammoRow = $('#ammo-count').parentElement;
-  if (weapon) {
-    $('#ammo-weapon').textContent = weapon.tpl.short || weapon.tpl.name;
-    // rounds in the gun, and the loose ones of its calibre in the rig
-    const inGun = roundsInWeapon(weapon);
-    const cap = weapon.magazine?.tpl.magSize || 0;
-    const reserve = weapon.tpl.cal ? raid.ammoCount(weapon.tpl.cal) : 0;
-    $('#ammo-count').textContent = weapon.tpl.cal
-      ? (cap ? `${inGun}/${cap} · ${reserve}` : String(reserve))
-      : '—';
-    ammoRow.classList.toggle('is-dry', !!weapon.tpl.cal && inGun === 0 && reserve === 0);
-  } else {
-    $('#ammo-weapon').textContent = 'unarmed';
-    $('#ammo-count').textContent = '—';
-    ammoRow.classList.remove('is-dry');
-  }
+  drawGunHud();
 
   const clock = $('#raid-timer');
   clock.textContent = fmtClock(raid.timeLeft);
@@ -261,6 +246,81 @@ function drawHud() {
   }
 
   drawStairsPrompt();
+}
+
+/**
+ * The gun on the HUD: the weapon, its selector, and what the shooter knows
+ * about the magazine - exact right after it went in, "?" once shots have
+ * gone through it, the game's words after a check (T). The chamber is the
+ * dot after the count. A stoppage or a running action (a reload, a check,
+ * a clearing) shows on the prompt above the vitals.
+ */
+function drawGunHud() {
+  const weapon = raid.activeWeapon();
+  const ammoRow = $('#ammo-count').parentElement;
+  const modeEl = $('#ammo-mode');
+  const gp = $('#gun-prompt');
+  if (!weapon) {
+    $('#ammo-weapon').textContent = 'unarmed';
+    $('#ammo-count').textContent = '—';
+    if (modeEl) modeEl.hidden = true;
+    ammoRow.classList.remove('is-dry', 'is-malf', 'is-hot');
+    if (gp) gp.hidden = true;
+    return;
+  }
+  const st = raid.gun.state(weapon);
+  $('#ammo-weapon').textContent = weapon.tpl.short || weapon.tpl.name;
+  const modes = weaponModes(weapon);
+  if (modeEl) {
+    modeEl.hidden = false;
+    modeEl.textContent = MODE_LABEL[st.mode] || st.mode.toUpperCase();
+    modeEl.classList.toggle('is-fixed', modes.length < 2);
+  }
+  const read = raid.gun.magReadout(weapon);
+  const chambered = weapon.chamber?.length ? '•' : '';
+  const reserve = weapon.tpl.cal ? raid.ammoCount(weapon.tpl.cal) : 0;
+  const spare = raid.gun.spareCount(weapon);
+  let text;
+  if (!weapon.magazine) text = `NO MAG${chambered ? ' •' : ''}`;
+  else if (read.exact) text = `${read.text}/${read.cap}${chambered}`;
+  else if (/[A-Z]/.test(read.text)) text = `${read.text}${chambered ? ' •' : ''}`;
+  else text = `${read.text}${read.cap ? `/${read.cap}` : ''}${chambered}`;
+  const tail = weapon.tpl.wpn?.reload === 'InternalMagazine' ? ` · ${reserve}` : (spare ? ` · ${spare} MAG${spare > 1 ? 'S' : ''}` : '');
+  $('#ammo-count').textContent = text + tail;
+  const known = read.exact ? weapon.chamber?.length + (weapon.magazine?.ammoCount || 0) : null;
+  ammoRow.classList.toggle('is-dry', known === 0 && !spare && !reserve);
+  ammoRow.classList.toggle('is-malf', !!st.malf);
+  ammoRow.classList.toggle('is-hot', st.heat > 100);
+  ammoRow.title = `${weapon.tpl.name}\ndurability ${Math.round(weapon.dura ?? 0)}/${weapon.maxDura ?? weapon.tpl.wpn?.maxDura ?? 100}` + (st.heat > 40 ? `\nhot: ${Math.round(st.heat)}` : '');
+  if (!gp) return;
+  const a = raid.gun.action;
+  if (a) {
+    gp.hidden = false;
+    gp.classList.remove('is-malf');
+    $('#gun-label').textContent = a.label;
+    $('#gun-fill').style.width = `${Math.round(clamp(a.t / Math.max(0.01, a.dur), 0, 1) * 100)}%`;
+  } else if (st.malf) {
+    gp.hidden = false;
+    gp.classList.add('is-malf');
+    $('#gun-label').textContent = `${st.malf.label} — R TO CLEAR`;
+    $('#gun-fill').style.width = '0%';
+  } else {
+    gp.hidden = true;
+  }
+}
+
+/** rounds into a magazine in the field: one at a time, on the raid clock */
+function timedLoad(mag, stacks, n) {
+  const r = raid.gun.loadRounds(mag, stacks, n);
+  if (!r.ok) { raidToast(r.reason || 'Cannot load now', 'warn'); return false; }
+  raidToast(`Loading ${mag.tpl.short || 'magazine'} — ${Math.round(r.dur)}s`, 'info', 1600);
+  return true;
+}
+
+/** the trigger let go: semi and burst may fire again on the next press */
+function releaseTrigger() {
+  firing = false;
+  if (raid) raid.gun.release(raid.activeWeapon());
 }
 
 /**
@@ -331,7 +391,7 @@ function bindRaidInput(canvas) {
     const enemy = raid.scavAt(wx, wy, 1.9);
     if (enemy) {
       firing = true;
-      raid.playerFire(enemy.x, enemy.y);
+      raid.playerFire(enemy.x, enemy.y, { held: false });
     } else if (reachable) {
       raid.interactWith(reachable);
     } else if (door) {
@@ -346,8 +406,8 @@ function bindRaidInput(canvas) {
     }
   });
 
-  window.addEventListener('pointerup', (e) => { if (e.button === 0) firing = false; });
-  window.addEventListener('blur', () => { firing = false; holdingF = false; });
+  window.addEventListener('pointerup', (e) => { if (e.button === 0) releaseTrigger(); });
+  window.addEventListener('blur', () => { releaseTrigger(); holdingF = false; });
 
   canvas.addEventListener('pointermove', (e) => {
     if (!raid) return;
@@ -456,6 +516,21 @@ function onKeyDown(e) {
     else raid.player.sprint = raid.health.canSprint();
   } else if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') {
     holdingF = true;
+  } else if (!e.repeat && (e.key === 'r' || e.key === 'R' || e.key === 'ㄱ')) {
+    const w = raid.activeWeapon();
+    if (!w) return;
+    const r = raid.gun.reload(w);
+    if (!r.ok && r.reason) raidToast(r.reason, 'warn');
+  } else if (!e.repeat && (e.key === 'b' || e.key === 'B' || e.key === 'ㅠ')) {
+    const w = raid.activeWeapon();
+    if (!w) return;
+    const r = raid.gun.cycleMode(w);
+    if (r.ok) raidToast(`${w.tpl.short || 'Weapon'}: ${MODE_LABEL[r.mode] || r.mode}`, 'info', 1200);
+  } else if (!e.repeat && (e.key === 't' || e.key === 'T' || e.key === 'ㅅ')) {
+    const w = raid.activeWeapon();
+    if (!w) return;
+    const r = raid.gun.checkMag(w);
+    if (!r.ok && r.reason) raidToast(r.reason, 'warn');
   } else if (e.key === 'h' || e.key === 'H' || e.key === 'ㅗ') {
     // the health block lives in the inventory overlay; H opens straight to it
     closeFloorplan();
@@ -661,7 +736,10 @@ function activateRaidContext() {
     if (mag) {
       actions.push({
         label: item.isMag ? 'LOAD AMMO' : 'LOAD MAGAZINE', icon: 'cart', disabled: mag.ammoFree === 0,
-        run: () => loadAmmoDialog(mag, [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()], () => dndContext.onChange()),
+        run: () => loadAmmoDialog(mag, [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()], () => dndContext.onChange(), {
+          // in the field a round goes in at a time, on the raid clock
+          timed: (stacks, n) => timedLoad(mag, stacks, n),
+        }),
       });
       actions.push({
         label: 'UNLOAD AMMO', icon: 'sell', disabled: mag.ammoCount === 0,
@@ -676,7 +754,9 @@ function activateRaidContext() {
     if (tpl.cat === 'ammo') {
       actions.push({
         label: 'LOAD INTO MAGAZINE', icon: 'cart',
-        run: () => loadIntoDialog(item, [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()], () => dndContext.onChange()),
+        run: () => loadIntoDialog(item, [...game.equipment.carryGrids(), ...game.equipment.nestedGrids()], () => dndContext.onChange(), {
+          timed: (mag, stacks, n) => timedLoad(mag, stacks, n),
+        }),
       });
     }
     if (tpl.cat === 'ammobox') {
@@ -704,7 +784,7 @@ on(EV.RAID_END, (result) => {
   stopLoop();
   overlayHealth = null;
   holdingF = false;
-  firing = false;
+  releaseTrigger();
   cancelExamine();               // whatever was being inspected is moot now
   closeFloorplan();
   closeOverlay();

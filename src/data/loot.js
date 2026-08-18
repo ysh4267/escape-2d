@@ -28,7 +28,9 @@ export const CONTAINERS = {
   drawer:      { name: 'Drawer',              w: 2, h: 2, search: 2.0,  rolls: [1, 1], icon: 'stash' },
   filecab:     { name: 'Filing cabinet',      w: 2, h: 2, search: 2.0,  rolls: [1, 2], icon: 'stash' },
   techcrate:   { name: 'Technical supply crate', w: 5, h: 5, search: 5.0, rolls: [2, 4], icon: 'box' },
-  deadscav:    { name: 'Dead Scav',           w: 4, h: 4, search: 4.5,  rolls: [2, 4], icon: 'body' },
+  // a body is bigger since the scavs carry their own guns and vests: what
+  // one wore has to fit beside the odds and ends
+  deadscav:    { name: 'Dead Scav',           w: 6, h: 5, search: 4.5,  rolls: [2, 4], icon: 'body' },
   pmcbody:     { name: 'Dead PMC',            w: 5, h: 5, search: 4.5,  rolls: [3, 5], icon: 'body' },
   // not a container at all: a thing lying on the floor where the game says one
   // lies. It is handled through the same panel so picking it up reads the same

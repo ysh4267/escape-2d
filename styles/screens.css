@@ -393,6 +393,21 @@
 .vital--ammo { color: var(--tx-1); letter-spacing: .04em; }
 .vital--ammo .ammo-count { color: var(--warn); font-weight: 700; margin-left: 4px; }
 .vital--ammo.is-dry .ammo-count { color: var(--danger); }
+.vital--ammo.is-malf .ammo-count { color: var(--danger); }
+.vital--ammo.is-hot .ammo-count::after { content: ' HOT'; color: var(--danger); font-size: 9px; letter-spacing: .12em; }
+/* the selector's position: SEMI / BURST / AUTO, dimmed on a gun without one */
+.ammo-mode {
+  margin-left: 8px; padding: 1px 5px; border: 1px solid var(--line-1); color: var(--tx-2);
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .12em; line-height: 1.3;
+}
+.ammo-mode.is-fixed { color: var(--tx-dim); border-color: transparent; padding-left: 0; }
+/* the gun's own prompt sits under the med prompt's place */
+.gun-prompt { bottom: 224px; }
+.gun-prompt .interact-prompt__label { color: var(--warn); }
+.gun-prompt .interact-prompt__label .ico { vertical-align: -4px; color: var(--warn); }
+.gun-prompt .interact-prompt__bar > i { background: var(--warn); }
+.gun-prompt.is-malf .interact-prompt__label { color: var(--danger); }
+.gun-prompt.is-malf .interact-prompt__label .ico { color: var(--danger); }
 
 .hud-clock { display: flex; align-items: center; gap: 8px; color: var(--tx-1); font-size: 17px; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
 .hud-clock.is-low { color: var(--warn); }

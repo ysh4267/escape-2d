@@ -30,7 +30,10 @@ Everything is playable with the mouse alone.
 |---|---|
 | **left click** the ground | move there (A\* pathfinding around the real Factory walls) |
 | **left click** a container | walk to it and search it |
-| **left click** a hostile | open fire; hold to keep shooting |
+| **left click** a hostile | open fire; on AUTO, hold to keep shooting |
+| **R** | reload — the fullest magazine carried goes in, or shells into a tube; on a stoppage, clear it |
+| **B** | fire selector: SEMI / BURST / AUTO, as the gun allows |
+| **T** | check the magazine — the game's words for what is in it, exact only through a see-through mag |
 | **left click** a door | open it, unlock it if you have the key, or force it |
 | **left click** a staircase | walk to it; the prompt offers the floors it reaches |
 | **wheel** | zoom |
@@ -39,6 +42,7 @@ Everything is playable with the mouse alone.
 
 Optional keyboard shortcuts still work: `TAB` inventory, `H` health, `M` floor
 plan, `SHIFT` sprint, `F` extract, `ESC` leave, `1/2/3/4` for the hideout tabs.
+The gun's keys are the game's own: `R`, `B`, `T`.
 
 Doors mostly look after themselves — walk into a shut one and you open it on
 the way through. Four on Factory want a key, and one wants a shoulder.
@@ -124,8 +128,8 @@ strip of the round's chance to go through a fresh plate of each armour class,
 on the penetration curve every calculator quotes off the client (`90%` at the
 plate's value, nothing fifteen under it). Right-click a round → CALIBER CHART
 for the wiki's table of every round of that calibre you have examined, coloured
-on the wiki's own six-step scale. What those numbers do to a shot is the next
-pass; for now a round's own damage is what lands.
+on the wiki's own six-step scale. Every one of those numbers is what lands in
+the field, below.
 
 **Ammo packs and cases.** The 86 ammo packs (every `AmmoBox` whose round we
 carry — the 120-round 5.45 PS pack, the 20-round 7.62x39 boxes, the 16 and 50
@@ -158,6 +162,64 @@ right-click a worn gun → REPAIR WITH KIT, or the kit → USE ON WEAPON. Scav
 guns come with a worn ceiling (85–100, and 30–45 under it), as the server rolls
 them.
 
+**The gun in the field.** Everything the modding screen shows now has a
+consequence when the trigger is pulled (`src/raid/gunplay.js`):
+
+- *The selector.* `B` walks the weapon's own modes — SEMI fires once per pull
+  at its `SingleFireRate`, AUTO runs a held trigger at the cyclic rate (the
+  Kedr's 900, the AKM's 600), BURST fires its count. The MP-133 pumps between
+  shells. The HUD's ammo row shows the mode beside the gun.
+- *Where the shot goes.* The spread is a cone built from the gun's numbers:
+  the receiver's MOA, the ergonomics deciding how long the aim takes to settle
+  after a move or a turn (an AKM at 26 ergo about a second, a light carbine
+  half that), a sprint or a walk opening it, the vertical recoil climbing the
+  aim across a string and recovering between shots, the horizontal recoil
+  scattering the string from the second shot on, a shell's pellets each taking
+  their own way inside the gun's shotgun dispersion, pain, a tremor and a
+  broken arm on top. Standing still, settled, a rifle puts a round on a man at
+  20 m every time; six rounds of AKM on AUTO and the sixth is a coin toss.
+- *What the round does.* The round meets the vest or helmet over the part it
+  lands on: the armour class × 10, worn down with durability, against the
+  round's penetration on the client's curve — a stopped round comes through as
+  blunt damage (the wiki's "very low", a soft vest's ~0.32 throughput), a
+  penetrating one loses 0–40% by how sure the penetration was, and either way
+  the plate loses durability by the wiki's rule (penetration × the round's
+  armour damage % × the material's destructibility, aramid 0.1875 to ceramic
+  0.6, never under 1). Rounds of 20+ penetration fragment at their own chance
+  for half again. Buckshot bounces off a class 4 plate; 5.45 BP goes through
+  one nearly always and through a class 5 less than half the time.
+- *Wear, heat, stoppages.* Every shot burns durability (the gun's ratio × each
+  part's × the round's — a suppressor is dear that way) and heat (the gun's
+  `HeatFactorByShot` × the round's × the parts', cooling at `CoolFactorGun`).
+  Above 93% of its own ceiling a gun cannot mechanically fail (the globals'
+  `DurRangeToIgnoreMalfs`); under it the weapon's `BaseMalfunctionChance`
+  scales in, the magazine's `MalfunctionChance` and the round's misfire / feed
+  factors on top, and a hot gun (past `OverheatProblemsStart`) adds 0.5–9%,
+  widens the spread up to ×1.5 and wears three times as fast. A stoppage is a
+  misfire, a failure to feed, a jammed bolt or — on a pistol at the very end —
+  a hard slide, each with its own clearing time on `R`; a dud round is a dud
+  at the round's own `MisfireChance` whatever the gun. The suppressed banks
+  play for a suppressor fitted, and a suppressed shot carries a third as far
+  to a scav's ears.
+- *Reloads on the clock.* `R` swaps in the fullest compatible magazine carried
+  (the old one back into the rig, or dropped at your feet when there is no
+  room, as the game does), racks a round if the chamber was empty, feeds a
+  tube gun a shell at a time (`BaseLoadTime` 0.85 s a round × the magazine's
+  `LoadUnloadModifier`), and rounds loaded into a magazine by hand in the field
+  go in at that pace too, on the raid clock, one at a time. `T` checks the
+  magazine (`BaseCheckTime` 3 s): the game's words for a hefted one — FULL,
+  NEARLY FULL, ABOUT HALF, FEWER THAN HALF, ALMOST EMPTY — or "~15" through a
+  see-through mag; the HUD count is exact right after a magazine goes in and a
+  `?` once shots have gone through it, until the next check.
+- *Scavs are bodies with guns.* A scav has the same seven-part body you do (a
+  round to the head is a round to the head), wears a vest and sometimes a
+  helmet that stop rounds and wear down, and fires the gun it carries — its
+  round, its recoil, its magazine, which it empties and changes — with a
+  steadiness by tier. What its body gives up is what it was using on you: the
+  gun with the rounds it did not fire, its spare magazines, the vest with the
+  holes in it. Six hostiles walk the insertion floor and a few more each floor
+  you reach; the plant is not empty upstairs.
+
 **The gun in three dimensions.** 3D in the modding screen opens the assembled
 weapon built from its own meshes: the receiver and every part hung on it at
 the transform of the slot it sits in, the same tree the modding screen edits,
@@ -176,8 +238,8 @@ prefabs, so a suppressor sits on the muzzle where the game puts it.
 | the modding screen — a slot picked, the stash dimmed to what fits it, the traders' offers for the slot | BUILDS — factory and saved builds, planned against the stash |
 | ![repair](docs/repair.png) | ![ammo chart](docs/ammochart.png) |
 | Prapor's bench | the 7.62x39 chart |
-| ![3D](docs/view3d.png) | |
-| the AKM in 3D, beside its modding screen | |
+| ![3D](docs/view3d.png) | ![gunplay](docs/gunplay.png) |
+| the AKM in 3D, beside its modding screen | in the field: three aimed rounds, the HUD's selector and magazine readout |
 
 **The plant, all four storeys of it.** Tunnels, ground floor, the locker level
 and the rafters, each with its own walls, walkable surface, machinery and
@@ -233,11 +295,13 @@ come out as a hatched **Unknown item** plate. Examining runs on its own timer,
 one at a time, and is learned per profile: examine one LEDX and every LEDX you
 ever find is recognised. Right-click or double-click to examine.
 
-**Scavs.** Seven hostiles patrol the navmesh and notice you inside a view cone
-with clear line of sight, then close to a firing distance and shoot. Your
-weapon draws ammunition of the matching caliber from whatever you are carrying,
-your armor soaks a share of incoming damage and wears down doing it, and a dead
-scav leaves a searchable body with its own gear in it.
+**Scavs.** Six hostiles patrol the insertion floor's navmesh (a few more on
+each floor you reach) and notice you inside a view cone with clear line of
+sight — or hear a shot, and come to look — then close to a firing distance and
+shoot the gun they carry. Your gun fires what is in it (see *The gun in the
+field*), your armour is a plate the round has to beat and wears down for it,
+and a dead scav leaves a searchable body with the gun and the vest it was
+using on you.
 
 **The body.** Seven body parts at the game's own sizes — head 35, thorax 85,
 stomach 70, arms 60, legs 65, 440 in all — and a round lands on one of them,
