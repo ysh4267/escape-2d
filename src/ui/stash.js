@@ -38,21 +38,21 @@ import { isRepairable, repairNeeded, repairKitsIn, isRepairKit } from '../invent
 import { on, emit, EV } from '../core/events.js';
 import { sfx } from '../core/audio.js';
 import { t, tOr } from '../core/i18n.js';
-import { uiImg, loadUiGroup, hasUi } from '../core/uiart.js';
+import { uiImg, uiIcon, loadUiGroup, hasUi } from '../core/uiart.js';
 import { getTpl } from '../data/items.js';
 import { DB } from '../game/db.js';
 import * as Wishlist from '../game/wishlist.js';
 import { strengthCarry } from '../game/skills.js';
 import { G as BODY, FX } from '../raid/health.js';
 import { toast, currentScreen } from './shell.js';
-import { useInHideout } from './health-ui.js';
+import { useInHideout, rates as healthRates } from './health-ui.js';
 
 /**
  * The strip down the stash's left edge, in the client's order with its
  * glyphs. A kind is the categories of this build's item table it covers;
  * RAID is not a kind of item but a mark on one.
  */
-const KINDS = [
+export const KINDS = [
   { key: 'all', ico: 'icon_itemtype_all' },
   { key: 'weapons', ico: 'icon_itemtype_weapon', cats: ['weapon', 'pistol'] },
   { key: 'mags', ico: 'icon_itemtype_mags', cats: ['mag'] },
@@ -167,7 +167,7 @@ export function initStash() {
   on(EV.HEALTH_CHANGED, () => { if (shown()) paintParams(); });
 }
 
-function kindOf(item) { return KIND_OF_CAT[item.tpl.cat] || 'barter'; }
+export function kindOf(item) { return KIND_OF_CAT[item.tpl.cat] || 'barter'; }
 
 /** the glyph of the kind of thing an item is, as the filter strip draws it */
 export function kindIcon(item) {
@@ -249,10 +249,12 @@ export function weightLimit() {
 
 /**
  * Along the bottom of the sheet: the weight carried against the limit, then
- * health, water and energy, each with how fast it comes back out of a raid.
+ * health, water and energy, each with how fast it comes back out of a raid -
+ * or, in one, how fast it goes.
+ * @param {HTMLElement} [host]
+ * @param {{ inRaid?: boolean }} [opts]
  */
-function paintParams() {
-  const host = $('#gear-params');
+export function paintParams(host = $('#gear-params'), { inRaid = false } = {}) {
   if (!host) return;
   const h = game.health;
   const kg = game.equipment.weight();
@@ -260,8 +262,17 @@ function paintParams() {
   const base = DB.progress?.weight?.base?.[0] || 26;
   const bleeding = h.has(FX.LB) || h.has(FX.HB);
   const hpRate = Object.entries(BODY.regen).reduce((n, [k, v]) => (k === 'energy' || k === 'hydration' ? n : n + v), 0);
-  // what comes back by the minute out of a raid; nothing does while a wound is open
-  const buff = (rate, shown = true) => (shown ? el('span', { class: 'gparam__buff' }, uiImg('health_buff_arrow_up', '', { w: 15, h: 13 }), rate.toFixed(2)) : null);
+  // what comes back by the minute out of a raid, where nothing does while a
+  // wound is open; in a raid, what the body is spending
+  const r = inRaid ? healthRates(h, true) : { hpRate: bleeding ? 0 : hpRate, hyRate: BODY.regen.hydration, enRate: BODY.regen.energy };
+  const buff = (rate) => (Math.abs(rate) < 0.005 ? null : rate > 0
+    ? el('span', { class: 'gparam__buff' }, uiImg('health_buff_arrow_up', '', { w: 15, h: 13 }), rate.toFixed(2))
+    : el('span', { class: 'gparam__buff is-down' }, uiIcon('health_buff_arrow_down', '', { w: 15, h: 13 }), rate.toFixed(2)));
+  // a figure stands three digits wide, the ones it does not need dim
+  const lcd = (n) => {
+    const s = String(Math.max(0, Math.round(n)));
+    return [s.length < 3 ? el('i', { class: 'gparam__lead' }, '0'.repeat(3 - s.length)) : null, s];
+  };
   const param = (cls, ico, cur, max, extra, state = '') => el('div', { class: `gparam gparam--${cls} ${state}` },
     uiImg(ico, 'gparam__ico', { w: 33, h: 32 }),
     el('span', { class: 'gparam__cur' }, cur),
@@ -269,17 +280,19 @@ function paintParams() {
   host.replaceChildren(
     param('weight', 'health_icon_weight_white', (Math.round(kg * 10) / 10).toFixed(1), Math.round(limit),
       el('span', { class: 'gparam__unit' }, 'KG'), kg > limit ? 'is-crit' : kg > base * strengthCarry() ? 'is-low' : ''),
-    param('health', 'health_icon', String(Math.round(h.total)), String(Math.round(h.max)),
-      buff(hpRate, !bleeding), h.total < h.max * 0.3 ? 'is-crit' : ''),
-    param('water', 'health_icon_hydration', String(Math.round(h.hydration)), '100',
-      buff(BODY.regen.hydration), h.hydration < 20 ? 'is-crit' : ''),
-    param('energy', 'health_icon_energy', String(Math.round(h.energy)), '100',
-      buff(BODY.regen.energy), h.energy < 20 ? 'is-crit' : ''));
+    param('health', 'health_icon', lcd(h.total), String(Math.round(h.max)),
+      buff(r.hpRate), h.total < h.max * 0.3 ? 'is-crit' : ''),
+    param('water', 'health_icon_hydration', lcd(h.hydration), '100',
+      buff(r.hyRate), h.hydration < 20 ? 'is-crit' : ''),
+    param('energy', 'health_icon_energy', lcd(h.energy), '100',
+      buff(r.enRate), h.energy < 20 ? 'is-crit' : ''));
 }
 
-/** QUICK USE: the blade and the guns on their own keys, and the seven keys things can be bound to */
-function paintQuick() {
-  const host = $('#gear-quick');
+/**
+ * QUICK USE: the blade and the guns on their own keys, and the seven keys things can be bound to
+ * @param {HTMLElement} [host]
+ */
+export function paintQuick(host = $('#gear-quick')) {
   if (!host) return;
   const row = el('div', { class: 'gquick__row' });
   for (const q of QUICK) {

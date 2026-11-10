@@ -576,44 +576,6 @@
 .sw--pmc { background: #7fb39a; height: 8px; width: 8px; border-radius: 50%; }
 .sw--scav { background: #d9a441; height: 8px; width: 8px; border-radius: 50%; }
 
-/* in-raid overlay */
-.overlay {
-  position: absolute; inset: 0; z-index: 20;
-  display: flex; flex-direction: column;
-  background: rgba(2,5,6,.9);
-  backdrop-filter: blur(3px);
-  padding: 16px;
-}
-/* the last column is the character screen, on the stash pane's own budget */
-.overlay__grid {
-  flex: 1; min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr minmax(316px, 336px) minmax(468px, 546px);
-  gap: 14px;
-}
-.overlay__grid.is-solo { grid-template-columns: minmax(316px, 336px) minmax(468px, 546px); justify-content: center; }
-.overlay__close { align-self: center; flex: 0 0 auto; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--tx-3); font-size: 11px; letter-spacing: .18em; }
-.overlay__close:hover { color: var(--tx-0); }
-
-.panel--loot .panel__head h2 { color: var(--warn); }
-
-/* uncovering a container: the contents appear one item at a time */
-.loot-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; min-height: 26px; }
-.loot-search { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.loot-search__label { color: var(--warn); font-size: 10px; letter-spacing: .18em; }
-.loot-search__bar { width: 130px; height: 4px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); }
-.loot-search__bar > i { display: block; height: 100%; background: var(--warn); transition: width .12s linear; }
-.loot-search__count { color: var(--tx-2); font-size: 11px; font-variant-numeric: tabular-nums; }
-
-.search-veil {
-  position: absolute; inset: 0; z-index: 6;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-  background: rgba(6,10,12,.88);
-  color: var(--tx-2); font-size: 12px; letter-spacing: .18em;
-}
-.search-veil__bar { width: 200px; height: 3px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); }
-.search-veil__bar > i { display: block; height: 100%; width: 0; background: var(--warn); }
-
 /* ---------------- result ---------------- */
 #screen-result { align-items: center; justify-content: center; }
 .result-wrap { width: min(880px, calc(var(--sw) * 0.92)); max-height: calc(var(--sh) * 0.88); display: flex; flex-direction: column; gap: 16px; }
@@ -650,8 +612,6 @@
    narrower than 1920 of its own pixels. The worn block and the carried block
    stand side by side, the way the character screen itself reads. */
 .pane-grid--stash { grid-template-columns: minmax(660px, 820px) minmax(316px, 336px) 1fr; }
-.overlay__grid { grid-template-columns: 1fr minmax(316px, 336px) minmax(660px, 820px); }
-.overlay__grid.is-solo { grid-template-columns: minmax(316px, 336px) minmax(660px, 820px); }
 
 /* ---------------- repair bench ---------------- */
 .deal-wrap--repair { gap: 8px; }

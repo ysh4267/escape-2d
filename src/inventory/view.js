@@ -317,7 +317,7 @@ export function renderGridBlock(gridModel, title, opts = {}) {
  * (`.gslot`, with `_slot` on it); the returned node is the box with its
  * header.
  * @param {import('./model.js').Slot} slot
- * @param {{ label: string, ghost?: string, w?: number, h?: number, x?: number, y?: number, ghostW?: number, ghostH?: number, onArrow?: (item) => void }} def
+ * @param {{ label: string, ghost?: string, w?: number, h?: number, x?: number, y?: number, ghostW?: number, ghostH?: number, onArrow?: (item) => void, noArrow?: boolean }} def
  */
 export function renderSlotView(slot, def) {
   const w = def.w || 125, h = def.h || 125;
@@ -328,9 +328,10 @@ export function renderSlotView(slot, def) {
   const item = slot.item;
   // a special slot is a bare box: the three of them share one header
   if (!def.bare) {
-    const head = el('button', { class: 'gslot__head', type: 'button', tabindex: '-1', disabled: !item, dataset: { sfx: 'own' } },
+    // in a raid the header is the name alone: the arrow and what it opens belong to the menus
+    const head = el('button', { class: 'gslot__head', type: 'button', tabindex: '-1', disabled: !item || !!def.noArrow, dataset: { sfx: 'own' } },
       el('span', { class: 'gslot__name' }, def.label),
-      el('span', { class: 'gslot__arrow' },
+      def.noArrow ? null : el('span', { class: 'gslot__arrow' },
         uiImg('slot_selectedbutton_arrow_icon_idle', 'gslot__arrowidle', { w: 18, h: 18 }),
         uiImg('slot_selectedbutton_arrow_icon_selected', 'gslot__arrowhot', { w: 18, h: 18 })));
     head.addEventListener('click', (e) => {

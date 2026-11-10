@@ -79,3 +79,60 @@
 .stamina__bar--arms i { background: #268194; }
 .stamina__bar--legs i { background: #2eaa91; }
 #screen-raid .hud-left { bottom: 62px; opacity: .8; }
+
+/* ---------------- the inventory a raid opens ----------------
+   The character screen's own frame over the ground: its tabs along the top,
+   the sheet with the figure and what is carried where they stand outside a
+   raid (styles/eft-inventory.css draws those), QUICK USE under it and, where
+   the stash stands, the client's loot panel. The ground behind is dimmed; the
+   client also puts its scene out of focus, which a canvas redrawn every frame
+   pays too dearly for here. */
+.rinv { position: absolute; inset: 0; z-index: 20; background: rgba(0,0,0,.74); }
+.rinv[hidden] { display: none; }
+.rinv__frame { position: absolute; left: calc(50% - 960px); top: calc(50% - 540px); width: 1920px; height: 1080px; }
+#rinv-pane { padding: 0; }
+/* the clock and the exits stay over it when they are asked for; what the ground wears is put away */
+#screen-raid .xpanel, #screen-raid .xplate { z-index: 22; }
+#screen-raid.has-inv .hud-health, #screen-raid.has-inv .stamina, #screen-raid.has-inv .raid-hud,
+#screen-raid.has-inv .gunsay, #screen-raid.has-inv .raidintro, #screen-raid.has-inv .interact-prompt,
+#screen-raid.has-inv .stairs-prompt { visibility: hidden; }
+
+/* a figure of the strip stands three digits wide, and what a raid takes by the minute is red */
+.gparam__lead { font-style: normal; color: #3a3d3f; }
+.gparam__buff.is-down { color: #c00000; }
+
+/* the loot panel (the client's Simple Panel): the frame of the stash's grid, 642 x 869 at 1265,79 */
+.rloot .gstash__grid { overflow-y: auto; box-shadow: 0 0 0 1px #5a5c58, 0 0 8px rgba(0,0,0,.6); }
+.rloot .gstash__grid .grid { position: absolute; left: 0; top: 0; border: 0; box-shadow: 1px 0 0 #5a5c58, 0 1px 0 #5a5c58; }
+.rloot__top { position: absolute; left: 1265px; top: 14px; height: 20px; display: flex; align-items: flex-start; }
+/* LOOT on the toggle's plate, which nothing here switches */
+.rloot__label { color: #b4b49a; margin-right: 5px; }
+.rloot__label::before { border-image-source: var(--ui-togglebutton_disabled_background); }
+/* the search: the grey plate with its corner cut, the glass or the turning ring, the word */
+.rloot__search {
+  position: relative; height: 20px; margin-left: -6px; padding: 0 10px 0 25px; border: 0; display: flex; align-items: center;
+  background: #54585b80; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%);
+  color: #c3cdd3; font-family: var(--font-ui); font-size: 11px; text-transform: uppercase; white-space: nowrap;
+}
+.rloot__search:disabled { cursor: default; }
+.rloot__search:hover:not(:disabled) { background: #70767a99; color: #fff; }
+.rloot__glass { position: absolute; left: 7px; top: 4px; }
+.rloot__search .rloot__spin { position: absolute; left: 3.5px; top: 1.5px; }
+.rloot__spin { animation: rloot-turn 1s linear infinite; }
+@keyframes rloot-turn { to { transform: rotate(360deg); } }
+.rloot__all { margin-left: 0; padding-left: 10px; }
+.rloot__stop { width: 27px; height: 17px; padding: 0; border: 0; display: grid; place-items: center; background: var(--ui-close_button) 0 0 / 100% 100% no-repeat; }
+.rloot__stop:hover { filter: brightness(1.5); }
+.rloot__clock { margin-left: 10px; height: 17px; font-size: 11px; line-height: 17px; color: #c3cdd3; }
+/* what is being searched, named top right */
+.rloot__name { position: absolute; right: 15px; top: 4.4px; height: 27.6px; box-sizing: border-box; padding: 4px 36px 6px 35px; background: #0000007f; color: #9da6ab; font-size: 16px; line-height: 17.6px; text-transform: uppercase; white-space: nowrap; }
+/* before anything of it is known */
+.rloot__unsearched {
+  position: absolute; left: 0; top: 0; width: 400px; height: 125px; padding: 0; border: 0; display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: var(--ui-search_pattern) 0 0 / 64px 64px repeat, linear-gradient(180deg, #0d0d0d97, #0c0c0ca0 25%, #090909a0 75%, #08080897);
+  color: #c5c3b2; font-family: var(--font-ui); font-size: 24px; letter-spacing: .5px; text-transform: uppercase;
+}
+.rloot__unsearched::after { content: ""; position: absolute; inset: 0; border-style: solid; border-width: 15px; border-image: var(--ui-unsearched_border_sliced) 15 fill stretch; pointer-events: none; }
+.rloot__unsearched:disabled { cursor: default; }
+/* a thing not yet come upon: its place in the grid, hatched */
+.item.item--unfound { background: rgba(255,255,255,.03) var(--ui-search_pattern) 0 0 / 64px 64px repeat; box-shadow: none; pointer-events: none; }

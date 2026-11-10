@@ -2,7 +2,7 @@
 // in-raid controller: loop, input, HUD, loot overlay, results
 // =========================================================
 
-import { $, el, icon, clamp, fmtClock, fmtNum, fmtWeight } from '../core/util.js';
+import { $, el, icon, clamp, fmtClock, fmtNum, fmtWeight, keepScroll } from '../core/util.js';
 import { Raid, RAID_STATUS } from '../raid/raid.js';
 import { Renderer } from '../raid/renderer.js';
 import {
@@ -11,7 +11,7 @@ import {
 } from './floorplan.js';
 import { game, saveSoon, registerSaveSection } from '../core/state.js';
 import { renderGrid, renderItem } from '../inventory/view.js';
-import { renderGearSlots, renderCarry } from '../inventory/equipment.js';
+import { renderDoll, renderContainers } from '../inventory/equipment.js';
 import { openContainerWindow, refreshContainerWindows, closeAllContainerWindows } from '../inventory/window.js';
 import { openModdingWindow, closeAllModdingWindows, moddingContext, moddingScreenOpen } from '../inventory/modding.js';
 import { loadAmmoDialog, loadIntoDialog } from '../inventory/ammo-dialogs.js';
@@ -27,8 +27,10 @@ import { showScreen, raidToast, toast, refreshTopbar } from './shell.js';
 import { emit, on, EV } from '../core/events.js';
 import { t } from '../core/i18n.js';
 import { locationName } from '../game/db.js';
-import { BY_ID } from '../data/items.js';
-import { mountHudHealth, drawHudHealth, useInRaid, renderHealthPanel } from './health-ui.js';
+import { BY_ID, getTpl } from '../data/items.js';
+import { uiImg } from '../core/uiart.js';
+import { mountHudHealth, drawHudHealth, useInRaid, renderHealthBoard } from './health-ui.js';
+import { paintParams, paintQuick, KINDS, kindOf } from './stash.js';
 
 import { openRaidEnd } from './raidend.js';
 
@@ -171,11 +173,15 @@ function loop(now) {
   sfx.muffle(raid.health.contused);
   drawHud();
   if (floorplanOpen()) drawFloorplan();
-  // the overlay's health block follows the body while it is open (a few
-  // times a second is plenty for numbers that move by the tick)
-  if (overlayOpen && overlayHealth && (now - overlayHealthAt) > 250) {
+  // the inventory's numbers follow the body and the search while it is open
+  // (a few times a second is plenty for numbers that move by the tick)
+  if (overlayOpen && (now - overlayHealthAt) > 250) {
     overlayHealthAt = now;
-    overlayHealth.refresh();
+    if (overlayTab === 'health' && overlayHealth) overlayHealth.refresh();
+    else paintParams($('#raid-params'), { inRaid: true });
+    const c = raid.openContainerRef;
+    const clock = $('#loot-clock');
+    if (c && clock && raid.searching === c) clock.textContent = searchClock(c);
   }
 }
 let overlayHealthAt = 0;
@@ -548,11 +554,6 @@ function bindRaidInput(canvas) {
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', onKeyUp);
 
-  $('#btn-close-overlay').addEventListener('click', closeOverlay);
-  $('#btn-close-loot').addEventListener('click', () => {
-    if (raid) raid.closeLoot();   // repaints via the LOOT_CLOSED listener
-  });
-
   // on-screen equivalents for everything that used to need a key
   $('#btn-hud-inventory').addEventListener('click', () => {
     overlayOpen ? closeOverlay() : openOverlay();
@@ -570,7 +571,7 @@ function bindRaidInput(canvas) {
   });
   $('#btn-hud-leave').addEventListener('click', () => abandonRaid());
 
-  on(EV.LOOT_OPENED, () => { closeFloorplan(); openOverlay(); });
+  on(EV.LOOT_OPENED, () => { closeFloorplan(); openOverlay('gear'); });
   on(EV.LOOT_FOUND, () => { if (overlayOpen) renderOverlay(); });
   on(EV.LOOT_CLOSED, () => { if (overlayOpen) renderOverlay(); });
   on(EV.RAID_LEVEL, ({ level, name }) => {
@@ -643,10 +644,9 @@ function onKeyDown(e) {
     const r = raid.gun.checkMag(w);
     if (!r.ok && r.reason) raidToast(r.reason, 'warn');
   } else if (e.key === 'h' || e.key === 'H' || e.key === 'ㅗ') {
-    // the health block lives in the inventory overlay; H opens straight to it
+    // the body is a tab of the inventory; H opens straight to it
     closeFloorplan();
-    if (!overlayOpen) openOverlay();
-    $('#raid-health-host')?.scrollIntoView({ block: 'nearest' });
+    openOverlay('health');
   } else if (e.key === 'Escape') {
     if (floorplanOpen()) closeFloorplan();
     else if (overlayOpen) closeOverlay();
@@ -660,10 +660,14 @@ function onKeyUp(e) {
 }
 
 // ---------------------------------------------------------
-export function openOverlay() {
+/** @param {'gear'|'health'|null} [tab] the tab to open on; the one last up when none is named */
+export function openOverlay(tab = null) {
   if (!overlayOpen) sfx.ui('window_open');
+  if (tab) overlayTab = tab;
   overlayOpen = true;
   $('#raid-inventory').hidden = false;
+  // what the ground wears - the body, the bars, this build's own buttons - is put away under it
+  $('#screen-raid').classList.add('has-inv');
   renderOverlay();
 }
 
@@ -671,74 +675,152 @@ export function closeOverlay() {
   if (overlayOpen) sfx.ui('close');
   overlayOpen = false;
   $('#raid-inventory').hidden = true;
+  $('#screen-raid').classList.remove('has-inv');
   // the floating panels belong to the overlay; they must not hang over the canvas
   closeAllContainerWindows();
   closeAllModdingWindows();
   if (raid) raid.closeLoot();
 }
 
+// ---------------------------------------------------------
+// the inventory a raid opens: the character screen as a raid has it. The
+// tabs along the top, the kit round the figure or the body on the left, what
+// is carried beside it, and where the stash stands outside a raid, whatever
+// is being searched.
+// ---------------------------------------------------------
+/** which of the inventory's tabs is up */
+let overlayTab = 'gear';
+/** the container the loot panel was last drawn for, and the kind of thing its grid is narrowed to */
+let lootOf = null;
+let lootKind = 'all';
+// the character screen's tabs as a raid has them; the ones this build does not open in a raid yet stand switched off
+const RAID_TABS = [
+  { key: 'overall', label: 'OVERALL', ico: 'tab_icon_overall', off: true },
+  { key: 'gear', label: 'GEAR', ico: 'tab_icon_gear' },
+  { key: 'health', label: 'HEALTH_TAB', ico: 'tab_icon_health' },
+  { key: 'skills', label: 'SKILLS', ico: 'tab_icon_skills', off: true },
+  { key: 'map', label: 'MAP', ico: 'tab_icon_map', off: true },
+  { key: 'tasks', label: 'TASKS', ico: 'tab_icon_tasks', off: true },
+  { key: 'achievements', label: 'ACHIEVEMENTS', ico: 'tab_icon_achivement_icon', icoOn: 'tab_icon_achivement_icon_pressed', off: true },
+];
+
+function paintOverlayTabs() {
+  const strip = $('#rinv-tabs');
+  if (strip.dataset.up === overlayTab) return;
+  strip.dataset.up = overlayTab;
+  strip.replaceChildren(...RAID_TABS.map((def) => {
+    const lit = overlayTab === def.key;
+    const b = el('button', { class: `ptab${lit ? ' is-active' : ''}`, type: 'button', disabled: !!def.off, dataset: { sfx: 'own' } },
+      el('span', { class: 'ptab__ico' }, uiImg(lit ? (def.icoOn || `${def.ico}_selected`) : def.ico)), el('span', {}, t(def.label)));
+    b.addEventListener('click', () => { if (overlayTab !== def.key) { sfx.ui('click'); overlayTab = def.key; renderOverlay(); } });
+    return b;
+  }));
+  const back = el('button', { class: 'dbtn charback', type: 'button', dataset: { sfx: 'own' } }, t('BACK'));
+  back.addEventListener('click', closeOverlay);
+  strip.append(back);
+}
+
+/** m:ss of how long a search has run */
+function searchClock(c) {
+  const s = Math.floor(c.searchSecs || 0);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Where the stash stands outside a raid: the thing being searched. LOOT on
+ * its plate and its name top right; while there is more to find, the search
+ * beside the plate - the ring turning, the red box that breaks it off and
+ * how long it has run. Nothing of the grid is shown until the first thing
+ * turns up; after that, what has not been come upon yet is a hatched place
+ * in it.
+ */
+function paintLoot() {
+  const panel = $('#panel-loot');
+  const c = raid.openContainerRef;
+  panel.hidden = !c;
+  if (!c) { lootOf = null; return; }
+  if (lootOf !== c) { lootOf = c; lootKind = 'all'; }
+  const going = raid.searching === c;
+  $('#loot-title').textContent = c.def.name;
+
+  const again = () => { raid.resumeSearch(); renderOverlay(); };
+  const head = $('#loot-head');
+  head.replaceChildren(el('div', { class: 'tbtn rloot__label' },
+    uiImg('stashheadericons_off', 'tbtn__ico', { w: 20, h: 20 }), el('span', {}, t('LOOT'))));
+  if (!c.searched) {
+    const search = el('button', { class: 'rloot__search', type: 'button', disabled: going, dataset: { sfx: 'own' } },
+      going ? uiImg('spinner_big', 'rloot__spin', { w: 17, h: 17 }) : uiImg('search_icon', 'rloot__glass', { w: 10, h: 12 }),
+      el('span', {}, going ? t('SEARCHING...') : t('Search')));
+    search.addEventListener('click', again);
+    head.append(search);
+    if (going) {
+      const stop = el('button', { class: 'rloot__stop', type: 'button', dataset: { sfx: 'own' } }, uiImg('close_window_x', '', { w: 9, h: 11 }));
+      stop.addEventListener('click', () => { raid.cancelSearch(); renderOverlay(); });
+      head.append(stop);
+    }
+    head.append(el('span', { class: 'rloot__clock', id: 'loot-clock' }, going || c.searchSecs ? searchClock(c) : ''));
+  } else if (c.grid.items().length) {
+    // this build's own: everything across in one press
+    const all = el('button', { class: 'rloot__search rloot__all', type: 'button', dataset: { sfx: 'own' } }, el('span', {}, t('RECEIVE ALL')));
+    all.addEventListener('click', () => {
+      let moved = 0;
+      for (const it of c.grid.items()) if (quickTransfer(it)) moved++;
+      if (!moved) raidToast(t('No free room for that item'), 'warn');
+      renderOverlay();
+    });
+    head.append(all);
+  }
+
+  // the kinds of thing down the grid's left edge, lit for what has been found
+  const present = new Set(['all']);
+  for (const it of c.grid.items()) {
+    if (!raid.isRevealed(it)) continue;
+    present.add(kindOf(it));
+    if (it.fir) present.add('raid');
+  }
+  if (!present.has(lootKind)) lootKind = 'all';
+  const kind = KINDS.find((k) => k.key === lootKind);
+  $('#loot-kinds').replaceChildren(...KINDS.map((k) => {
+    const b = el('button', { class: `ftab${lootKind === k.key ? ' is-active' : ''}`, type: 'button', disabled: !present.has(k.key), dataset: { sfx: 'own' } }, uiImg(k.ico));
+    b.addEventListener('click', () => { sfx.ui('click'); lootKind = lootKind === k.key ? 'all' : k.key; renderOverlay(); });
+    return b;
+  }));
+
+  const host = $('#loot-host');
+  host.replaceChildren();
+  if (!c.searched && !c.found.size) {
+    const veil = el('button', { class: 'rloot__unsearched', type: 'button', disabled: going, dataset: { sfx: 'own' } },
+      el('span', {}, t('UNSEARCHED')), going ? uiImg('spinner_big', 'rloot__spin', { w: 16, h: 16 }) : null);
+    veil.addEventListener('click', again);
+    host.append(veil);
+    return;
+  }
+  const grid = renderGrid(c.grid, { filterFn: lootKind === 'all' ? null : (it) => (kind.test ? kind.test(it) : kindOf(it) === lootKind) });
+  for (const tile of grid.querySelectorAll('.item')) {
+    if (raid.isRevealed(tile._item)) continue;
+    tile.replaceChildren();
+    tile.className = 'item item--unfound';
+    delete tile.dataset.bg;
+  }
+  host.append(grid);
+}
+
 function renderOverlay() {
   if (!raid) return;
-  const lootPanel = $('#panel-loot');
-  const grid = $('#raid-inventory .overlay__grid');
-  const c = raid.openContainerRef;
-
-  lootPanel.hidden = !c;
-  grid.classList.toggle('is-solo', !c);
-
-  if (c) {
-    $('#loot-title').textContent = c.def.name.toUpperCase();
-    const host = $('#loot-host');
-    host.replaceChildren();
-
-    const total = c.order.length;
-    const done = c.searched;
-    const bar = el('div', { class: 'loot-bar' });
-    bar.append(el('span', { class: 'hint' }, c.region || ''));
-
-    if (!done) {
-      // the container gives up its contents one item at a time
-      bar.append(el('div', { class: 'loot-search' },
-        el('span', { class: 'loot-search__label' },
-          raid.searching === c ? 'SEARCHING' : 'SEARCH PAUSED'),
-        el('div', { class: 'loot-search__bar' },
-          el('i', { style: { width: `${Math.round(raid.searchFraction(c) * 100)}%` } })),
-        el('span', { class: 'loot-search__count' }, `${c.found.size}/${total}`)));
-    } else {
-      const takeAll = el('button', { class: 'btn btn--sm' }, icon('cart'), 'TAKE ALL');
-      takeAll.addEventListener('click', () => {
-        let moved = 0;
-        for (const it of c.grid.items()) if (quickTransfer(it)) moved++;
-        raidToast(moved ? `Took ${moved} item${moved > 1 ? 's' : ''}` : 'No space', moved ? 'ok' : 'warn');
-        renderOverlay();
-      });
-      bar.append(takeAll);
-    }
-    host.append(bar);
-    host.append(renderGrid(c.grid, { filterFn: (it) => c.found.has(it.uid) }));
-
-    if (!done && !c.found.size) {
-      host.append(el('div', { class: 'empty-note' }, 'NOTHING UNCOVERED YET'));
-    }
-  }
-
-  renderCarry(game.equipment, $('#raid-carry-host'));
-  renderGearSlots(game.equipment, $('#raid-equipment-host'));
-  // the body, above the gear, the way the character screen stacks them
-  const hh = $('#raid-health-host');
-  if (hh) {
-    if (!overlayHealth || !hh.firstChild) overlayHealth = renderHealthPanel(hh, raid.health, { compact: false });
+  paintOverlayTabs();
+  $('#rinv-gear').dataset.mode = overlayTab === 'health' ? 'health' : 'gear';
+  // every one of these is a scroll box; replacing its children would otherwise scroll it back to the top
+  keepScroll([$('#raid-carry-host'), $('#loot-host')], () => {
+    renderDoll(game.equipment, $('#raid-equipment-host'), { faction: game.profile.faction, getTpl, noArrow: true });
+    renderContainers(game.equipment, $('#raid-carry-host'), { noArrow: true });
+    paintLoot();
+  });
+  if (overlayTab === 'health') {
+    if (!overlayHealth || !overlayHealth.root.isConnected) overlayHealth = renderHealthBoard($('#raid-health-host'), raid.health, { inRaid: true });
     else overlayHealth.refresh();
   }
-  $('#raid-weight').textContent = fmtWeight(game.equipment.weight());
-
-  for (const host of ['#loot-host', '#raid-carry-host', '#raid-equipment-host']) {
-    const root = $(host);
-    if (!root) continue;
-    for (const node of root.querySelectorAll('.item')) {
-      if (node._item?.isContainer) node.classList.add('item--openable');
-    }
-  }
+  paintParams($('#raid-params'), { inRaid: true });
+  paintQuick($('#raid-quick'));
   refreshContainerWindows();
 }
 
@@ -890,6 +972,8 @@ function activateRaidContext() {
 on(EV.RAID_END, (result) => {
   stopLoop();
   overlayHealth = null;
+  overlayTab = 'gear';
+  lootOf = null;
   releaseTrigger();
   cancelExamine();               // whatever was being inspected is moot now
   closeFloorplan();

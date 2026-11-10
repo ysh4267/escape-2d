@@ -330,20 +330,20 @@ const slotName = (key) => tOr(key, key).trim();
  * The slots around the figure.
  * @param {Equipment} equipment
  * @param {HTMLElement} host
- * @param {{ onArrow?: (item, anchor) => void, faction?: string, getTpl?: (id: string) => any }} [opts]
+ * @param {{ onArrow?: (item, anchor) => void, noArrow?: boolean, faction?: string, getTpl?: (id: string) => any }} [opts]
  */
 export function renderDoll(equipment, host, opts = {}) {
   host.replaceChildren();
   host.append(uiImg('character_pmc', 'gdoll__figure'));
   for (const d of DOLL) {
-    host.append(renderSlotView(equipment.slots[d.key], { ...d, label: slotName(d.label), onArrow: opts.onArrow }));
+    host.append(renderSlotView(equipment.slots[d.key], { ...d, label: slotName(d.label), onArrow: opts.onArrow, noArrow: opts.noArrow }));
   }
   // the dogtag: a box of its own that always holds the tag of the side
   const tag = opts.getTpl?.(DOGTAG[opts.faction] || DOGTAG.USEC);
   const cell = el('div', { class: 'gslotcell gslotcell--tag', style: { position: 'absolute', left: '0px', top: '246px', width: '125px' } },
     el('div', { class: 'gslot__head', 'aria-disabled': 'true' },
       el('span', { class: 'gslot__name' }, t('Dogtag')),
-      el('span', { class: 'gslot__arrow' }, uiImg('slot_selectedbutton_arrow_icon_idle', 'gslot__arrowidle', { w: 18, h: 18 }))),
+      opts.noArrow ? null : el('span', { class: 'gslot__arrow' }, uiImg('slot_selectedbutton_arrow_icon_idle', 'gslot__arrowidle', { w: 18, h: 18 }))),
     el('div', { class: 'gslot is-full is-fixed', style: { width: '125px', height: '45px' } },
       tag?.imgUrl ? el('img', { class: 'gslot__tagimg', src: tag.imgUrl, alt: '' }) : null,
       el('span', { class: 'gslot__tagname' }, opts.faction || 'USEC')));
@@ -354,14 +354,14 @@ export function renderDoll(equipment, host, opts = {}) {
  * What is carried, top to bottom.
  * @param {Equipment} equipment
  * @param {HTMLElement} host
- * @param {{ onArrow?: (item, anchor) => void, filterFn?: (item) => boolean }} [opts]
+ * @param {{ onArrow?: (item, anchor) => void, noArrow?: boolean, filterFn?: (item) => boolean }} [opts]
  */
 export function renderContainers(equipment, host, opts = {}) {
   host.replaceChildren();
   const worn = (key, label, ghost) => {
     const slot = equipment.slots[key];
     const row = el('div', { class: 'gcont', dataset: { slot: key } },
-      renderSlotView(slot, { label, ghost, onArrow: opts.onArrow }));
+      renderSlotView(slot, { label, ghost, onArrow: opts.onArrow, noArrow: opts.noArrow }));
     if (slot.item?.grids) row.append(renderContainerGrids(slot.item, opts));
     return row;
   };

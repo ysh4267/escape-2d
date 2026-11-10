@@ -267,7 +267,7 @@ function paintVitals(node, health, opts = {}) {
 }
 
 /** what the numbers are doing per minute, for the little arrows */
-function rates(health, inRaid) {
+export function rates(health, inRaid) {
   if (inRaid) {
     const f = health.isDestroyed('stomach') ? G.existence.stomachFactor : 1;
     let hp = 0;

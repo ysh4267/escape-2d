@@ -785,13 +785,13 @@ export class Raid {
   beginSearch(container) {
     this.path = [];
     this.pendingInteract = null;
-    // the panel opens straight away; the contents appear as they are uncovered
+    // the panel opens straight away; the contents appear as they are uncovered.
+    // The search is under way before the panel is drawn, so it opens saying so.
+    const fresh = !container.searched;
+    if (fresh) { this.searching = container; this.searchProgress = 0; }
     this.openLoot(container);
     sfx.openContainer(container.type);
-    if (container.searched) return;
-    this.searching = container;
-    this.searchProgress = 0;
-    sfx.searchStart(container.type);
+    if (fresh) sfx.searchStart(container.type);
   }
 
   openLoot(container) {
@@ -808,6 +808,15 @@ export class Raid {
     if (this.searching) sfx.searchStop();
     this.searching = null;
     this.searchProgress = 0;
+  }
+
+  /** take up again the search of what stands open, if it was broken off */
+  resumeSearch() {
+    const c = this.openContainerRef;
+    if (!c || c.searched || this.searching === c) return;
+    this.searching = c;
+    this.searchProgress = 0;
+    sfx.searchStart(c.type);
   }
 
   /** the visible hostile under a world point, if any */
@@ -894,6 +903,7 @@ export class Raid {
       } else {
         const step = this.searchStep(c);
         this.searchProgress += dt;
+        c.searchSecs = (c.searchSecs || 0) + dt;
         while (this.searchProgress >= step && c.found.size < c.order.length) {
           this.searchProgress -= step;
           const uid = c.order[c.found.size];

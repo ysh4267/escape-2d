@@ -299,29 +299,31 @@
       </div>
     </div>
 
-    <!-- in-raid inventory overlay -->
-    <div class="overlay" id="raid-inventory" hidden>
-      <button class="overlay__close" id="btn-close-overlay"><svg class="ico"><use href="#i-close"/></svg> CLOSE</button>
-      <div class="overlay__grid">
-        <div class="panel panel--loot" id="panel-loot">
-          <div class="panel__head">
-            <h2 id="loot-title">CONTAINER</h2>
-            <button class="btn btn--ghost btn--sm" id="btn-close-loot"><svg class="ico"><use href="#i-close"/></svg></button>
-          </div>
-          <div class="panel__body panel__body--scroll" id="loot-host"></div>
-        </div>
-        <div class="panel" id="panel-raid-carry">
-          <div class="panel__head">
-            <h2>INVENTORY</h2>
-            <div class="panel__meta"><svg class="ico"><use href="#i-weight"/></svg><span id="raid-weight">0.00</span> kg</div>
-          </div>
-          <div class="panel__body panel__body--scroll" id="raid-carry-host"></div>
-        </div>
-        <div class="panel" id="panel-raid-gear">
-          <div class="panel__head"><h2>GEAR</h2><div class="panel__meta hint">right-click a med: USE</div></div>
-          <div class="panel__body panel__body--scroll">
-            <div id="raid-health-host"></div>
-            <div id="raid-equipment-host"></div>
+    <!-- the inventory a raid opens: the character screen as a raid has it - its tabs, the kit and
+         the body on the left as outside one and, where the stash stands there, whatever is being
+         searched (src/ui/raid-ui.js) -->
+    <div class="rinv" id="raid-inventory" hidden>
+      <div class="rinv__frame">
+        <nav class="chartabs" id="rinv-tabs"></nav>
+        <div class="char-body">
+          <div class="pane is-active" id="rinv-pane">
+            <div class="gear" id="rinv-gear" data-mode="gear">
+              <div class="gear__left">
+                <div class="gear__figure">
+                  <div class="gdoll" id="raid-equipment-host"></div>
+                  <div class="ghealth" id="raid-health-host"></div>
+                </div>
+                <div class="gear__cont" id="raid-carry-host"></div>
+                <div class="gparams" id="raid-params"></div>
+              </div>
+              <div class="gquick" id="raid-quick"></div>
+              <div class="gstash rloot" id="panel-loot" hidden>
+                <div class="rloot__top" id="loot-head"></div>
+                <div class="rloot__name" id="loot-title"></div>
+                <div class="ftabs gstash__kinds" id="loot-kinds"></div>
+                <div class="gstash__grid" id="loot-host"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
