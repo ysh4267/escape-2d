@@ -43,6 +43,7 @@
 .pr__btn--under { left: 960px; top: 996.2px; }
 .pr__btn--right { left: 1260px; top: 996.2px; }
 .pr__btn--left { left: 660px; top: 996.2px; }
+.pr__btn--aside { left: 1260px; top: 939px; }
 .pr__logo { position: absolute; pointer-events: none; }
 /* the flat figure is see-through where the body is; laid three deep and blacked out it is its own backing */
 .pr__figure { position: absolute; pointer-events: none; }
@@ -139,6 +140,53 @@
 .prl__phase.is-on i::after { content: ""; position: absolute; left: -2.5px; top: -2px; width: 19px; height: 19px; background: var(--ui-check_square) 0 0 / 100% 100% no-repeat; }
 .prl__skycap { position: absolute; left: 418px; top: 19.5px; width: 74px; height: 49.5px; display: flex; align-items: center; font-size: 11px; line-height: 12.1px; color: #b6c1c7; }
 .prl__cond .pr__sky { position: absolute; left: 492px; top: 19.5px; }
+
+/* INSURANCE: the kit that would be lost, and beside it the insurer and what is covered */
+.pri__kit { position: absolute; left: 55px; top: 102px; width: 598px; height: 928px; overflow-x: hidden; overflow-y: scroll; background: linear-gradient(#00000080, #00000080) 0 0 / 590px 100% no-repeat; }
+.pri__kit::-webkit-scrollbar { width: 6px; }
+.pri__doll { position: relative; height: 700px; }
+.pri__kit .gdoll { position: absolute; left: 43px; top: 37px; width: 494px; height: 650px; }
+.pri__conts { padding: 0 0 30px 43px; display: flex; flex-direction: column; gap: 23px; }
+.pri__kit .item { cursor: pointer; }
+/* what is covered, or picked to be, wears the insurer's orange */
+.pri__kit .item.is-covered { outline: 2px solid #e8922a; outline-offset: -2px; box-shadow: 0 0 12px 1px #e8922a99; z-index: 2; }
+.pri__notice { position: absolute; left: 708.3px; top: 102px; width: 1118.5px; height: 80px; box-sizing: border-box; padding: 5px 60px; display: grid; place-items: center; background: #d77400b4; font-size: 16px; font-weight: 700; line-height: 18px; letter-spacing: .3px; color: #000; text-align: center; }
+.pri__notice b { font-weight: 700; }
+.pri__tabs { position: absolute; left: 705.7px; top: 190.4px; height: 32px; }
+.pri__tab { position: absolute; top: 0; width: 180px; height: 32px; font-size: 16px; }
+.pri__tab:nth-child(1) { left: 0; }
+.pri__tab:nth-child(2) { left: 150.4px; }
+.pri__body { position: absolute; left: 706.3px; top: 222.5px; width: 1120.5px; height: 592.5px; background: #0d0d0e; }
+.pri__step { position: absolute; left: 706.3px; width: 1120px; height: 40px; background: #323530; display: flex; align-items: center; font-size: 18px; letter-spacing: .5px; color: #c4c1b0; white-space: nowrap; }
+.pri__step--1 { top: 222.5px; }
+.pri__step--2 { top: 382.5px; }
+.pri__step b { flex: none; width: 74px; height: 40px; margin-right: 20px; display: grid; place-items: center; background: #00000055; color: #88867d; clip-path: polygon(0 0, 100% 0, calc(100% - 20px) 100%, 0 100%); padding-right: 14px; box-sizing: border-box; }
+.pri__who { position: absolute; left: 706.3px; top: 267.5px; width: 1120px; height: 110px; background: #111212; }
+.pri__face { position: absolute; left: 33.7px; top: 10.5px; width: 90px; height: 90px; box-sizing: border-box; border: 1px solid #c4c1b0; }
+.pri__face img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pri__face i { position: absolute; left: -2px; top: -2px; width: 24px; height: 24px; display: grid; place-items: center; background: var(--ui-bind_label) 0 0 / 100% 100% no-repeat; font-style: normal; font-size: 14px; color: #000; }
+.pri__who .ddb { position: absolute; left: 133.7px; top: 10.5px; }
+.pri__terms { position: absolute; left: 866px; top: 26px; display: flex; flex-direction: column; gap: 13px; font-size: 15px; letter-spacing: .3px; color: #88867d; white-space: nowrap; }
+.pri__terms--left { left: 731px; }
+.pri__terms span { display: flex; align-items: center; gap: 6px; height: 20px; }
+.pri__terms img { opacity: .55; }
+.pri__all { position: absolute; right: 14px; top: 8.5px; height: 23.4px; padding: 0; border: 0; background: none; display: flex; align-items: center; gap: 11px; font-family: var(--font-ui); font-size: 11px; color: #fff; text-transform: uppercase; }
+.pri__all i { width: 20px; height: 20px; box-sizing: border-box; border: 3px solid transparent; border-image: var(--ui-checkbox) 3 fill / 3px stretch; background: none; }
+.pri__all.is-on i { background: var(--ui-checkmark) center / 14px 14px no-repeat; }
+.pri__all span { width: 139px; height: 23.4px; display: grid; place-items: center; background: #2b2d2e; }
+.pri__count { position: absolute; left: 706.3px; top: 428px; width: 1120px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 12px; font-size: 18px; letter-spacing: .4px; color: #a8b2b6; }
+.pri__list { position: absolute; left: 706.3px; top: 470px; width: 1112px; height: 342px; overflow-x: hidden; overflow-y: scroll; padding-top: 7.5px; box-sizing: border-box; }
+.pri__row { position: relative; height: 35px; margin: 0 14px 5px calc(83px + var(--d) * 50px); background: #131414; display: flex; align-items: center; padding: 0 44px 0 10px; font-size: 18px; letter-spacing: .36px; white-space: nowrap; }
+.pri__kind { position: absolute; left: -46px; top: 1px; width: 37px; height: 33px; object-fit: contain; }
+.pri__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #c5c3b2; }
+.pri__price { color: #a8b2b6; }
+.pri__fold { position: absolute; right: 5px; top: 9px; width: 17px; height: 17px; padding: 0; border: 0; background: #2b2d2e; display: grid; place-items: center; }
+.pri__fold.is-shut img { transform: rotate(-90deg); }
+.pri__cash, .pri__total { position: absolute; top: 820px; height: 60px; background: #0e0f11; display: flex; flex-direction: column; justify-content: center; font-size: 18px; line-height: 19.8px; letter-spacing: .4px; white-space: nowrap; }
+.pri__cash { left: 706.3px; width: 787.2px; padding-left: 35px; box-sizing: border-box; color: #88867d; }
+.pri__total { left: 1498.6px; width: 326.3px; align-items: center; color: #e4e2d1; }
+.pri__cash b, .pri__total b { font-weight: 400; }
+.pri__total.is-short b { color: #c7361f; }
 
 /* CONFIRMATION */
 .prc__level { position: absolute; left: 723.5px; top: 79.5px; width: 277px; height: 90px; }

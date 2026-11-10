@@ -42,6 +42,7 @@ import { DB, loadMeta } from './game/db.js';
 import * as Quests from './game/quests.js';
 import * as Traders from './game/traders.js';
 import * as Mail from './game/mail.js';
+import * as Insurance from './game/insurance.js';
 import * as Skills from './game/skills.js';
 import * as Profile from './game/profile.js';
 import * as Flea from './game/flea.js';
@@ -117,6 +118,7 @@ async function boot() {
   else if (consumePendingMIA()) {
     // the last session was closed mid-raid — that run ends as MIA, exactly
     // as if the timer had run out: unsecured gear does not come home
+    Insurance.claimLost(game.equipment);
     game.equipment.clearInsecure();
     game.health.afterDeath();
     game.profile.raids++;
@@ -149,6 +151,9 @@ async function boot() {
   initNotices();
   initSettings({ onWipe: hardReset });
   Mail.expireMail();
+  // insured gear comes home when its hours are up, whether or not anyone is watching
+  Insurance.deliverDue();
+  setInterval(() => Insurance.deliverDue(), 60 * 1000);
 
   // the raid reports what happened; the tasks and the career numbers listen
   on(EV.RAID_KILL, (k) => {

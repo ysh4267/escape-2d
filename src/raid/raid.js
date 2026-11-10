@@ -16,6 +16,7 @@ import { game, addExp, addStat, countMoney } from '../core/state.js';
 import { sfx } from '../core/audio.js';
 import { emit, EV } from '../core/events.js';
 import { Health, PART, FX, FX_INFO } from './health.js';
+import { claimLost } from '../game/insurance.js';
 
 export const RAID_STATUS = {
   RUNNING: 'running',
@@ -1533,6 +1534,8 @@ export class Raid {
           if (it.raidLoot) { it.fir = true; delete it.raidLoot; }
         }
       }
+      // what was insured is looked for where it fell
+      claimLost(eq, { location: this.location, loc: this.map.name });
       eq.clearInsecure();
       addExp(35);
       if (status === RAID_STATUS.KIA) game.profile.died++;

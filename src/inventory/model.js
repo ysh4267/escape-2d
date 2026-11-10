@@ -282,6 +282,8 @@ export class Item {
     if (this.folded) o.fd = 1;
     // a plan map's markers: [{ x, y, type, note }], the place as shares of the plan
     if (this.markers && this.markers.length) o.mk = this.markers;
+    // who has it insured, by trader key
+    if (this.insured) o.ins = this.insured;
     if (this.rounds && this.rounds.length) o.rd = this.rounds.map((r) => [r.t, r.n]);
     if (this.chamber && this.chamber.length) o.ch = this.chamber.slice();
     if (this.grids) o.g = this.grids.map((g) => g.toJSON());
@@ -321,6 +323,7 @@ export class Item {
       res, dura, maxDura, folded: o.fd, bare: !legacy,
     });
     if (Array.isArray(o.mk)) it.markers = o.mk;
+    if (o.ins) it.insured = o.ins;
     if (o.g && it.grids) {
       o.g.forEach((gj, i) => { if (it.grids[i]) it.grids[i].loadJSON(gj); });
     }

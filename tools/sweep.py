@@ -95,6 +95,9 @@ STEPS: list[tuple[str, str]] = [
         E.showScreen('menu'); await sleep(200); click('#screen-menu .menu__item'); await sleep(400); seen('.pr__title'); seen('.prs__side--pmc'); seen('.prs__about');
         click('.pr__btn--main'); await sleep(400); seen('.prl__node'); seen('.prl__route');
         click('.prl__node:not(:disabled)'); await sleep(400); seen('.prl__info .prl__stats'); seen('.prl__phase.is-on');
+        click('.pr__btn--main'); await sleep(500); seen('.pri__kit .gslot'); seen('.pri__who .ddb'); seen('.pri__notice');
+        click('.pri__all'); await sleep(300); seen('.pri__row'); seen('.pri__kit .item.is-covered');
+        click('.pri__tab:not(.is-active)'); await sleep(200); click('.pri__tab:not(.is-active)'); await sleep(200);
         click('.pr__btn--main'); await sleep(400); seen('.prc__cond'); seen('.prc__level');
         click('.pr__btn--main'); await sleep(600); seen('.prd__bar i'); seen('.prd__banner');
         click('.pr__btn--under'); await sleep(300); seen('.prc__cond');

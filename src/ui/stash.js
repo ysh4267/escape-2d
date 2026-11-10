@@ -169,6 +169,11 @@ export function initStash() {
 
 function kindOf(item) { return KIND_OF_CAT[item.tpl.cat] || 'barter'; }
 
+/** the glyph of the kind of thing an item is, as the filter strip draws it */
+export function kindIcon(item) {
+  return KINDS.find((k) => k.key === kindOf(item)).ico;
+}
+
 function matches(item) {
   if (kind !== 'all') {
     const k = KINDS.find((x) => x.key === kind);

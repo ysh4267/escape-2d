@@ -12,19 +12,29 @@
 // Time Has Come, Matchmaker Final Countdown), checked on 1080p captures of
 // 1.0 and 1.0.6. Where the client stands a lit model of the character this
 // stands the flat figure of the health screen.
+//
+// Between the location and the last look comes INSURANCE (Matchmaker
+// Insurance, set against a lossless capture of 1.1): the kit that would be
+// lost on the left, the insurer and what is to be covered on the right.
 // =========================================================
 
-import { $, el } from '../core/util.js';
+import { $, el, fmtNum } from '../core/util.js';
 import { on, EV } from '../core/events.js';
-import { game } from '../core/state.js';
+import { game, countMoney } from '../core/state.js';
 import { sfx } from '../core/audio.js';
-import { t } from '../core/i18n.js';
+import { t, tOr, tRich } from '../core/i18n.js';
 import { uiImg, setUiSrc } from '../core/uiart.js';
 import { MAPS } from '../data/maps.js';
+import { getTpl } from '../data/items.js';
 import { DB, levelGroup } from '../game/db.js';
+import { loyaltyLevel, traderRecord } from '../game/traders.js';
+import { insurers, coverBlocker, coverCost, kitRows, insure } from '../game/insurance.js';
+import { renderDoll, renderContainers } from '../inventory/equipment.js';
+import { confirmDialog } from '../inventory/dialogs.js';
 import { PARTS } from '../raid/health.js';
 import { showScreen, setBar } from './shell.js';
-import { screenButton } from './kit.js';
+import { screenButton, dropdown } from './kit.js';
+import { kindIcon } from './stash.js';
 
 let ctx = { deploy: () => {} };
 const flow = { step: 'side', side: 'pmc', loc: null, phase: 0 };
@@ -132,6 +142,7 @@ const BUTTONS = {
   ready: { at: 'main', label: 'READY' },
   back: { at: 'under', label: 'BACK' },
   readyAside: { at: 'right', label: 'READY' },
+  insure: { at: 'aside', label: 'Insure' },
 };
 
 function button(kind, run, disabled = false) {
@@ -162,6 +173,7 @@ function render() {
   stopRunning();
   if (flow.step === 'side') sideScreen();
   else if (flow.step === 'location') locationScreen();
+  else if (flow.step === 'insurance') insuranceScreen();
   else if (flow.step === 'confirm') confirmScreen();
   else if (flow.step === 'deploying') deployingScreen();
   else if (flow.step === 'countdown') countdownScreen();
@@ -301,9 +313,139 @@ function locationScreen() {
       el('div', { class: 'pr__cond prl__cond' },
         el('div', { class: 'prl__phasecap' }, t('SELECT TIME PHASE:')), ...phases,
         el('div', { class: 'prl__skycap' }, t('CURRENT WEATHER CONDITIONS:')), skyIcon(50)));
-    buttons.push(button('next', () => go('confirm')), button('readyAside', () => go('deploying')));
+    buttons.push(button('next', () => go('insurance')), button('readyAside', () => go('deploying')));
   }
   frame({ title: t('SELECT LOCATION'), body, buttons });
+}
+
+// ---------------------------------------------------------
+// INSURANCE
+// ---------------------------------------------------------
+const ins = { tab: 'to', trader: null, picked: new Set(), shut: new Set() };
+const ROMAN = ['', 'I', 'II', 'III', 'IV'];
+// how fast an insurer's people are, in the client's words, by the longest they take
+const PACE = [{ max: 2, key: 'very fast' }, { max: 8, key: 'fast' }];
+
+/** one line of the list: the kind's glyph, the name, and at the right what it costs or who covers it */
+function insRow(r, right, kids) {
+  const shut = ins.shut.has(r.item.uid);
+  const arrow = kids ? el('button', { class: `pri__fold${shut ? ' is-shut' : ''}`, type: 'button', dataset: { sfx: 'own' } }, uiImg('minimize_down')) : null;
+  arrow?.addEventListener('click', () => { if (shut) ins.shut.delete(r.item.uid); else ins.shut.add(r.item.uid); sfx.ui('click'); render(); });
+  return el('div', { class: 'pri__row', style: `--d:${r.depth}` },
+    uiImg(kindIcon(r.item), 'pri__kind'), el('span', { class: 'pri__name' }, r.item.tpl.name), el('span', { class: 'pri__price' }, right), arrow);
+}
+
+function insuranceScreen() {
+  const traders = insurers();
+  // with nobody to insure with there is nothing to show
+  if (!traders.length) { go('confirm'); return; }
+  if (!traders.includes(ins.trader)) ins.trader = traders[0];
+  const trader = ins.trader;
+  const rows = kitRows();
+  const open = rows.filter((r) => !coverBlocker(r.item));
+  for (const uid of [...ins.picked]) if (!open.some((r) => r.item.uid === uid)) ins.picked.delete(uid);
+  const picked = rows.filter((r) => ins.picked.has(r.item.uid));
+  const covered = rows.filter((r) => r.item.insured);
+  const cost = picked.reduce((n, r) => n + coverCost(r.item, trader), 0);
+  const cash = countMoney('RUB');
+
+  // the kit: a press on a thing takes it, and what is in and on it, in or out of the cover
+  const doll = el('div', { class: 'gdoll' });
+  const conts = el('div', { class: 'pri__conts' });
+  renderDoll(game.equipment, doll, { faction: game.profile.faction, getTpl });
+  renderContainers(game.equipment, conts, {});
+  const kit = el('div', { class: 'pri__kit', dataset: { inert: '1' } }, el('div', { class: 'pri__doll' }, doll), conts);
+  for (const tile of kit.querySelectorAll('.item')) {
+    const it = tile._item;
+    if (!it) continue;
+    if (it.insured || ins.picked.has(it.uid)) tile.classList.add('is-covered');
+  }
+  kit.addEventListener('click', (e) => {
+    const it = e.target.closest('.item')?._item;
+    if (!it) return;
+    const family = [it, ...it.descendants()].filter((x) => !coverBlocker(x));
+    if (!family.length) return;
+    const all = family.every((x) => ins.picked.has(x.uid));
+    for (const x of family) { if (all) ins.picked.delete(x.uid); else ins.picked.add(x.uid); }
+    ins.tab = 'to';
+    sfx.cue('insurance_item');
+    render();
+  });
+
+  const tab = (id, label, ico) => {
+    const b = el('button', { class: `ptab pri__tab${ins.tab === id ? ' is-active' : ''}`, type: 'button', dataset: { sfx: 'own' } },
+      el('span', { class: 'ptab__ico' }, uiImg(ins.tab === id ? `${ico}_selected` : ico)), el('span', {}, label));
+    b.addEventListener('click', () => { if (ins.tab !== id) { ins.tab = id; sfx.ui('click'); render(); } });
+    return b;
+  };
+
+  // the list: what is picked to be covered, or what is covered already
+  const shown = ins.tab === 'to' ? picked : covered;
+  const lines = [];
+  let hidden = Infinity;       // rows deeper than this are under a folded one
+  shown.forEach((r, i) => {
+    if (r.depth > hidden) return;
+    hidden = Infinity;
+    const kids = !!shown[i + 1] && shown[i + 1].depth > r.depth;
+    if (kids && ins.shut.has(r.item.uid)) hidden = r.depth;
+    const right = ins.tab === 'to' ? `${fmtNum(coverCost(r.item, trader))} ₽` : (DB.traders.find((x) => x.key === r.item.insured)?.name || '');
+    lines.push(insRow(r, right, kids));
+  });
+
+  const everything = open.length > 0 && open.every((r) => ins.picked.has(r.item.uid));
+  const all = el('button', { class: `pri__all${everything ? ' is-on' : ''}`, type: 'button', dataset: { sfx: 'own' } }, el('i', {}), el('span', {}, t('INSURE ALL')));
+  all.addEventListener('click', () => {
+    if (everything) ins.picked.clear(); else for (const r of open) ins.picked.add(r.item.uid);
+    ins.tab = 'to';
+    sfx.ui('checkbox');
+    render();
+  });
+
+  const who = dropdown({
+    value: trader.key, width: 248, options: traders.map((x) => ({ id: x.key, label: x.name })),
+    onChange: (key) => { ins.trader = traders.find((x) => x.key === key); render(); },
+  });
+  const terms = trader.insurance;
+  const pace = PACE.find((p) => terms.maxH <= p.max);
+
+  const pay = button('insure', async () => {
+    const ok = await confirmDialog({ title: t('Confirmation'), body: t('Are you sure you want to insure {0} items?', picked.length) });
+    if (!ok) return;
+    const res = insure(picked.map((r) => r.item), trader);
+    if (!res.ok) return;
+    ins.picked.clear();
+    ins.tab = 'insured';
+    sfx.cue('insurance_insured');
+    render();
+  }, !picked.length || cost > cash);
+
+  frame({
+    title: t('INSURANCE'),
+    body: [
+      kit,
+      el('div', { class: 'pri__notice' }, el('span', {}, tRich('InsuranceWarning'))),
+      el('div', { class: 'pri__tabs' }, tab('insured', t('INSURED'), 'tab_icon_overall'), tab('to', t('TO INSURE'), 'tab_icon_gear')),
+      el('div', { class: 'pri__body' }),
+      el('div', { class: 'pri__step pri__step--1' }, el('b', {}, '1'), el('span', {}, t('SELECT INSURER'))),
+      el('div', { class: 'pri__who' },
+        el('div', { class: 'pri__face' }, uiImg(`avatar_${trader.key}`), el('i', {}, ROMAN[loyaltyLevel(trader)] || '')),
+        who.node,
+        el('div', { class: 'pri__terms pri__terms--left' },
+          el('span', {}, uiImg('standing_icon', '', { w: 30, h: 25 }), (traderRecord(trader).rep || 0).toFixed(2)),
+          // the client prints this figure the same for every insurer
+          el('span', {}, uiImg('insurance_shield_icon', '', { w: 24, h: 25 }), tOr('1.35 (good)', '1.35 (good)'))),
+        el('div', { class: 'pri__terms' },
+          el('span', {}, uiImg('icon_time', '', { w: 20, h: 20 }), `${t('RETURN TIME:')}${terms.minH} - ${terms.maxH}h`),
+          el('span', {}, uiImg('insurance_return_rate_icon', '', { w: 20, h: 20 }), `${t('Return rate:')}${pace ? t(pace.key) : t('Unknown')}`))),
+      el('div', { class: 'pri__step pri__step--2' }, el('b', {}, '2'), el('span', {}, t('SELECT ITEMS')), all),
+      el('div', { class: 'pri__count' }, uiImg('items_icon', '', { w: 20, h: 20 }),
+        el('span', {}, ins.tab === 'to' ? t('{0} items to insure', picked.length) : t('{0} items insured', covered.length))),
+      el('div', { class: 'pri__list' }, lines),
+      el('div', { class: 'pri__cash' }, el('span', {}, t('CASH IN STASH: ')), el('b', {}, `${fmtNum(cash)} ₽`)),
+      el('div', { class: `pri__total${cost > cash ? ' is-short' : ''}` }, el('span', {}, t('TOTAL SUM TO PAY: ')), el('b', {}, `${fmtNum(cost)} ₽`)),
+    ],
+    buttons: [button('next', () => go('confirm')), button('back', () => go('location')), pay, button('readyAside', () => go('deploying'))],
+  });
 }
 
 // ---------------------------------------------------------
@@ -331,7 +473,7 @@ function confirmScreen() {
         el('div', { class: 'prc__cell' }, el('div', { class: 'prc__cap' }, t('CURRENT INGAME TIME:')), time),
         el('div', { class: 'prc__cell prc__cell--sky' }, el('div', { class: 'prc__cap' }, t('CURRENT WEATHER CONDITIONS:')), skyIcon(40))),
     ],
-    buttons: [button('ready', () => go('deploying')), button('back', () => go('location'))],
+    buttons: [button('ready', () => go('deploying')), button('back', () => go(insurers().length ? 'insurance' : 'location'))],
   });
 }
 

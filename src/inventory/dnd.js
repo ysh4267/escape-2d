@@ -61,7 +61,7 @@ export function initDnd() {
 
 function onDoubleClick(e) {
   const node = e.target.closest('.item');
-  if (!node || !node._item) return;
+  if (!node || !node._item || node.closest('[data-inert]')) return;
   e.preventDefault();
   e.stopPropagation();
   dndContext.onActivate?.(node._item);
@@ -79,7 +79,8 @@ function onPointerDown(e) {
   if (e.button !== 0) { pending = null; return; }
   const node = e.target.closest('.item');
   if (!node || !node._item) return;
-  if (node.closest('.drag-layer')) return;
+  // a host marked inert shows its items; they are not handled there
+  if (node.closest('.drag-layer') || node.closest('[data-inert]')) return;
   const item = node._item;
   if (!dndContext.canMove(item)) return;
   // a vital part in raid does not leave its gun by dragging either

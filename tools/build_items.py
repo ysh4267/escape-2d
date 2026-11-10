@@ -815,6 +815,9 @@ def main():
         # inspected before their name and stats are revealed
         if props.get('ExaminedByDefault'):
             tpl['known'] = True
+        # the few things no trader will insure
+        if props.get('InsuranceDisabled'):
+            tpl['noIns'] = True
         if props.get('ExamineTime'):
             tpl['examineTime'] = float(props['ExamineTime'])
         if props.get('ExamineExperience'):

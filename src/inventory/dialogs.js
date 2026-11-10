@@ -69,7 +69,7 @@ function onContext(e) {
   // popping up over the drag would swallow the drop
   if (isDragging()) { e.preventDefault(); e.stopPropagation(); return; }
   const tile = e.target.closest('.item');
-  if (!tile || !tile._item) { closeContext(); return; }
+  if (!tile || !tile._item || tile.closest('[data-inert]')) { closeContext(); return; }
   e.preventDefault();
   e.stopPropagation();
   hideTooltip();
