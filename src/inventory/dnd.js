@@ -159,8 +159,13 @@ function beginDrag(e) {
   const { item, node } = pending;
   // the tile is measured on screen; the ghost is laid out on the stage
   const rect = node.getBoundingClientRect();
-  const cw = toStage(rect.width) / item.w;
-  const ch = toStage(rect.height) / item.h;
+  let cw = toStage(rect.width) / item.w;
+  let ch = toStage(rect.height) / item.h;
+  // worn in a slot an item is drawn to the slot's size, not its own: carried,
+  // it is the size it will be in a grid
+  if (node.dataset.worn) {
+    cw = ch = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) || 63;
+  }
 
   // Tarkov anchors the carried item by its TOP-LEFT cell to the cell under the
   // cursor; the sub-cell grab offset is deliberately discarded.
@@ -257,7 +262,7 @@ function updateDrag(x, y) {
     return;
   }
 
-  const slotEl = under.closest('.slot');
+  const slotEl = under.closest('.slot, .gslot');
   if (slotEl && slotEl._slot) {
     const slot = slotEl._slot;
     // ammo onto an occupied magazine slot loads that magazine
@@ -292,7 +297,7 @@ function clearHighlights() {
     ghostSlot.parentNode.classList.remove('is-dragover');
     ghostSlot.remove();
   }
-  for (const n of document.querySelectorAll('.slot.is-ok, .slot.is-bad')) {
+  for (const n of document.querySelectorAll('.slot.is-ok, .slot.is-bad, .gslot.is-ok, .gslot.is-bad')) {
     n.classList.remove('is-ok', 'is-bad');
   }
 }

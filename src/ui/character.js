@@ -10,7 +10,7 @@
 
 import { $, $$, el, fmtNum } from '../core/util.js';
 import { on, emit, EV } from '../core/events.js';
-import { game, countMoney } from '../core/state.js';
+import { game } from '../core/state.js';
 import { sfx } from '../core/audio.js';
 import { DB, levelProgress, levelGroup, MAX_LEVEL, CUR_SYM } from '../game/db.js';
 import { activeTasks, completedTasks, QS, taskCounts } from '../game/quests.js';
@@ -25,11 +25,16 @@ import { showScreen, currentScreen } from './shell.js';
 const TABS = [
   { key: 'overall', label: 'OVERALL', ico: 'tab_icon_overall' },
   { key: 'gear', label: 'GEAR', ico: 'tab_icon_gear', pane: 'stash' },
-  { key: 'health', label: 'HEALTH_TAB', ico: 'tab_icon_health' },
+  // HEALTH is the same frame as GEAR with the body where the slots are
+  { key: 'health', label: 'HEALTH_TAB', ico: 'tab_icon_health', pane: 'stash' },
+  // the client's own tabs for things this build has nothing behind yet are
+  // drawn switched off, as the bar's are
+  { key: 'customization', label: 'Customization', ico: 'tab_icon_customisation', off: true },
   { key: 'skills', label: 'SKILLS', ico: 'tab_icon_skills' },
   { key: 'map', label: 'MAP', ico: 'tab_icon_map' },
   { key: 'tasks', label: 'TASKS', ico: 'tab_icon_tasks' },
   { key: 'achievements', label: 'ACHIEVEMENTS', ico: 'tab_icon_achivement_icon', icoOn: 'tab_icon_achivement_icon_pressed' },
+  { key: 'prestige', label: 'Prestige', ico: 'prestige_tabicon_0', icoOn: 'prestige_tabicon_1', off: true },
 ];
 const litIcon = (def) => def.icoOn || (def.ico + '_selected');
 
@@ -40,7 +45,7 @@ let journalSelected = null;
 export function currentTab() { return tab; }
 
 export function openCharacter(next = tab) {
-  tab = TABS.some((t) => t.key === next) ? next : 'gear';
+  tab = TABS.some((t) => t.key === next && !t.off) ? next : 'gear';
   if (currentScreen() !== 'character') showScreen('character');
   paint();
   emit(EV.SCREEN_CHANGED, `character:${tab}`);
@@ -49,9 +54,11 @@ export function openCharacter(next = tab) {
 function paneId(t) { return `pane-${t.pane || t.key}`; }
 
 function paint() {
+  // two tabs can share a pane (GEAR and HEALTH do): the pane of the tab that is up is the one shown
+  const up = paneId(TABS.find((t) => t.key === tab));
   for (const t of TABS) {
     const p = $(`#${paneId(t)}`);
-    if (p) p.classList.toggle('is-active', t.key === tab);
+    if (p) p.classList.toggle('is-active', paneId(t) === up);
   }
   for (const b of $$('#char-tabs .ptab')) {
     const lit = b.dataset.tab === tab;
@@ -70,7 +77,7 @@ export function initCharacter() {
   const strip = $('#char-tabs');
   strip.replaceChildren();
   for (const def of TABS) {
-    const b = el('button', { class: 'ptab', dataset: { tab: def.key, sfx: 'own' } },
+    const b = el('button', { class: 'ptab', disabled: !!def.off, dataset: { tab: def.key, sfx: 'own' } },
       el('span', { class: 'ptab__ico' }, uiImg(def.ico)), el('span', {}, t(def.label)));
     b.addEventListener('click', () => { if (tab !== def.key) { sfx.ui('click'); openCharacter(def.key); } });
     strip.append(b);
@@ -82,22 +89,6 @@ export function initCharacter() {
   on(EV.SCREEN_CHANGED, (id) => { if (id === 'character') { paint(); emit(EV.SCREEN_CHANGED, `character:${tab}`); } });
   on(EV.QUEST, () => { if (currentScreen() === 'character' && tab === 'tasks') renderJournal(); });
   on(EV.LEVEL_UP, () => { if (currentScreen() === 'character' && tab === 'overall') renderOverall(); });
-  on(EV.INVENTORY_CHANGED, paintMoney);
-  on('shell:money', paintMoney);
-  paintMoney();
-}
-
-/** the three currencies over the stash, the way the stash panel counts them */
-export function paintMoney() {
-  for (const id of ['stash-money']) {
-    const host = $(`#${id}`);
-    if (!host) continue;
-    host.replaceChildren();
-    for (const cur of ['RUB', 'EUR', 'USD']) {
-      host.append(el('span', { class: `money money--${cur.toLowerCase()}` },
-        el('em', {}, CUR_SYM[cur]), fmtNum(countMoney(cur))));
-    }
-  }
 }
 
 // ---------------------------------------------------------

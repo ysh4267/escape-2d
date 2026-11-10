@@ -17,12 +17,11 @@
 // tinted by the pool as a whole.
 // =========================================================
 
-import { $, el, icon, fmtNum, keepScroll } from '../core/util.js';
+import { $, el, icon, fmtNum } from '../core/util.js';
 import { game, saveSoon, countMoney, takeMoney } from '../core/state.js';
 import { PARTS, PART, FX, FX_INFO, Health, fmtDur, G } from '../raid/health.js';
 import { PMC_PATH, PMC_VIEWBOX, PMC_XRAY, PMC_REGIONS, PMC_TABS, HUD_PARTS, HUD_VIEWBOX } from './silhouette.js';
 import { openModal } from '../inventory/dialogs.js';
-import { renderGrid } from '../inventory/view.js';
 import { detach } from '../inventory/model.js';
 import { dndContext } from '../inventory/dnd.js';
 import { sfx } from '../core/audio.js';
@@ -601,10 +600,11 @@ export function drawHudHealth(raid) {
 }
 
 // ---------------------------------------------------------
-// hideout HEALTH pane
+// the HEALTH tab: the body on the figure's sheet of the GEAR screen
 // ---------------------------------------------------------
 let paneBoard = null;
-let stashHostRender = null;
+/** whether the tab is the one showing: the board is only redrawn while it is */
+const healthShown = () => $('#pane-stash .gear')?.dataset.mode === 'health' && $('#screen-character')?.classList.contains('is-active');
 
 /** the trial period and the Therapist's bill */
 export function treatmentQuote() {
@@ -614,10 +614,8 @@ export function treatmentQuote() {
   return { cost: free ? 0 : cost, listed: cost, free, needed: cost > 0 };
 }
 
-export function initHealthPane(renderStashGrid) {
-  stashHostRender = renderStashGrid;
-  on(EV.HEALTH_CHANGED, () => refreshHealthPane());
-  on(EV.INVENTORY_CHANGED, () => { if ($('#pane-health')?.classList.contains('is-active')) renderHealthStash(); });
+export function initHealthPane() {
+  on(EV.HEALTH_CHANGED, () => { if (healthShown()) refreshHealthPane(); });
 
   // the body keeps mending in real time while you are home; a save now and
   // then so a closed tab does not lose the minutes
@@ -628,7 +626,7 @@ export function initHealthPane(renderStashGrid) {
     if (inRaid) return;
     game.health.regen(1);
     sinceSave += 1;
-    if ($('#pane-health')?.classList.contains('is-active')) refreshHealthPane();
+    if (healthShown()) refreshHealthPane();
     if (sinceSave >= 30) { sinceSave = 0; saveSoon(); }
   }, 1000);
 }
@@ -640,7 +638,6 @@ export function renderHealthPane() {
   const btn = el('button', { class: 'btn btn--primary', id: 'btn-treat' }, 'TREATMENT');
   const note = el('div', { class: 'hb__foot-note' });
   foot.append(el('div', { class: 'hb__foot-row' }, btn, note));
-  foot.append(el('div', { class: 'hint' }, 'right-click a med in the stash to use it · the body mends on its own over time'));
   btn.addEventListener('click', async () => {
     const q = treatmentQuote();
     if (!q.needed) { toast('Nothing to treat', 'info'); return; }
@@ -659,7 +656,6 @@ export function renderHealthPane() {
   paneBoard.note = note;
   paneBoard.btn = btn;
   refreshHealthPane();
-  renderHealthStash();
 }
 
 export function refreshHealthPane() {
@@ -670,14 +666,4 @@ export function refreshHealthPane() {
   paneBoard.note.textContent = !q.needed ? 'Fit for duty'
     : q.free ? `Therapist · free (trial: level ≤ ${G.heal.trialLevels}, ≤ ${G.heal.trialRaids} raids) · would be ${fmtNum(q.listed)} ₽`
       : `Therapist · ${fmtNum(q.cost)} ₽`;
-}
-
-function renderHealthStash() {
-  const host = $('#health-stash-host');
-  if (!host) return;
-  keepScroll([host], () => {
-    host.replaceChildren();
-    host.append(renderGrid(game.stash));
-  });
-  stashHostRender?.(host);
 }

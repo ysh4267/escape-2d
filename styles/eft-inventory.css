@@ -1,0 +1,366 @@
+/* =========================================================
+   Items, slots and the GEAR tab of the character screen.
+
+   Everything here is measured off the client: the item tile off its
+   grid_layout prefab, a worn item off slot_layout, a slot off SlotView, and
+   the screen itself off the Items Panel of InventoryScreen and a 1080p
+   capture of 1.2. Positions inside #pane-stash are the screen's own pixels
+   less the 43 px of the tab bar above it.
+   ========================================================= */
+
+/* ---------------- the item tile ----------------
+   A panel of the template's colour under the render, a 1 px frame, the short
+   name in the top-right corner, and in the bottom-right what there is to
+   count with the found-in-raid tick over it. */
+.item { overflow: hidden; }
+.item__img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+/* an older picture has its panel, frame and name baked in: nothing is drawn over or under it */
+.item--flat { background: none !important; box-shadow: none; }
+.item--flat:hover { box-shadow: inset 0 0 0 1px #7b8588; }
+.item__cap {
+  position: absolute; right: 2px; top: 1px; max-width: calc(100% - 4px); overflow: hidden; white-space: nowrap;
+  font-size: 11px; line-height: 14px; color: #fff; text-align: right; pointer-events: none;
+  text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 1px #000;
+}
+.item__ins {
+  position: absolute; left: 3px; bottom: 2px; max-width: 60%; overflow: hidden; white-space: nowrap;
+  font-size: 11px; line-height: 13px; color: #fff; pointer-events: none; text-shadow: 0 0 2px #000, 0 0 2px #000;
+}
+.item__br {
+  position: absolute; right: 3px; bottom: 2px; display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+  pointer-events: none;
+}
+.item__fir { display: block; opacity: .7; }
+.item__val { font-size: 11px; line-height: 13px; color: #fff; white-space: nowrap; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 1px #000; }
+.item__val.is-dry { color: #c0c0c0; }
+.item__val.is-res { color: #e7a455; }
+.item__val.is-low { color: #e78d19; }
+.item__val.is-crit { color: #e02a2a; }
+.item--openable::after { display: none; }
+.item--incomplete { outline: 0; background-image: repeating-linear-gradient(135deg, rgba(255,0,0,.15) 0 6px, transparent 6px 12px); }
+.item.is-filtered { opacity: .22; }
+.item.is-dragging { opacity: .3; }
+
+/* the same item worn: the render scaled into the slot, the slot view's labels */
+.item--worn {
+  position: absolute; inset: 0; width: auto !important; height: auto !important; background: none !important; box-shadow: none;
+}
+.item--worn:hover { box-shadow: none; }
+.item--worn:hover::before { background: rgba(255,255,255,.06); }
+.item__wornimg { position: absolute; left: 4px; top: 4px; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: contain; pointer-events: none; }
+.has-cond .item__wornimg { width: calc(100% - 20px); }
+.item__wornname {
+  position: absolute; right: 2px; top: -1px; max-width: calc(100% - 4px); overflow: hidden; white-space: nowrap;
+  font-size: 11px; font-weight: 700; line-height: 14px; color: #b6c1c7; text-align: right; text-transform: uppercase; pointer-events: none;
+  text-shadow: 0 0 2px #000, 0 0 2px #000;
+}
+.has-cond .item__wornname, .has-cond .item__worninfo { right: 14px; }
+.item__worninfo {
+  position: absolute; right: 2px; top: 12px; font-size: 11px; line-height: 14px; color: #747b7e; text-align: right; white-space: nowrap; pointer-events: none;
+}
+.item--worn .item__br { right: 3px; bottom: 2px; }
+.has-cond .item__br { right: 15px; }
+.item__val--big { color: #c5c3b2; }
+.item__val--big b { font-size: 30px; font-weight: 400; line-height: 26px; color: #dadabc; }
+.item__val--big.is-dry b { color: #c0392b; }
+/* a gun's condition: a bar down the right edge, light for what is left, red for what repairs have cost it */
+.item__cond { position: absolute; right: 3px; top: 26px; bottom: 5px; width: 3px; background: rgba(0,0,0,.6); pointer-events: none; }
+.item__condnow { position: absolute; left: 0; right: 0; bottom: 0; background: #d5d9d6; }
+.item__cond.is-low .item__condnow { background: #e78d19; }
+.item__condlost { position: absolute; left: 0; right: 0; top: 0; background: #c15757; }
+
+/* ---------------- a slot ----------------
+   The header sits over the box's top edge, three pixels wider each side; the
+   box is hatched with the outline of what belongs there while it is empty. */
+.gslotcell { position: relative; flex: none; padding-top: 22px; }
+.gslotcell--bare { padding-top: 0; }
+.gslot__head {
+  position: absolute; left: -3px; top: 0; width: calc(100% + 6px); height: 20px; padding: 0 0 0 5px; border: 0; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: space-between; text-align: left;
+  background:
+    var(--ui-slot_selectedbutton_background_short_idle_0) 0 0 / 2px 20px no-repeat,
+    var(--ui-slot_selectedbutton_background_short_idle_1) 100% 0 / 2px 20px no-repeat,
+    var(--ui-slot_selectedbutton_background_short_idle_2) 2px 0 / 16px 20px repeat-x;
+  background-color: #17191b; color: #d1dbe0; font-family: var(--font-ui);
+}
+.gslot__head:hover:not(:disabled) {
+  background-image:
+    var(--ui-slot_selectedbutton_background_short_hover_0),
+    var(--ui-slot_selectedbutton_background_short_hover_1),
+    var(--ui-slot_selectedbutton_background_short_hover_2);
+}
+.gslot__head:disabled, .gslot__head[aria-disabled] { cursor: default; }
+.gslot__head--plain { position: relative; left: -3px; width: 131px; margin-bottom: 2px; }
+.gslot__name { font-size: 14px; font-weight: 700; line-height: 20px; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+.gslot__arrow { width: 20px; height: 20px; flex: none; display: grid; place-items: center; }
+.gslot__arrowhot, .gslot__head:hover:not(:disabled) .gslot__arrowidle { display: none; }
+.gslot__head:hover:not(:disabled) .gslot__arrowhot { display: block; }
+.gslot__head:disabled .gslot__arrow { opacity: .45; }
+
+.gslot {
+  position: relative; box-sizing: border-box; overflow: hidden;
+  background: rgba(0,0,0,.4) var(--ui-slot_empty_fill) 0 0 / 64px 64px repeat;
+  box-shadow: 0 0 0 1px rgba(58,58,58,.61), 0 0 22px rgba(0,0,0,.35);
+}
+.gslot.is-full {
+  background: rgba(28,28,28,.75) var(--ui-background_weapon_pattern) center / 100% 100% no-repeat;
+  box-shadow: 0 0 0 1px #495154, 0 0 22px rgba(0,0,0,.35);
+}
+.gslot__ghost { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 100%; max-height: 100%; opacity: .5; pointer-events: none; }
+.gslot.is-ok { box-shadow: 0 0 0 1px #9fd36a, inset 0 0 26px rgba(120,200,80,.28); }
+.gslot.is-bad { box-shadow: 0 0 0 1px #c0392b, inset 0 0 26px rgba(192,57,43,.3); }
+/* the dogtag: issued, not worn */
+.gslot.is-fixed { cursor: default; }
+.gslot__tagimg { position: absolute; left: 50%; top: 50%; height: 60px; transform: translate(-50%, -50%); opacity: .85; pointer-events: none; }
+.gslot__tagname { position: absolute; right: 3px; top: 0; font-size: 11px; font-weight: 700; color: #b6c1c7; text-shadow: 0 0 2px #000; }
+
+/* ---------------- the GEAR tab ---------------- */
+#pane-stash { padding: 0 !important; }
+.gear { position: absolute; inset: 0; }
+.gear__left { position: absolute; left: 11.6px; top: 5px; width: 1213.3px; height: 902px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.gear__figure { position: absolute; left: 0; top: 0; width: 601.7px; height: 902px; background: rgba(0,0,0,.5); overflow: hidden; }
+.gdoll { position: absolute; left: 54.4px; top: 96px; width: 494px; height: 650px; }
+.gdoll__figure { position: absolute; left: -70px; top: -49px; width: 512px; height: 768px; opacity: .55; pointer-events: none; }
+
+/* what is carried: one scrolling column, a container a row with its grids to the right */
+.gear__cont { position: absolute; left: 606.7px; top: 0; width: 606.6px; height: 902px; background: rgba(0,0,0,.5); overflow-x: hidden; overflow-y: auto; box-sizing: border-box; padding: 98px 0 60px 38.7px; display: flex; flex-direction: column; gap: 23px; }
+.gcont { display: flex; align-items: flex-start; gap: 7px; flex: none; }
+/* the pockets' row is two cells tall: the camera under the special slots hangs into the gap below it */
+.gcont--pockets { gap: 18px; height: 150px; }
+.cgrids { display: flex; flex-wrap: wrap; gap: 5px; align-content: flex-start; max-width: 420px; margin-top: 22px; }
+.cgrids--placed { position: relative; display: block; flex: none; max-width: none; }
+.cgrids .grid { box-shadow: 0 0 6px rgba(0,0,0,.6); }
+.gpockets, .gspecial { flex: none; }
+.gpockets__row { display: flex; gap: 5px; }
+.gspecial__row { display: flex; gap: 10px; }
+.gspecial .gslot__ghost { left: 2px; top: auto; bottom: 3px; transform: none; opacity: .8; }
+.gspecial__cam {
+  position: relative; width: 64px; height: 64px; margin-top: 10px; box-sizing: border-box;
+  background: rgba(255,255,255,.07); box-shadow: 0 0 0 1px rgba(62,65,66,.8);
+}
+.gspecial__camimg { position: absolute; left: 2px; top: 2px; opacity: .6; }
+.gspecial__camname { position: absolute; right: 2px; top: 0; font-size: 11px; color: rgba(182,193,199,.64); }
+.gspecial__cammark { position: absolute; left: 2px; bottom: 2px; }
+.gspecial__camlock { position: absolute; right: 0; bottom: 0; opacity: .3; }
+
+/* along the bottom of the figure's sheet: weight, health, water, energy */
+.gparams { position: absolute; left: 0; top: 797px; width: 601.7px; height: 105px; background: var(--ui-bottom_bar_tile) 0 0 / 128px 105px repeat-x; display: flex; padding: 37.6px 0 0 8.9px; box-sizing: border-box; pointer-events: none; }
+.gparam { position: relative; width: 138.1px; height: 46.8px; flex: none; }
+.gparam__ico { position: absolute; left: 13.5px; top: 7.4px; }
+.gparam__cur { position: absolute; right: 50.1px; top: 0; font-size: 30px; line-height: 46.8px; white-space: nowrap; }
+.gparam__side { position: absolute; left: 88px; top: 2px; display: flex; flex-direction: column; font-size: 14px; line-height: 18px; white-space: nowrap; }
+.gparam__max { color: #969a9b; order: 2; }
+.gparam__unit { color: #747b7e; order: 1; }
+.gparam__buff { order: 1; display: flex; align-items: center; gap: 1px; color: #5caed7; }
+.gparam__side > :only-child { margin-top: 18px; }
+.gparam--weight .gparam__cur { right: 28.1px; color: #a4c5a9; }
+.gparam--weight .gparam__side { left: 110px; }
+.gparam--weight .gparam__max { color: #747b7e; }
+.gparam--health .gparam__cur { color: #9ad323; }
+.gparam--water .gparam__cur { color: #5caed7; }
+.gparam--water .gparam__max { color: #747b7e; }
+.gparam--energy .gparam__cur { color: #dadabc; }
+.gparam--energy .gparam__max { color: #a6b0b5; }
+.gparam.is-low .gparam__cur { color: #e78d19; }
+.gparam.is-crit .gparam__cur { color: #e02a2a; }
+
+/* ---------------- QUICK USE ---------------- */
+.gquick { position: absolute; left: 558.5px; top: 892px; width: 854.2px; height: 115px; }
+.gquick__head {
+  position: absolute; left: 0; top: 3.6px; height: 17.4px; min-width: 100px; padding: 0 20px 0 8px; box-sizing: border-box;
+  display: flex; align-items: center; isolation: isolate;
+  color: #c7d3d9; font-size: 14px; font-weight: 700; white-space: nowrap;
+}
+.gquick__head::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  border-style: solid; border-width: 0 20px 0 22px; border-image: var(--ui-item_header_flexible) 0 20 0 22 fill stretch;
+}
+.gquick__row { position: absolute; left: 0; top: 26px; display: flex; gap: 6px; }
+.gquick__slot {
+  position: relative; width: 64px; height: 64px; flex: none; box-sizing: border-box;
+  background: rgba(0,0,0,.45) var(--ui-slot_empty_fill) 0 0 / 64px 64px; box-shadow: inset 0 0 0 1px rgba(73,81,84,.8);
+}
+.gquick__slot--gap { margin-left: 4px; }
+.gquick__key {
+  position: absolute; left: 0; top: 0; z-index: 4; min-width: 25px; height: 22px; padding: 0 8px 0 5px; box-sizing: border-box; isolation: isolate;
+  color: #323232; font-size: 14px; line-height: 22px; text-align: center; pointer-events: none;
+}
+.gquick__key::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  border-style: solid; border-width: 0 10px 0 10px; border-image: var(--ui-bind_label) 0 10 0 10 fill stretch;
+}
+.gquick__name { position: absolute; left: -3px; right: -3px; top: 66px; font-size: 11px; line-height: 12px; color: #b6c1c7; text-align: center; white-space: nowrap; overflow: hidden; text-transform: uppercase; }
+.item--quick .item__wornname, .item--quick .item__worninfo, .item--quick .item__br, .item--quick .item__cond { display: none; }
+.item--quick .item__wornimg { width: calc(100% - 8px); }
+
+/* ---------------- the stash ---------------- */
+.gstash { position: absolute; left: 0; top: 0; width: 1920px; height: 0; }
+.gstash__top { position: absolute; left: 1265px; top: 14px; display: flex; gap: 5px; height: 20px; }
+/* the client's toggle: a small dark plate that turns light when it is on */
+.tbtn {
+  position: relative; min-width: 120px; height: 20px; padding: 0 4px; border: 0; display: flex; align-items: center; gap: 2px; isolation: isolate;
+  background: none; color: #b4b49a; font-family: var(--font-ui); font-size: 12px; text-transform: uppercase; white-space: nowrap;
+}
+.tbtn::before {
+  content: ""; position: absolute; inset: -4px; z-index: -1;
+  border-style: solid; border-width: 9px 7px; border-image: var(--ui-togglebutton_normal_background) 9 7 9 7 fill stretch;
+}
+.tbtn:hover:not(:disabled)::before { border-image-source: var(--ui-togglebutton_normal_hover); }
+.tbtn.is-on { color: #000; }
+.tbtn.is-on::before { border-image-source: var(--ui-togglebutton_selected_background); }
+.tbtn:disabled { color: rgba(206,203,181,.25); cursor: default; }
+.tbtn:disabled .tbtn__ico { opacity: .3; }
+.tbtn__ico--on, .tbtn.is-on .tbtn__ico--off { display: none; }
+.tbtn.is-on .tbtn__ico--on { display: block; }
+.gstash__find {
+  width: 216px; height: 20px; box-sizing: border-box; padding: 0 6px; border: 1px solid #5c6061; outline: none;
+  background: rgba(0,0,0,.8); color: #c5c3b2; font-family: var(--font-ui); font-size: 13px;
+}
+.gstash__money { position: absolute; right: 13px; top: 7px; height: 20px; display: flex; gap: 15px; }
+.gmoney { display: flex; align-items: center; gap: 3px; font-size: 18px; line-height: 20px; color: #b6c1c7; white-space: nowrap; }
+.gmoney--rub { color: #c5c3b2; font-weight: 700; }
+.gstash__kinds { left: 1229px; top: 36px; flex-direction: column; }
+.gstash__tools { position: absolute; left: 1229px; top: 807px; display: flex; flex-direction: column; gap: 2px; }
+.gtool { width: 32px; height: 32px; padding: 0; border: 0; background: none; display: grid; place-items: center; }
+.gtool img { opacity: .69; }
+.gtool:hover:not(:disabled) { background: var(--ui-button_itemtype_over) center / 32px 30px no-repeat; }
+.gtool:hover:not(:disabled) img { opacity: 1; }
+.gtool:disabled { cursor: default; }
+.gtool:disabled img { opacity: .2; }
+.gstash__grid {
+  position: absolute; left: 1265px; top: 36px; width: 642px; height: 869px; box-sizing: border-box;
+  background: rgba(0,0,0,.5); overflow-x: hidden; overflow-y: scroll; box-shadow: 0 0 0 1px rgba(255,255,255,.08), 0 0 8px rgba(0,0,0,.6);
+}
+.gstash__grid .grid { border: 0; }
+
+/* ---------------- the item's name by the pointer ---------------- */
+.tooltip.itip {
+  width: auto; max-width: 420px; padding: 2px 6px 5px; border: 0; border-radius: 0; z-index: 990;
+  background: #000; box-shadow: inset 0 0 0 1px #52595a, 0 0 6px rgba(0,0,0,.8);
+  color: #a6b0b5; font-size: 14px; line-height: 15.4px; white-space: nowrap; pointer-events: none;
+}
+
+/* ---------------- the right-click menu ----------------
+   Rows 18 px tall two apart on a dark plate; the row under the pointer dark
+   red, the wishlist's teal, DISCARD red under a rule. */
+.ctx {
+  position: fixed; z-index: 995; min-width: 0; padding: 5px; border: 0; border-radius: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  background: rgba(0,0,0,.79); box-shadow: 0 0 22px rgba(0,0,0,.6);
+}
+.ctx[hidden] { display: none; }
+.ctx__row {
+  position: relative; min-width: 150px; height: 18px; padding: 0 5px 0 12px; border: 0; flex: none;
+  display: flex; align-items: center; gap: 13px; text-align: left;
+  background: #2b2d2e var(--ui-subbutton) center / 100% 100% no-repeat; background-blend-mode: multiply;
+  color: #fff; font-family: var(--font-ui); font-size: 11px; line-height: 18px; text-transform: uppercase; white-space: nowrap;
+}
+.ctx__ico { width: 18px; height: 18px; flex: none; display: grid; place-items: center; }
+.ctx__ico img { display: block; }
+.ctx__label { flex: 1; }
+.ctx__arrow { flex: none; margin-left: 8px; }
+.ctx__row:hover:not(:disabled) { background-color: #3a0405; }
+.ctx__row:disabled { color: rgba(255,255,255,.35); cursor: default; }
+.ctx__row:disabled .ctx__ico { opacity: .35; }
+.ctx__row--wish { background-color: #113342; }
+.ctx__row--wish:hover:not(:disabled) { background-color: #1b4a5e; }
+.ctx__row--discard, .ctx__row--unwish { background-color: #480d0d; }
+.ctx__row--discard:hover:not(:disabled), .ctx__row--unwish:hover:not(:disabled) { background-color: #6a1414; }
+.ctx__rule { display: block; height: 2px; margin: 2px 0; background: var(--ui-tooltip_separator) center / 100% 1px no-repeat; flex: none; }
+.ctx--sub .ctx__row { min-width: 178px; }
+
+/* ---------------- windows ----------------
+   Black, a thin frame and a soft shadow; a caption bar 20 px tall with a
+   glyph and the name on it, and the box at its end that shuts it. */
+.cwin {
+  min-width: 128px; max-width: none; max-height: none; border: 0; border-radius: 0;
+  background: #000; box-shadow: 0 0 0 1px #585d60, 0 0 0 2px #000, 0 0 26px rgba(0,0,0,.75);
+}
+.cwin.is-flash { animation: ewin-flash .5s ease-out; }
+@keyframes ewin-flash { 35% { box-shadow: 0 0 0 1px #d9d5bb, 0 0 0 2px #000, 0 0 26px rgba(0,0,0,.75); } }
+.cwin__head {
+  position: relative; height: 20px; margin: 2px 2px 0; padding: 0 29px 0 2px; gap: 3px; border: 0; flex: none;
+  background: rgba(84,88,91,.3); cursor: var(--ui-cursor_idle) 0 0, grab;
+}
+.cwin__ico { flex: none; opacity: .9; }
+.cwin__title { flex: 1; min-width: 30px; overflow: hidden; text-overflow: ellipsis; color: #fff; font-size: 14px; letter-spacing: 0; line-height: 20px; }
+.cwin__tool { width: 27px; height: 17px; padding: 0; border: 0; flex: none; display: grid; place-items: center; background: var(--ui-button_itemtype_idle) center / 100% 100% no-repeat; }
+.cwin__tool:hover { background-image: var(--ui-button_itemtype_over); }
+.wclose, .cwin__close {
+  position: absolute; right: 1px; top: 1.5px; width: 27px; height: 17px; padding: 0; border: 0; border-radius: 0;
+  display: grid; place-items: center; background: #6a1111 var(--ui-close_button) center / 100% 100% no-repeat;
+}
+.wclose:hover, .cwin__close:hover { filter: brightness(1.35); background-color: #8a1616; }
+.cwin__close .ico { display: none; }
+.cwin__close::after { content: ""; width: 9px; height: 11px; background: var(--ui-close_window_x) center / 100% 100% no-repeat; }
+.cwin__body { padding: 4px 4px 4px 5px; gap: 5px; overflow: visible; }
+.cwin--grid .cgrids { margin-top: 0; max-width: 640px; }
+
+/* the same frame for the windows that stop the screen */
+.modal-root { background: rgba(0,0,0,.6); }
+.modal { position: relative; padding: 0; border: 0; border-radius: 0; background: #000; box-shadow: 0 0 0 1px #585d60, 0 0 0 2px #000, 0 0 30px rgba(0,0,0,.8); }
+.modal__head {
+  position: relative; height: 20px; min-height: 0; margin: 2px 2px 0; padding: 0 30px 0 5px; display: flex; align-items: center;
+  background: rgba(84,88,91,.3); border: 0; color: #fff; font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: uppercase;
+}
+.modal__body { padding: 12px 14px; }
+.modal__foot { padding: 0 14px 12px; }
+/* a button inside a window: a low dark plate */
+.wbtn {
+  min-width: 133px; height: 18px; padding: 0 10px; border: 0;
+  background: #3a3d3f var(--ui-subbutton) center / 100% 100% no-repeat; background-blend-mode: multiply;
+  color: #fff; font-family: var(--font-ui); font-size: 11px; text-transform: uppercase;
+}
+.wbtn:hover:not(:disabled) { background-color: #c5c3b2; color: #000; }
+.wbtn:disabled { color: rgba(255,255,255,.3); cursor: default; }
+
+/* the question: text in the middle, YES and NO under it */
+.msgwin { width: 456px; }
+.msgwin__text { padding: 21px 32px 0; min-height: 60px; color: #c5c3b2; font-size: 18px; line-height: 1.25; text-align: center; white-space: pre-line; }
+.msgwin__btns { display: flex; justify-content: center; gap: 40px; padding: 22px 32px 22px; }
+.msgwin__btn { min-width: 150px; height: 42.4px; }
+
+/* SPLIT: the slider, the count, ACCEPT */
+.splitwin { width: 418px; height: 200px; }
+.splitwin__panel { position: absolute; left: 10px; top: 75px; width: 398px; height: 50px; background: rgba(77,67,67,.39); }
+.splitwin__track { position: absolute; left: 20px; top: 8px; width: 300px; height: 20px; touch-action: none; }
+.splitwin__track i { position: absolute; left: 0; right: 0; top: 12px; height: 3px; background: rgba(84,88,91,.4); }
+.splitwin__handle { position: absolute; top: 20px; width: 18px; height: 18px; margin-left: -9px; display: grid; place-items: center; background: #24282a var(--ui-scroller_main_button_idle) center / 100% 100% no-repeat; pointer-events: none; }
+.splitwin__val { position: absolute; left: 336px; top: 8px; width: 56px; height: 24px; box-sizing: border-box; padding: 0; border: 0; outline: none; background: #000; color: #c3c5b2; font-family: var(--font-ui); font-size: 16.7px; text-align: center; }
+.splitwin__ok { position: absolute; right: 20px; bottom: 20px; }
+
+/* ---------------- an item's own window ---------------- */
+.cwin--info { width: 749px; }
+.cwin--info .cwin__body { display: block; padding: 0 2px 0; }
+.iw__preview {
+  position: relative; height: 300px; overflow: hidden;
+  background: #060807 repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 10px, transparent 10px 20px);
+}
+.iw__stage { position: absolute; inset: 22px 20px 14px; display: grid; place-items: center; }
+.iw__img { max-width: 100%; max-height: 100%; min-height: 96px; object-fit: contain; image-rendering: auto; }
+.iw__corner { position: absolute; pointer-events: none; opacity: .8; }
+.iw__corner--bl { left: 2px; bottom: 2px; }
+.iw__corner--tr { right: 0; top: 2px; }
+.iw__type { position: absolute; left: 10px; top: 5px; color: #767d80; font-size: 11px; line-height: 15px; text-transform: uppercase; }
+.iw__mass { position: absolute; right: 8px; top: 3px; display: flex; align-items: center; gap: 4px; color: #c8cdcf; font-size: 14px; font-weight: 700; }
+.iw__marks { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 4px; }
+.iw__actionsband { margin-top: 3px; padding: 10px; background: rgba(84,88,91,.3); }
+.iw__actions { display: grid; grid-template-columns: repeat(4, 175px); gap: 5px; justify-content: center; }
+.iw__actions .ctx__row { min-width: 0; width: 175px; }
+.iw__details { padding: 10px 18px 23px 17px; }
+.iw__bar { position: relative; height: 23px; margin-bottom: 4px; padding: 0 8px; display: flex; align-items: center; gap: 8px; background: #1e201d; isolation: isolate; overflow: hidden; }
+.iw__barfill { position: absolute; left: 0; top: 0; bottom: 0; z-index: -1; background: rgba(160,168,160,.3); }
+.iw__barlost { position: absolute; right: 0; top: 0; bottom: 0; z-index: -1; background: repeating-linear-gradient(135deg, rgba(193,87,87,.5) 0 4px, transparent 4px 8px); }
+.iw__rows { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px; }
+.iw__row { height: 23px; padding: 0 8px; display: flex; align-items: center; gap: 10px; background: #1e201d; min-width: 0; }
+.iw__k { color: #c5c3b2; font-size: 13px; text-transform: uppercase; white-space: nowrap; }
+.iw__v { margin-left: auto; color: #e7e5d4; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.iw__desc { margin-top: 10px; color: #d6dbd6; font-size: 14px; line-height: 1.35; white-space: pre-line; }
+
+/* ---------------- HEALTH: the body on the figure's sheet ----------------
+   The same screen as GEAR; only what the left sheet holds changes. */
+.ghealth { position: absolute; inset: 0; display: none; padding: 8px 14px 0; box-sizing: border-box; overflow: hidden; }
+.gear[data-mode="health"] .ghealth { display: block; }
+.gear[data-mode="health"] .gdoll, .gear[data-mode="health"] .gparams { display: none; }
+.ghealth .hb { max-width: none; height: 100%; gap: 6px; }
+.ghealth .hb__stage { flex: 1; min-height: 0; }

@@ -1,13 +1,16 @@
 // =========================================================
 // hover tooltip for item tiles
+//
+// The client's ItemTooltip: the item's full name on a small black plate by
+// the pointer and nothing else - what the item weighs and does is on its own
+// window (INSPECT), not on a card that follows the cursor.
 // =========================================================
 
 import { toStage, stageW, stageH } from '../core/stage.js';
-import { $, el, icon, fmtNum, fmtWeight } from '../core/util.js';
-import { catLabel } from './view.js';
+import { $ } from '../core/util.js';
 import { isKnown } from './examine.js';
-import { statRows } from './statrows.js';
 import { on, EV } from '../core/events.js';
+import { tOr } from '../core/i18n.js';
 
 let node = null;
 let hoverItem = null;
@@ -17,6 +20,7 @@ let lastX = 0, lastY = 0;
 
 export function initTooltip() {
   node = $('#tooltip');
+  node.classList.add('itip');
   document.addEventListener('pointerover', onOver, true);
   document.addEventListener('pointerout', onOut, true);
   document.addEventListener('pointermove', onMove, true);
@@ -31,7 +35,9 @@ function onOver(e) {
   if (document.body.classList.contains('is-dragging')) return;
   hoverItem = tile._item;
   hoverNode = tile;
-  show(hoverItem);
+  node.textContent = isKnown(hoverItem) ? hoverItem.tpl.name : tOr('Item is not examined', 'Unknown item');
+  node.hidden = false;
+  place();
 }
 
 function onOut(e) {
@@ -53,15 +59,15 @@ function onMove(e) {
 
 function place() {
   raf = 0;
-  // the pointer is in window pixels, the card is placed on the stage
+  // the pointer is in window pixels, the plate is placed on the stage
   const w = node.offsetWidth, h = node.offsetHeight;
   const px = toStage(lastX), py = toStage(lastY);
-  let x = px + 16;
-  let y = py + 16;
-  if (x + w > stageW() - 8) x = px - w - 14;
-  if (y + h > stageH() - 8) y = Math.max(8, stageH() - h - 8);
-  node.style.left = `${Math.max(8, x)}px`;
-  node.style.top = `${y}px`;
+  let x = px + 14;
+  let y = py + 18;
+  if (x + w > stageW() - 6) x = px - w - 10;
+  if (y + h > stageH() - 6) y = py - h - 10;
+  node.style.left = `${Math.max(6, x)}px`;
+  node.style.top = `${Math.max(6, y)}px`;
 }
 
 export function hide() {
@@ -70,72 +76,7 @@ export function hide() {
   if (node) node.hidden = true;
 }
 
-function row(dl, k, v) {
-  dl.append(el('dt', {}, k), el('dd', {}, v));
-}
-
-function show(item) {
-  const tpl = item.tpl;
-  node.replaceChildren();
-
-  if (!isKnown(item)) {
-    node.append(
-      el('div', { class: 'tooltip__head' },
-        el('div', { class: 'tooltip__name' }, 'Unknown item'),
-        el('div', { class: 'tooltip__short' }, 'NOT EXAMINED')),
-      el('div', { class: 'tooltip__body' },
-        el('div', { class: 'tooltip__desc' }, 'Examine this item to reveal its name, stats and value — right-click it, or double-click.')));
-    node.hidden = false;
-    place();
-    return;
-  }
-
-  const head = el('div', { class: 'tooltip__head' },
-    el('div', { class: 'tooltip__name' }, tpl.name),
-    el('div', { class: 'tooltip__short' }, `${catLabel(tpl.cat)} · ${item.fw}x${item.fh}`));
-  node.append(head);
-
-  const body = el('div', { class: 'tooltip__body' });
-  if (tpl.desc) body.append(el('div', { class: 'tooltip__desc' }, tpl.desc));
-
-  const dl = el('dl', { class: 'tooltip__rows' });
-  row(dl, 'WEIGHT', `${fmtWeight(item.weight)} kg`);
-  if (item.stack > 1) row(dl, 'COUNT', fmtNum(item.stack));
-  if (tpl.res && item.res != null) row(dl, 'RESOURCE', `${Math.round(item.res)} / ${tpl.res.max}`);
-  if (tpl.dura != null && item.dura != null) row(dl, 'DURABILITY', `${Math.round(item.dura)} / ${tpl.dura}`);
-  if (tpl.armorClass) row(dl, 'ARMOR CLASS', String(tpl.armorClass));
-  if (tpl.armorMat) row(dl, 'MATERIAL', tpl.armorMat);
-  medRows(tpl, (k, v) => row(dl, k, v));
-  // guns, parts, magazines and cartridges have their own rows
-  if (!statRows(item, (k, v) => row(dl, k, v))) {
-    if (tpl.dmg) row(dl, 'DAMAGE', String(tpl.dmg));
-    if (tpl.pen) row(dl, 'PENETRATION', String(tpl.pen));
-    if (tpl.ergo) row(dl, 'ERGONOMICS', String(tpl.ergo));
-    if (tpl.rpm) row(dl, 'FIRE RATE', `${tpl.rpm} rpm`);
-    if (tpl.cal) row(dl, 'CALIBER', tpl.cal);
-  }
-  if (tpl.uses) row(dl, 'USES LEFT', `${item.res ?? tpl.uses} / ${tpl.uses}`);
-  if (tpl.speedPen) row(dl, 'SPEED', `${tpl.speedPen}%`);
-  if (item.isContainer) {
-    const cells = item.grids.reduce((n, g) => n + g.capacity, 0);
-    const used = item.grids.reduce((n, g) => n + g.usedCells(), 0);
-    row(dl, 'CAPACITY', `${used} / ${cells} cells`);
-  }
-  body.append(dl);
-  node.append(body);
-
-  const foot = el('div', { class: 'tooltip__foot' });
-  foot.append(item.fir
-    ? el('span', { class: 'tooltip__fir' }, icon('check', 'ico ico--sm'), 'FOUND IN RAID')
-    : el('span', {}, ''));
-  foot.append(el('span', { class: 'tooltip__value' }, `${fmtNum(item.value)} ₽`));
-  node.append(foot);
-
-  node.hidden = false;
-  place();
-}
-
-/** what a med or a ration does, as the item card lists it */
+/** what a med or a ration does, as the item's window lists it */
 export function medRows(tpl, row) {
   const m = tpl.med;
   if (!m) return false;

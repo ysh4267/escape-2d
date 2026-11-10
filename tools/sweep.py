@@ -27,16 +27,20 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # (name, script). A script runs in the page; `E` is window.ESCAPE2D, `click`
 # presses the first element matching a selector (and throws if there is none),
-# `sleep` waits. Steps run in order on one page, so each starts where the
-# last one left the game.
+# `seen` throws unless something matching a selector is actually on screen -
+# a screen can fail by showing nothing without ever throwing - and `sleep`
+# waits. Steps run in order on one page, so each starts where the last one
+# left the game.
 STEPS: list[tuple[str, str]] = [
     ("menu", "E.showScreen('menu')"),
     ("character", "E.showScreen('character')"),
+    ("gear", "E.openCharacter('gear'); await sleep(400); seen('#stash-host .item'); seen('#equipment-host .gslot'); seen('#carry-host .gcont')"),
+    ("health", "E.openCharacter('health'); await sleep(400); seen('#health-panel-host .hb'); seen('#stash-host .item')"),
     ("character tabs", """
         for (const b of document.querySelectorAll('#screen-character .ptab:not(:disabled)')) { b.click(); await sleep(350); }
     """),
     ("traders", "E.showScreen('traders')"),
-    ("trader", "click('#screen-traders .tcard:not(.is-locked)'); await sleep(500)"),
+    ("trader", "click('#screen-traders .tcard:not(.is-locked)'); await sleep(500); seen('#trader-content .item'); seen('#trade-stash-host .grid')"),
     ("trader sell", "click('#screen-trader .dtab--sell'); await sleep(300)"),
     ("trader tabs", """
         for (const b of document.querySelectorAll('#screen-trader .trbar .ptab:not(:disabled)')) { b.click(); await sleep(400); }
@@ -46,7 +50,7 @@ STEPS: list[tuple[str, str]] = [
     ("handbook", "E.showScreen('handbook')"),
     ("hideout", "E.showScreen('hideout')"),
     ("messenger", "E.openMessenger(); await sleep(400); E.openMessenger && document.querySelector('#bottombar .bbtn[data-key=messenger]').click()"),
-    ("settings", "E.showScreen('settings')"),
+    ("settings", "E.showScreen('settings'); await sleep(200); seen('#screen-settings .set__pane')"),
     ("settings tabs", """
         for (const b of [...document.querySelectorAll('#screen-settings .set__tabs .set__tab:not(:disabled)')]) {
           const again = [...document.querySelectorAll('#screen-settings .set__tabs .set__tab')].find((x) => x.textContent === b.textContent);
@@ -61,6 +65,10 @@ HELPERS = """
 const E = window.ESCAPE2D;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const click = (sel) => { const n = document.querySelector(sel); if (!n) throw new Error('nothing matches ' + sel); n.click(); };
+const seen = (sel) => {
+  const n = [...document.querySelectorAll(sel)].find((x) => { const r = x.getBoundingClientRect(); return r.width > 1 && r.height > 1; });
+  if (!n) throw new Error('nothing on screen matches ' + sel);
+};
 """
 
 

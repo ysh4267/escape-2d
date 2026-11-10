@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="styles/eft.css">
 <link rel="stylesheet" href="styles/eft-menu.css">
 <link rel="stylesheet" href="styles/eft-character.css">
+<link rel="stylesheet" href="styles/eft-inventory.css">
 <link rel="stylesheet" href="styles/eft-traders.css">
 <link rel="stylesheet" href="styles/eft-misc.css">
 <link rel="stylesheet" href="styles/eft-settings.css">
@@ -144,54 +145,17 @@
   </section>
 
   <!-- ===================== CHARACTER ===================== -->
-  <!-- OVERALL / GEAR / HEALTH / SKILLS / MAP / TASKS / ACHIEVEMENTS, as the
-       game's character screen has them. GEAR is the stash screen. -->
+  <!-- OVERALL / GEAR / HEALTH / CUSTOMIZATION / SKILLS / MAP / TASKS /
+       ACHIEVEMENTS / PRESTIGE, as the game's character screen has them. -->
   <section class="screen" id="screen-character">
     <nav class="chartabs" id="char-tabs"></nav>
 
     <div class="char-body">
       <div class="pane" id="pane-overall"><div class="overall" id="overall-host"></div></div>
 
-      <!-- ---- GEAR ---- -->
-      <div class="pane is-active" id="pane-stash">
-        <div class="pane-grid pane-grid--stash">
-          <div class="panel" id="panel-equipment">
-            <div class="panel__body panel__body--scroll" id="equipment-host"></div>
-            <div class="gear-foot">
-              <div class="gear-foot__stat" title="Carried weight"><svg class="ico"><use href="#i-weight"/></svg><span id="equip-weight">0.00</span><em>KG</em></div>
-            </div>
-          </div>
-          <div class="panel" id="panel-carry">
-            <div class="panel__body panel__body--scroll" id="carry-host"></div>
-          </div>
-          <div class="panel" id="panel-stash">
-            <div class="panel__head stash-head">
-              <div class="stash-money" id="stash-money"></div>
-              <div class="panel__tools">
-                <div class="field field--search">
-                  <svg class="ico"><use href="#i-search"/></svg>
-                  <input type="text" id="stash-search" placeholder="" autocomplete="off" spellcheck="false">
-                </div>
-                <button class="btn btn--sm" id="btn-unload-gear" title="Empty your rig, pockets, backpack and pouch into the stash">UNLOAD</button>
-                <button class="btn btn--sm" id="btn-sort-stash" title="Sort the stash">SORT</button>
-              </div>
-            </div>
-            <div class="panel__body panel__body--scroll" id="stash-host"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ---- HEALTH ---- -->
-      <div class="pane" id="pane-health">
-        <div class="pane-grid pane-grid--health">
-          <div class="panel" id="panel-health">
-            <div class="panel__body panel__body--scroll" id="health-panel-host"></div>
-          </div>
-          <div class="panel" id="panel-health-stash">
-            <div class="panel__body panel__body--scroll" id="health-stash-host"></div>
-          </div>
-        </div>
-      </div>
+      <!-- ---- GEAR and HEALTH: the slots or the body, what is carried and the stash;
+           src/ui/stash.js builds it and HEALTH swaps the figure's sheet ---- -->
+      <div class="pane is-active" id="pane-stash"></div>
 
       <div class="pane" id="pane-skills"><div class="skills" id="skills-host"></div></div>
       <div class="pane" id="pane-map"><div class="charmap" id="charmap-host"></div></div>
@@ -369,6 +333,8 @@
 </div>
 
 <!-- floating layers -->
+<!-- container and item windows live on the stage, so they scale with it and sit under what is carried -->
+<div id="container-windows" class="cwin-layer"></div>
 <div id="drag-layer" class="drag-layer"></div>
 <div id="tooltip" class="tooltip" hidden></div>
 <div id="context-menu" class="ctx" hidden></div>

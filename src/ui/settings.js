@@ -204,7 +204,6 @@ function gamePane() {
     const ok = await confirmDialog({
       title: t('Ui/Settings/ClearAllWishlistMessage1'),
       body: t('Ui/Settings/ClearAllWishlistMessage2'),
-      confirmLabel: t('Yes'),
     });
     if (!ok) return;
     clearWishlist();
@@ -259,7 +258,7 @@ function credits() {
       '비상업적 팬 프로젝트입니다. Escape From Tarkov는 Battlestate Games의 상표입니다. '
       + '지도 형상: the-hideout/tarkov-dev-svg-maps (CC BY-NC-SA 4.0), 아이템 그림: assets.tarkov.dev, '
       + '아이템 템플릿과 가격: SPT 데이터베이스 덤프.'),
-    confirmLabel: 'OK',
+    single: true,
   });
 }
 

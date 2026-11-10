@@ -41,17 +41,21 @@ Container, before compression (same as the sound pack):
 
 sealed as  magic "E2UI01" | salt (16) | iv (12) | ciphertext || tag (16).
 
+The salt and the iv are cut from a hash of what is being sealed, so a pack
+whose contents did not change comes out byte for byte the same and is not a
+change to commit; two different packs still never share an iv.
+
     python -m pip install cryptography pillow
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import os
 import re
-import secrets
 import struct
 import sys
 import zlib
@@ -68,6 +72,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 SOURCE = HERE / "cache" / "client"
 EXPORT = SOURCE / "export"
+ENCODED = HERE / "cache" / "ui-encoded"
 OUT = ROOT / "assets" / "ui-eft"
 
 MAGIC = b"E2UI01"
@@ -78,6 +83,7 @@ ROUNDS = 200_000
 # ---------------------------------------------------------------------------
 ALWAYS = """
 lvl ll check checkbox checkmark condition exp levelling shade button background
+keys camera setlock mass
 """.split()
 
 # sprites that share a name with another one: say which export is meant
@@ -92,6 +98,8 @@ CORE_FOLDERS = [
     ("d_player/item_markers", None),
     ("e_raid/status_effects", None),
     ("f_uikit/icons_item_types", None),
+    # the glyph of every action in an item's menu, and of every row of its details
+    ("f_uikit/icons_characteristics", None),
     ("f_uikit/icons_handbook", None),
     ("f_uikit/scroll_sliders", None),
     ("d_player/stats_icons", None),
@@ -207,6 +215,10 @@ def scan(index: dict[str, dict]) -> tuple[set[str], set[str]]:
                 wanted.add(name)
     for name in ALWAYS:
         (wanted if name in index else missing).add(name)
+    # a tab's glyph has a lit twin the page asks for by adding to the name
+    for name in list(wanted):
+        if name + "_selected" in index:
+            wanted.add(name + "_selected")
     return wanted, missing
 
 
@@ -220,6 +232,24 @@ def encode(path: Path, longest: int | None, quality: int | None, crop=None) -> t
     WebP, scaled down if they are larger than they are ever shown. `crop`
     first cuts a 16:9 window out of the picture: (zoom, x centre, y centre).
     """
+    # Encoding is nearly all of a build's time, so what a file came out as is
+    # kept beside the extraction and used again for as long as the file and
+    # what is asked of it stay the same.
+    st = path.stat()
+    key = hashlib.sha1(f"{path}|{st.st_size}|{st.st_mtime_ns}|{longest}|{quality}|{crop}".encode("utf-8")).hexdigest()
+    kept = ENCODED / key
+    if kept.exists():
+        raw = kept.read_bytes()
+        cut = raw.index(b"\n")
+        mime, w, h = raw[:cut].decode("ascii").split(" ")
+        return raw[cut + 1:], mime, int(w), int(h)
+    data, mime, w, h = encode_fresh(path, longest, quality, crop)
+    ENCODED.mkdir(parents=True, exist_ok=True)
+    kept.write_bytes(f"{mime} {w} {h}\n".encode("ascii") + data)
+    return data, mime, w, h
+
+
+def encode_fresh(path: Path, longest: int | None, quality: int | None, crop=None) -> tuple[bytes, str, int, int]:
     im = Image.open(path)
     im.load()
     w, h = im.size
@@ -279,7 +309,8 @@ class Pack:
         payload = struct.pack("<I", len(header)) + header + b"".join(self.blobs)
         comp = zlib.compressobj(9, zlib.DEFLATED, -15)
         squeezed = comp.compress(payload) + comp.flush()
-        salt, iv = secrets.token_bytes(16), secrets.token_bytes(12)
+        digest = hashlib.sha256(passphrase.encode("utf-8") + b"\0" + squeezed).digest()
+        salt, iv = digest[:16], digest[16:28]
         key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=ROUNDS).derive(passphrase.encode("utf-8"))
         return MAGIC + salt + iv + AESGCM(key).encrypt(iv, squeezed, None)
 

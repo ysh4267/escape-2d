@@ -10,8 +10,10 @@
 
 import { Slot, Grid, Item } from './model.js';
 import { el, icon } from '../core/util.js';
-import { renderSlot, renderGrid, renderContainerBlock } from './view.js';
+import { renderSlot, renderGrid, renderContainerBlock, renderSlotView, renderContainerGrids } from './view.js';
 import { SLOT_ACCEPTS } from '../data/items.js';
+import { t, tOr } from '../core/i18n.js';
+import { uiImg } from '../core/uiart.js';
 
 /**
  * The slots, named and positioned the way the game's own character screen
@@ -48,7 +50,21 @@ export const SLOT_DEFS = [
   { key: 'rig',       label: 'TACTICAL RIG', icon: 'g-rig',     w: 2, h: 2, carry: true },
   { key: 'backpack',  label: 'BACKPACK',     icon: 'g-pack',    w: 2, h: 2, carry: true },
   { key: 'secure',    label: 'POUCH',        icon: 'g-pouch',   w: 2, h: 2, carry: true },
+  // the band on the arm, and the three slots for things that are used and not
+  // carried about - a marker, a compass, a jammer. The older two-panel
+  // drawing below has no place for them; the character screen does.
+  { key: 'armband',   label: 'ARMBAND',      icon: 'g-armband', w: 2, h: 1, extra: true },
+  { key: 'special1',  label: 'SPECIAL SLOT', icon: 'g-pouch',   w: 1, h: 1, extra: true },
+  { key: 'special2',  label: 'SPECIAL SLOT', icon: 'g-pouch',   w: 1, h: 1, extra: true },
+  { key: 'special3',  label: 'SPECIAL SLOT', icon: 'g-pouch',   w: 1, h: 1, extra: true },
 ];
+
+/**
+ * What stays on the character whatever happens in a raid: the pouch, the
+ * blade in its sheath, the armband and what is in the special slots. Nobody
+ * can take them off a body in the game, and they come home with it.
+ */
+const KEPT_ON_DEATH = new Set(['secure', 'scabbard', 'armband', 'special1', 'special2', 'special3']);
 
 /**
  * The slots the character screen draws that this game has nothing to put in:
@@ -158,10 +174,10 @@ export class Equipment {
     for (const g of this.pockets) for (const it of g.items()) { yield it; yield* it.descendants(); }
   }
 
-  /** items that are lost on death (everything except the secure container) */
+  /** items that are lost on death: everything but what KEPT_ON_DEATH names */
   *insecureItems() {
     for (const d of SLOT_DEFS) {
-      if (d.key === 'secure') continue;
+      if (KEPT_ON_DEATH.has(d.key)) continue;
       const it = this.slots[d.key].item;
       if (it) yield it;
     }
@@ -170,7 +186,7 @@ export class Equipment {
 
   clearInsecure() {
     for (const d of SLOT_DEFS) {
-      if (d.key === 'secure') continue;
+      if (KEPT_ON_DEATH.has(d.key)) continue;
       this.slots[d.key].clear();
     }
     for (const g of this.pockets) for (const it of g.items()) g.remove(it);
@@ -204,7 +220,7 @@ export function renderGearSlots(equipment, host, opts = {}) {
   const body = el('div', { class: 'equip__body' });
   body.append(icon('pmc', 'equip__pmc'));
   for (const d of SLOT_DEFS) {
-    if (d.carry) continue;
+    if (d.carry || d.extra) continue;
     const cell = renderSlot(equipment.slots[d.key], d);
     cell.style.gridArea = d.area;
     body.append(cell);
@@ -277,4 +293,101 @@ export function renderEquipment(equipment, host, opts = {}) {
   const carry = el('div');
   renderCarry(equipment, carry, opts);
   host.append(carry);
+}
+
+// ---------------------------------------------------------
+// the character screen's own drawing
+//
+// The client's EquipmentTab and ContainersPanel: every slot a box of a fixed
+// size at a fixed place around the figure, each under its named header, and
+// beside them what is carried - the rig, the pockets with the special slots,
+// the backpack, the pouch - each container with its grids set out to its
+// right the way its own layout sets them.
+// ---------------------------------------------------------
+/**
+ * Where each slot's box sits, measured from the corner of the first one
+ * (EARPIECE), the client's locale key for its name and the outline shown in
+ * it while it is empty. Boxes are 125 x 125 unless said otherwise.
+ */
+const DOLL = [
+  { key: 'ears', x: 0, y: 0, label: 'Earpiece', ghost: 'earpiece' },
+  { key: 'head', x: 184, y: 0, label: 'Headwear', ghost: 'headwear' },
+  { key: 'face', x: 368, y: 0, label: 'FaceCover', ghost: 'face_cover' },
+  { key: 'armband', x: 0, y: 166, h: 44, label: 'ArmBand', ghost: 'armband', ghostW: 62, ghostH: 40 },
+  { key: 'armor', x: 184, y: 166, label: 'ArmorVest', ghost: 'bodyarmor' },
+  { key: 'eyes', x: 368, y: 166, label: 'Eyewear', ghost: 'eyewear' },
+  { key: 'primary', x: 0, y: 334, w: 310, label: 'FirstPrimaryWeapon', ghost: 'on_belt' },
+  { key: 'holster', x: 368, y: 334, label: 'Holster', ghost: 'holster' },
+  { key: 'secondary', x: 0, y: 504, w: 310, label: 'SecondPrimaryWeapon', ghost: 'on_belt' },
+  { key: 'scabbard', x: 368, y: 504, label: 'Scabbard', ghost: 'scabbard' },
+];
+/** the tag each side is issued, shown in its own box under the armband; it is not something to take off */
+const DOGTAG = { USEC: '59f32c3b86f77472a31742f0', BEAR: '59f32bb586f774757e1e8442' };
+
+const slotName = (key) => tOr(key, key).trim();
+
+/**
+ * The slots around the figure.
+ * @param {Equipment} equipment
+ * @param {HTMLElement} host
+ * @param {{ onArrow?: (item, anchor) => void, faction?: string, getTpl?: (id: string) => any }} [opts]
+ */
+export function renderDoll(equipment, host, opts = {}) {
+  host.replaceChildren();
+  host.append(uiImg('character_pmc', 'gdoll__figure'));
+  for (const d of DOLL) {
+    host.append(renderSlotView(equipment.slots[d.key], { ...d, label: slotName(d.label), onArrow: opts.onArrow }));
+  }
+  // the dogtag: a box of its own that always holds the tag of the side
+  const tag = opts.getTpl?.(DOGTAG[opts.faction] || DOGTAG.USEC);
+  const cell = el('div', { class: 'gslotcell gslotcell--tag', style: { position: 'absolute', left: '0px', top: '246px', width: '125px' } },
+    el('div', { class: 'gslot__head', 'aria-disabled': 'true' },
+      el('span', { class: 'gslot__name' }, t('Dogtag')),
+      el('span', { class: 'gslot__arrow' }, uiImg('slot_selectedbutton_arrow_icon_idle', 'gslot__arrowidle', { w: 18, h: 18 }))),
+    el('div', { class: 'gslot is-full is-fixed', style: { width: '125px', height: '45px' } },
+      tag?.imgUrl ? el('img', { class: 'gslot__tagimg', src: tag.imgUrl, alt: '' }) : null,
+      el('span', { class: 'gslot__tagname' }, opts.faction || 'USEC')));
+  host.append(cell);
+}
+
+/**
+ * What is carried, top to bottom.
+ * @param {Equipment} equipment
+ * @param {HTMLElement} host
+ * @param {{ onArrow?: (item, anchor) => void, filterFn?: (item) => boolean }} [opts]
+ */
+export function renderContainers(equipment, host, opts = {}) {
+  host.replaceChildren();
+  const worn = (key, label, ghost) => {
+    const slot = equipment.slots[key];
+    const row = el('div', { class: 'gcont', dataset: { slot: key } },
+      renderSlotView(slot, { label, ghost, onArrow: opts.onArrow }));
+    if (slot.item?.grids) row.append(renderContainerGrids(slot.item, opts));
+    return row;
+  };
+
+  // the pockets are part of the character: four cells that never come off
+  const pockets = el('div', { class: 'gpockets' },
+    el('div', { class: 'gslot__head gslot__head--plain' }, el('span', { class: 'gslot__name' }, t('Pockets'))),
+    el('div', { class: 'gpockets__row' }, equipment.pockets.map((g) => renderGrid(g, opts))));
+
+  // three special slots, and under the first the head-mounted camera the
+  // client shows locked
+  const special = el('div', { class: 'gspecial' },
+    el('div', { class: 'gslot__head gslot__head--plain' }, el('span', { class: 'gslot__name' }, t('InventoryScreen/SpecialSlotsHeader'))),
+    el('div', { class: 'gspecial__row' },
+      ['special1', 'special2', 'special3'].map((key) => renderSlotView(equipment.slots[key], {
+        bare: true, w: 64, h: 64, ghost: 'specialslot', label: '', onArrow: opts.onArrow,
+      }))),
+    el('div', { class: 'gspecial__cam', title: tOr('Inventory/SpecCameraSlot', 'Head-mounted camera') },
+      uiImg('camera', 'gspecial__camimg', { w: 60, h: 60 }),
+      el('span', { class: 'gspecial__camname' }, tOr('Inventory/SpecCameraShortName', 'Camera')),
+      uiImg('icon_special_item', 'gspecial__cammark', { w: 32, h: 10 }),
+      uiImg('setlock', 'gspecial__camlock', { w: 16, h: 16 })));
+
+  host.append(
+    worn('rig', t('TacticalVest'), 'tacticalvest'),
+    el('div', { class: 'gcont gcont--pockets' }, pockets, special),
+    worn('backpack', t('Backpack'), 'backpack'),
+    worn('secure', t('SecuredContainer'), 'securedcontainer'));
 }

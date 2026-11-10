@@ -17,12 +17,11 @@ import { initTooltip } from './inventory/tooltip.js';
 import { initContextMenu, confirmDialog } from './inventory/dialogs.js';
 import { initAudio } from './core/audio.js';
 import { initShell, showScreen, showPane, refreshTopbar, bootProgress, toast, setBarBadge, setBarHandler } from './ui/shell.js';
-import { initStash, renderStash, activateStashContext } from './ui/stash.js';
+import { initStash, renderStash, activateStashContext, setGearMode } from './ui/stash.js';
 import { initTrade, rerollFence } from './ui/trade.js';
 import { startRaid, consumePendingMIA } from './ui/raid-ui.js';
 import { initFloorplan } from './ui/floorplan.js';
 import { initHealthPane, renderHealthPane } from './ui/health-ui.js';
-import { markOpenable } from './ui/stash.js';
 import { initCharacter, openCharacter } from './ui/character.js';
 import { initMenu, setPlayHandler } from './ui/menu.js';
 import { initTradersList } from './ui/traders-list.js';
@@ -144,7 +143,7 @@ async function boot() {
   initHideout();
   initFlea();
   initFloorplan();
-  initHealthPane(markOpenable);
+  initHealthPane();
   Quests.setWeaponStats(weaponStats);
   Quests.initQuests();
   initNotices();
@@ -177,9 +176,10 @@ async function boot() {
   setBarHandler('messenger', { toggle: toggleMessenger, isOpen: messengerOpen });
 
   on(EV.SCREEN_CHANGED, (id) => {
-    if (id === 'character:gear') { activateStashContext(); renderStash(); }
-    // the health tab borrows the stash context: meds are used out of the stash
-    if (id === 'character:health') { activateStashContext(); renderHealthPane(); }
+    if (id === 'character:gear') { setGearMode('gear'); activateStashContext(); renderStash(); }
+    // the health tab is the same screen with the body where the slots are:
+    // meds are used out of the stash beside it
+    if (id === 'character:health') { setGearMode('health'); activateStashContext(); renderStash(); renderHealthPane(); }
     // these have no grids of their own, but a floating container window
     // survives the switch — without a context, an item ctrl+clicked in that
     // window would still fly to the last trader's sell table

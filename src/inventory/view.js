@@ -3,9 +3,19 @@
 //
 // every rendered node keeps a back-reference to its model
 // (_grid / _item / _slot) so drag & drop can hit-test by element.
+//
+// A tile is drawn the way the client draws its own (the grid_layout and
+// slot_layout prefabs): the item's render over a panel of the colour its
+// template names, a 1 px frame, the short name in the top-right corner and,
+// along the bottom, what there is to count - rounds in a magazine, a stack,
+// what is left of a medkit, an armour's points - with the found-in-raid tick
+// over it. Worn in a slot the same item is its render scaled to the slot,
+// with the name in bold, what it is chambered for under the name, the count
+// in large figures and its condition as a bar down the right edge.
 // =========================================================
 
 import { el, icon, clear } from '../core/util.js';
+import { uiImg } from '../core/uiart.js';
 import { CAT_LABEL } from '../data/items.js';
 import { isKnown, examineProgress } from './examine.js';
 
@@ -17,10 +27,65 @@ export function cellSize(gridEl) {
 }
 
 // ---------------------------------------------------------
+// what a tile counts
+// ---------------------------------------------------------
+const tidy = (n) => (Math.round(n * 10) / 10).toString();
+
+/**
+ * The figure in a tile's bottom-right corner and how worried it should look.
+ * @returns {{ text: string, cur?: string, max?: string, cls: string, frac?: number } | null}
+ */
+export function itemValue(item) {
+  const tpl = item.tpl;
+  const state = (f) => (f <= 0.15 ? 'is-crit' : f <= 0.4 ? 'is-low' : '');
+  if (item.isMag || (item.isWeapon && item.magazine)) {
+    // the magazine's count, as in the game; the chambered round is on the
+    // card, not on the tile (a "31/30" reads as an error)
+    const mag = item.isMag ? item : item.magazine;
+    const cap = mag.tpl.magSize || 0;
+    return { text: `${mag.ammoCount}/${cap}`, cur: String(mag.ammoCount), max: String(cap), cls: mag.ammoCount ? '' : 'is-dry' };
+  }
+  if (item.stack > 1) return { text: formatStack(item.stack), cls: '' };
+  if (tpl.res && item.res != null && tpl.res.max) {
+    const f = item.res / tpl.res.max;
+    return { text: `${tidy(item.res)}/${tpl.res.max}`, cur: tidy(item.res), max: String(tpl.res.max), cls: `is-res ${state(f)}`, frac: f };
+  }
+  if (!item.isWeapon && item.dura != null && item.maxDura) {
+    const f = item.dura / item.maxDura;
+    return { text: `${tidy(item.dura)}/${tidy(item.maxDura)}`, cur: tidy(item.dura), max: tidy(item.maxDura), cls: state(f), frac: f };
+  }
+  return null;
+}
+
+/** a gun's or an armour's condition, 0..1 against what it left the factory with; null for things that do not wear */
+export function conditionOf(item) {
+  const tpl = item.tpl;
+  const full = tpl.wpn?.maxDura ?? tpl.dura;
+  if (item.dura == null || !full) return null;
+  return { now: Math.max(0, Math.min(1, item.dura / full)), ceiling: Math.max(0, Math.min(1, (item.maxDura ?? full) / full)) };
+}
+
+function formatStack(n) {
+  if (n >= 1000000) return `${Math.round(n / 100000) / 10}M`;
+  return String(n);
+}
+
+// ---------------------------------------------------------
+// the picture
+// ---------------------------------------------------------
+/** a gun with parts on it is drawn assembled; the bare sprite is the receiver */
+function pictureOf(item) {
+  const tpl = item.tpl;
+  const built = item.isWeapon && tpl.presetImgUrl && item.slots?.some((s) => s.item);
+  return built ? { src: tpl.presetImgUrl, flat: !!tpl.presetFlat } : { src: tpl.imgUrl, flat: !!tpl.imgFlat };
+}
+
+// ---------------------------------------------------------
 // item tile
 // ---------------------------------------------------------
 export function renderItem(item, opts = {}) {
   const tpl = item.tpl;
+  const known = isKnown(item);
   const node = el('div', {
     class: 'item',
     // bg is Tarkov's own BackgroundColor for the template, so tiles read the
@@ -39,8 +104,9 @@ export function renderItem(item, opts = {}) {
   node.style.width = `calc(var(--cell) * ${item.w})`;
   node.style.height = `calc(var(--cell) * ${item.h})`;
 
-  // a gun with parts on it is drawn assembled; the bare sprite is the receiver
-  const src = (item.isWeapon && tpl.presetImgUrl && item.slots?.some((s) => s.item)) ? tpl.presetImgUrl : tpl.imgUrl;
+  const { src, flat } = pictureOf(item);
+  // an older picture brings its own colour, frame and name with it
+  if (flat) node.classList.add('item--flat');
   if (src) {
     const img = el('img', {
       class: 'item__img', src, alt: '', draggable: 'false', loading: 'lazy',
@@ -67,57 +133,24 @@ export function renderItem(item, opts = {}) {
     node.append(el('div', { class: 'item__fallback' }, tpl.short || tpl.name));
   }
 
-  // tarkov.dev grid sprites already carry the short name in the corner, so the
-  // name strip is only needed when we are falling back to a text tile
-  if (!tpl.imgUrl && item.w * item.h > 1 && !opts.noName) {
-    node.append(el('div', { class: 'item__name' }, tpl.short || tpl.name));
+  if (known) {
+    if (!flat && src && !opts.noName) node.append(el('div', { class: 'item__cap' }, tpl.short || tpl.name));
+    // what a gun is chambered for, in the corner the client writes it in
+    if (item.isWeapon && tpl.cal && item.w * item.h > 1) node.append(el('div', { class: 'item__ins' }, tpl.cal));
+    const corner = el('div', { class: 'item__br' });
+    if (item.fir) corner.append(uiImg('icon_foundinraid_small', 'item__fir', { w: 13, h: 12 }));
+    const v = itemValue(item);
+    if (v) corner.append(el('span', { class: `item__val ${v.cls}` }, v.text));
+    if (corner.childNodes.length) node.append(corner);
   }
 
-  // stack counter
-  if (item.stack > 1) {
-    node.append(el('div', { class: 'item__stack' }, formatStack(item.stack)));
-  }
-
-  // found-in-raid marker
-  if (item.fir) {
-    const tag = el('div', { class: 'item__tag' });
-    const f = icon('check', 'item__fir');
-    f.setAttribute('title', 'Found in raid');
-    tag.append(f);
-    node.append(tag);
-  }
-
-  // resource / durability bar
-  const bar = resourceBar(item);
-  if (bar) node.append(bar);
-
-  // rounds in a magazine, or in the magazine of a gun
-  if (item.isMag || (item.isWeapon && item.magazine)) {
-    const mag = item.isMag ? item : item.magazine;
-    // the badge is the magazine's count, as in the game; the chambered round
-    // is on the card, not on the tile (a "31/30" reads as an error)
-    const n = mag.ammoCount;
-    const cap = mag.tpl.magSize || 0;
-    const badge = el('div', { class: 'item__ammo' }, `${n}/${cap}`);
-    if (n === 0) badge.classList.add('is-dry');
-    node.append(badge);
-  } else if (item.isWeapon && item.slots?.some((sl) => sl.name === 'mod_magazine')) {
-    node.append(el('div', { class: 'item__ammo is-dry' }, 'no mag'));
-  }
   // a gun missing a vital part is not a gun yet
   if (item.isWeapon && item.slots?.some((sl) => sl.required && !sl.item)) {
     node.classList.add('item--incomplete');
   }
   if (item.folded) node.classList.add('item--folded');
 
-  // container fill badge
-  if (item.isContainer) {
-    let used = 0, cap = 0;
-    for (const g of item.grids) { used += g.usedCells(); cap += g.capacity; }
-    node.append(el('div', { class: 'item__cnt-badge' }, `${used}/${cap}`));
-  }
-
-  if (!isKnown(item)) {
+  if (!known) {
     const veil = el('div', { class: 'item__unexamined' }, el('span', {}, '?'));
     const bar = el('div', { class: 'item__exambar' }, el('i', {}));
     veil.append(bar);
@@ -128,36 +161,57 @@ export function renderItem(item, opts = {}) {
   return node;
 }
 
-function formatStack(n) {
-  if (n >= 1000000) return `${Math.round(n / 100000) / 10}M`;
-  if (n >= 10000) return `${Math.round(n / 1000)}k`;
-  return String(n);
-}
-
-function resourceBar(item) {
+/**
+ * The same item as it is drawn worn in a slot: scaled to the slot, with the
+ * slot view's own labels. Still an `.item`, so it is picked up, right-clicked
+ * and hovered like any other.
+ */
+export function renderSlotItem(item) {
   const tpl = item.tpl;
-  if (tpl.res && item.res != null && tpl.res.max) {
-    const f = item.res / tpl.res.max;
-    return barNode('res', f);
-  }
-  if (tpl.dura != null && item.dura != null) {
-    const f = item.dura / tpl.dura;
-    return barNode('dura', f);
-  }
-  // guns keep their ceiling on the item (it wears down with each repair)
-  if (tpl.wpn?.maxDura && item.dura != null) {
-    const f = item.dura / (tpl.wpn.maxDura || 1);
-    return barNode('dura', f);
-  }
-  return null;
-}
+  const known = isKnown(item);
+  const node = el('div', {
+    class: 'item item--worn',
+    dataset: { uid: item.uid, cat: tpl.cat, bg: tpl.bg || 'default', worn: '1' },
+  });
+  node._item = item;
+  if (document.body.dataset.dragUid === item.uid) node.classList.add('is-dragging');
 
-function barNode(kind, frac) {
-  const cls = `item__bar item__bar--${kind}` +
-    (frac <= 0.15 ? ' is-crit' : frac <= 0.4 ? ' is-low' : '');
-  const b = el('div', { class: cls });
-  b.append(el('i', { style: { width: `${Math.max(0, Math.min(1, frac)) * 100}%` } }));
-  return b;
+  const { src, flat } = pictureOf(item);
+  if (src) {
+    const img = el('img', { class: `item__wornimg${flat ? ' is-flat' : ''}`, src, alt: '', draggable: 'false' });
+    img.addEventListener('error', () => img.remove(), { once: true });
+    node.append(img);
+  }
+  if (known) {
+    node.append(el('div', { class: 'item__wornname' }, tpl.short || tpl.name));
+    if (item.isWeapon && tpl.cal) node.append(el('div', { class: 'item__worninfo' }, tpl.cal));
+    const v = itemValue(item);
+    const corner = el('div', { class: 'item__br' });
+    if (item.fir) corner.append(uiImg('icon_foundinraid_small', 'item__fir', { w: 13, h: 12 }));
+    if (v) {
+      // a weapon's rounds are written large with the capacity small beside them
+      if (item.isWeapon && v.cur != null) {
+        corner.append(el('span', { class: `item__val item__val--big ${v.cls}` }, el('b', {}, v.cur), `/${v.max}`));
+      } else corner.append(el('span', { class: `item__val ${v.cls}` }, v.text));
+    }
+    if (corner.childNodes.length) node.append(corner);
+    // a gun's condition is a bar down the right edge: what is left, and in
+    // red the part of the scale repairs have taken away for good
+    const cond = item.isWeapon || tpl.cat === 'melee' ? conditionOf(item) : null;
+    if (cond) {
+      node.classList.add('has-cond');
+      node.append(el('div', { class: `item__cond${cond.now <= 0.4 ? ' is-low' : ''}` },
+        el('i', { class: 'item__condlost', style: { height: `${(1 - cond.ceiling) * 100}%` } }),
+        el('i', { class: 'item__condnow', style: { height: `${cond.now * 100}%` } })));
+    }
+  } else {
+    const veil = el('div', { class: 'item__unexamined' }, el('span', {}, '?'));
+    veil.append(el('div', { class: 'item__exambar' }, el('i', {})));
+    node.append(veil);
+    paintExamine(item, node);
+  }
+  if (item.isWeapon && item.slots?.some((sl) => sl.required && !sl.item)) node.classList.add('item--incomplete');
+  return node;
 }
 
 // ---------------------------------------------------------
@@ -180,6 +234,31 @@ export function renderGrid(gridModel, opts = {}) {
     node.append(tile);
   }
   return node;
+}
+
+/**
+ * The grids of a rig, a backpack or a case, set out the way the client sets
+ * them out: each grid where the item's layout puts it (tools/build_layouts.py
+ * reads the layouts out of the client), or side by side when it has none.
+ */
+export function renderContainerGrids(item, opts = {}) {
+  const place = item.tpl.container?.place;
+  const wrap = el('div', { class: 'cgrids', dataset: { uid: item.uid } });
+  if (place && place.pos.length === item.grids.length) {
+    wrap.classList.add('cgrids--placed');
+    wrap.style.width = `${place.w + 1}px`;
+    wrap.style.height = `${place.h + 1}px`;
+    item.grids.forEach((g, i) => {
+      const node = renderGrid(g, opts);
+      node.style.position = 'absolute';
+      node.style.left = `${place.pos[i][0]}px`;
+      node.style.top = `${place.pos[i][1]}px`;
+      wrap.append(node);
+    });
+  } else {
+    for (const g of item.grids) wrap.append(renderGrid(g, opts));
+  }
+  return wrap;
 }
 
 /**
@@ -231,9 +310,50 @@ export function renderGridBlock(gridModel, title, opts = {}) {
 // equipment slot
 // ---------------------------------------------------------
 /**
- * One slot as the character screen draws it: a named header bar with a
- * chevron, and the outline underneath. Returns the wrapper — the drop target
- * is the `.slot` inside it, which is what drag & drop hit-tests for.
+ * One slot as the client's character screen draws it: the named header with
+ * its arrow sitting over the top edge, and under it a box of a fixed size -
+ * hatched with the outline of what belongs there while it is empty, and the
+ * worn item scaled into it when it is not. The box is the drop target
+ * (`.gslot`, with `_slot` on it); the returned node is the box with its
+ * header.
+ * @param {import('./model.js').Slot} slot
+ * @param {{ label: string, ghost?: string, w?: number, h?: number, x?: number, y?: number, ghostW?: number, ghostH?: number, onArrow?: (item) => void }} def
+ */
+export function renderSlotView(slot, def) {
+  const w = def.w || 125, h = def.h || 125;
+  const cell = el('div', { class: 'gslotcell', dataset: { slot: slot.key } });
+  if (def.x != null) { cell.style.left = `${def.x}px`; cell.style.top = `${def.y}px`; cell.style.position = 'absolute'; }
+  cell.style.width = `${w}px`;
+
+  const item = slot.item;
+  // a special slot is a bare box: the three of them share one header
+  if (!def.bare) {
+    const head = el('button', { class: 'gslot__head', type: 'button', tabindex: '-1', disabled: !item, dataset: { sfx: 'own' } },
+      el('span', { class: 'gslot__name' }, def.label),
+      el('span', { class: 'gslot__arrow' },
+        uiImg('slot_selectedbutton_arrow_icon_idle', 'gslot__arrowidle', { w: 18, h: 18 }),
+        uiImg('slot_selectedbutton_arrow_icon_selected', 'gslot__arrowhot', { w: 18, h: 18 })));
+    head.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (slot.item) def.onArrow?.(slot.item, head);
+    });
+    cell.append(head);
+  } else cell.classList.add('gslotcell--bare');
+
+  const box = el('div', { class: `gslot${item ? ' is-full' : ' is-empty'}`, dataset: { slot: slot.key } });
+  box._slot = slot;
+  box.style.width = `${w}px`;
+  box.style.height = `${h}px`;
+  if (item) box.append(renderSlotItem(item));
+  else if (def.ghost) box.append(uiImg(def.ghost, 'gslot__ghost', def.ghostW ? { w: def.ghostW, h: def.ghostH } : null));
+  cell.append(box);
+  return cell;
+}
+
+/**
+ * The older slot: a named header bar with a chevron, and the outline
+ * underneath, growing to whatever it holds. The raid's inventory overlay
+ * still draws with it.
  */
 export function renderSlot(slot, opts = {}) {
   const cell = el('div', { class: 'slot-cell' });

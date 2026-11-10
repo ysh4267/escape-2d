@@ -148,6 +148,8 @@
 .trgoods .assort-scroll { position: absolute; left: 0; top: 0; width: 640px; height: 740px; overflow-x: hidden; overflow-y: scroll; padding: 0; border: 0; background: none; border-radius: 0; }
 .trgoods .assort-scroll::-webkit-scrollbar { width: 10px; }
 .trgoods .grid, .trstash .grid, .selltable .grid { border: 0; }
+/* on a trader's shelf the corners of a tile are his: the price, the stock, the lock - not the item's own counts */
+.trgoods .item__br, .trgoods .item__ins { display: none; }
 .trgoods__empty { position: absolute; left: 0; right: 0; top: 330px; text-align: center; color: #4a4d4c; font-size: 16px; }
 .trgoods__spin { position: absolute; left: 299px; top: 349px; width: 44px; height: 44px; background: var(--ui-spinner_big) 0 0 / 100% 100% no-repeat; animation: tr-spin 1s linear infinite; }
 
