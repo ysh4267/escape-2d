@@ -1342,6 +1342,94 @@ try {
     check('and so do the loot pools', Object.values(loot3.POOLS).every((pool) => pool.every(([k]) => T[k]?.core)));
     check('every gun is priced assembled, not only the ones on a shelf', allT.filter((t) => t.wpn && t.preset).every((t) => t.presetPrice > t.price));
     check('quest items are here and are nobody\'s stock', byCat('quest').length > 100 && byCat('quest').every((t) => t.quest && !t.core));
+
+    // what the game reads off the order of a list, and the two scopes only the dumps have
+    check('the first round a magazine lists is one of its own calibre',
+          byCat('mag').filter((t) => t.ammoFilter.length).every((t) => T[t.ammoFilter[0]].cal === t.cal) && T.mag_akm.ammoFilter[0] === 'am_762bp',
+          byCat('mag').filter((t) => t.ammoFilter.length && T[t.ammoFilter[0]].cal !== t.cal).map((t) => t.short).slice(0, 5).join(','));
+    check('a magazine found loaded holds a round the game shipped with',
+          core.filter((t) => t.cat === 'mag' && t.ammoFilter.length).every((t) => T[t.ammoFilter[0]].core));
+    check('the scopes the live list no longer has still go where they went',
+          ['mod_os4x', 'mod_nxs_2_5_10'].every((k) => T[k].core && core.some((t) => (t.slots || []).some((sl) => sl.f.includes(k)))));
+
+    // a magazine can take more than the gun it is on: the gun's calibre decides
+    const tkm = byCat('ammo').find((t) => t.cal === '.366 TKM');
+    const vpo209 = allT.find((t) => t.wpn && t.cal === '.366 TKM');
+    const stripped = (key) => { const g = new Item(key); g.modSlot('mod_magazine').clear(); return g; };
+    const mag366 = wp.spawnMag('mag_akm', tkm.key, 10), mag762 = wp.spawnMag('mag_akm', 'am_762ps', 10);
+    check('an AK magazine holds .366 TKM as well as 7.62x39', mag366.ammoCount === 10 && mag762.ammoCount === 10 && T.mag_akm.cal === '7.62x39');
+    check('the VPO-209 takes the one loaded with its round, the AKM the other, and neither the wrong one',
+          model.canInstall(stripped(vpo209.key).modSlot('mod_magazine'), mag366).ok && !model.canInstall(stripped(vpo209.key).modSlot('mod_magazine'), mag762).ok
+          && model.canInstall(stripped('w_akm').modSlot('mod_magazine'), mag762).ok && !model.canInstall(stripped('w_akm').modSlot('mod_magazine'), mag366).ok);
+    check('an empty magazine goes on either', model.canInstall(stripped(vpo209.key).modSlot('mod_magazine'), new Item('mag_akm')).ok
+          && model.canInstall(stripped('w_akm').modSlot('mod_magazine'), new Item('mag_akm')).ok);
+    check('a round goes in through a gun only if the gun chambers it', (() => {
+      const akm = new Item('w_akm'), stack = () => new Item(tkm.key, { stack: 5 });
+      return !wp.canLoad(akm, stack()).ok && !wp.canLoad(akm.magazine, stack()).ok && wp.canLoad(akm, new Item('am_762ps', { stack: 5 })).ok
+        && wp.canLoad(new Item('mag_akm'), stack()).ok && wp.canLoad(new Item(vpo209.key), stack()).ok;
+    })());
+    check('the first twelve guns load every round they shipped with, through the gun', (() => {
+      const bad = [];
+      for (const t of core.filter((x) => x.wpn && x.preset?.mod_magazine)) {
+        const g = new Item(t.key);
+        for (const a of g.magazine.tpl.ammoFilter.filter((k) => T[k].core)) {
+          if (!wp.canLoad(g, new Item(a)).ok) bad.push(`${t.short}/${T[a].short}`);
+        }
+      }
+      return bad.length === 0 || bad.join(',');
+    })() === true);
+    check('every gun takes a magazine loaded with its default round, whatever else the magazine holds', (() => {
+      const bad = [];
+      for (const t of allT.filter((x) => x.wpn && x.preset?.mod_magazine && x.wpn.defAmmo)) {
+        const g = new Item(t.key), slot = g.modSlot('mod_magazine'), mag = slot.clear();
+        if (!mag.tpl.ammoFilter.includes(t.wpn.defAmmo)) continue;
+        mag.rounds.push({ t: t.wpn.defAmmo, n: 1 });
+        if (!model.canInstall(slot, mag).ok) bad.push(t.short);
+      }
+      return bad.length === 0 || bad.join(',');
+    })() === true);
+    {
+      const gpC = await import('../src/raid/gunplay.js');
+      const bag = new Grid(6, 6, { tag: 'stash' });
+      autoPlace(mag366, [bag]); autoPlace(mag762, [bag]);
+      const spares = (key) => gpC.spareMags(new Item(key), [bag]).map((m) => m.uid).join();
+      check('a magazine of another gun\'s rounds is not a spare for this one', spares('w_akm') === mag762.uid && spares(vpo209.key) === mag366.uid,
+            `${spares('w_akm')} / ${spares(vpo209.key)}`);
+    }
+  }
+
+  head('a save made before the item list grew');
+  {
+    // durability, a resource and a key's uses are saved as points. Where the
+    // live data moved the maximum they were out of, they come over as the
+    // share they were - the old maxima are the ones the game shipped with
+    const back = (o) => Item.fromJSON({ uid: 'i9' + Math.random().toString(36).slice(2, 7), ...o });
+    const rt = (it) => Item.fromJSON(JSON.parse(JSON.stringify(it.toJSON())));
+    const paca = back({ t: 'ar_paca', d: 50 });
+    check('a fresh PACA of an old save is still a fresh PACA', paca.dura === T.ar_paca.dura && paca.maxDura === T.ar_paca.dura, `${paca.dura}/${paca.maxDura}`);
+    const iotv = back({ t: 'ar_iotv', d: 40 });
+    check('a vest half worn stays half worn where the maximum came down', iotv.dura === T.ar_iotv.dura / 2 && iotv.maxDura === T.ar_iotv.dura, `${iotv.dura}/${iotv.maxDura}`);
+    check('a full surgical kit is a full one, and a nearly spent one keeps a use',
+          back({ t: 'cms', res: 5 }).res === T.cms.res.max && back({ t: 'cms', res: 1 }).res === 1 && back({ t: 'splint', res: 2 }).res === 1,
+          `${back({ t: 'cms', res: 5 }).res} ${back({ t: 'cms', res: 1 }).res} ${back({ t: 'splint', res: 2 }).res}`);
+    check('a key keeps its share of uses, and an unused one has all of them',
+          back({ t: 'k_bunk', res: 5 }).res === T.k_bunk.uses / 2 && back({ t: 'k_machine', res: 10 }).res === T.k_machine.uses && back({ t: 'k_bunk' }).res === null,
+          `${back({ t: 'k_bunk', res: 5 }).res} ${back({ t: 'k_machine', res: 10 }).res}`);
+    check('numbers whose maximum did not move are read as they are', back({ t: 'salewa', res: 123 }).res === 123 && back({ t: 'ar_6b13', d: 12.5 }).dura === 12.5);
+    check('a gun is out of 100 in every database', (() => { const g = back({ t: 'w_akm', d: 61.5, md: 93.25, m: {} }); return g.dura === 61.5 && g.maxDura === 93.25 && g.toJSON().u === undefined; })());
+    // from here on an item says what its points are out of
+    const worn = new Item('ar_paca'); worn.dura = 37.5;
+    check('a saved item says what its points are out of',
+          worn.toJSON().u === T.ar_paca.dura && new Item('salewa').toJSON().u === T.salewa.res.max && new Item('bolts').toJSON().u === undefined
+          && new Item('k_bunk').toJSON().u === undefined);
+    check('and comes back exactly as it was', rt(worn).dura === 37.5 && rt(worn).maxDura === T.ar_paca.dura && rt(rt(worn)).dura === 37.5);
+    check('so the next time a maximum moves the share is kept without a list', back({ t: 'ar_paca', d: 30, u: 60 }).dura === T.ar_paca.dura / 2
+          && back({ t: 'salewa', res: 100, u: 200 }).res === T.salewa.res.max / 2);
+    check('nothing comes back holding more than it can',
+          back({ t: 'salewa', res: 99999, u: T.salewa.res.max }).res === T.salewa.res.max && back({ t: 'ar_6b13', d: 999 }).dura === T.ar_6b13.dura
+          && back({ t: 'ar_paca', d: 20, md: 500, u: T.ar_paca.dura }).maxDura === T.ar_paca.dura);
+    // and the rest of what a save holds: every key, every part where it was
+    check('every key the game shipped with is still a template', core.length === 987 && core.every((t) => items.getTpl(t.key) === t));
   }
 
   head('summary');
