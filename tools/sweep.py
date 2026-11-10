@@ -64,6 +64,12 @@ STEPS: list[tuple[str, str]] = [
         click('.tjr__pin'); await sleep(150); seen('.tjr__pin.is-on');
         for (const b of document.querySelectorAll('.tj__tab')) { b.click(); await sleep(150); }
     """),
+    ("achievements", """
+        E.openCharacter('achievements'); await sleep(400); seen('.achievements .ov__sheet .ov__level'); seen('.ach__count'); seen('.ach__row .ach__badge');
+        click('.ach__h--pct'); await sleep(150); seen('.ach__h--pct img'); seen('.ach__row');
+        const last = document.querySelector('.ach__rows').lastElementChild;
+        if (!last.classList.contains('ach__row--hidden')) throw new Error('the row of hidden achievements is not the last');
+    """),
     ("character tabs", """
         for (const b of document.querySelectorAll('#screen-character .ptab:not(:disabled)')) { b.click(); await sleep(350); }
     """),

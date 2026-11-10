@@ -38,6 +38,12 @@ export function fmtClock(sec) {
   const m = Math.floor(s / 60);
   return `${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
+/** a day the way the game writes one: 07.03.2026 */
+export function fmtDate(ms) {
+  const d = new Date(ms);
+  const two = (n) => String(n).padStart(2, '0');
+  return `${two(d.getDate())}.${two(d.getMonth() + 1)}.${d.getFullYear()}`;
+}
 
 // ---------- dom ----------
 export const $ = (sel, root = document) => root.querySelector(sel);

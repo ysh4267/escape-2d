@@ -396,15 +396,84 @@
 .tj__qitem { pointer-events: auto; }
 div.tj__qitem > img:only-child { display: block; width: 100%; height: 100%; }
 
-/* ---- ACHIEVEMENTS ---- */
-.achv { height: 100%; overflow: auto; }
-.achv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.achv-card { display: flex; gap: 12px; padding: 10px; background: rgba(5,7,7,.82); border: 1px solid #2a2c2c; opacity: .5; }
-.achv-card.is-done { opacity: 1; border-color: #6b6b5a; }
-.achv-card__art { width: 64px; height: 64px; flex: none; background: #0d0e10; }
-.achv-card__art img { width: 100%; height: 100%; object-fit: contain; }
-.achv-card__name { font-size: 16px; font-weight: 700; color: var(--e-text-hi); }
-.achv-card__desc { font-size: 13px; color: var(--e-dim); line-height: 1.35; margin: 2px 0; }
-.achv-card__meta { font-size: 11px; color: var(--e-faint); }
-.achv-card--rare .achv-card__meta { color: #5d9ac4; }
-.achv-card--legendary .achv-card__meta { color: var(--e-gold); }
+/* ---- ACHIEVEMENTS ----
+   The client's AchievementsScreen; positions are its own less the 43 px of
+   the tab strip. The sheet is OVERALL's; TasksPanel [651,48 1244x967] is the
+   rest: OverallInfoPanel 117.8 tall, 20 clear, then the table to the foot.
+   Both lay their columns out by sharing the width between them, so the
+   places here are where 1080p captures of 1.1 have them; the letter-spacing
+   is the client's wider setting of its type, measured off the same. */
+#pane-achievements { padding: 0; }
+.achievements { position: absolute; inset: 0; }
+.ach__right { position: absolute; left: 651px; top: 5px; width: 1244px; height: 967px; color: #c5c3b2; }
+
+/* what has been earned: the words and the bar take what the rarities leave */
+.ach__sum {
+  position: absolute; left: 0; top: 0; width: 1244px; height: 117.8px; box-sizing: border-box; padding: 15px 25px;
+  display: flex; align-items: center; gap: 60px;
+}
+.ach__sum::before, .ach__table::before {
+  content: ""; position: absolute; inset: 0; opacity: .78;
+  background: var(--ui-main_part_gradient) 0 0 / 100% 64px no-repeat, linear-gradient(#0000009b, #0000009b) 0 64px / 100% calc(100% - 64px) no-repeat;
+}
+.ach__sum > * { position: relative; }
+.ach__prog { flex: 1 1 0; min-width: 0; height: 87.8px; display: flex; flex-direction: column; gap: 15px; }
+.ach__upper { height: 52.8px; display: flex; align-items: flex-end; }
+.ach__words { flex: none; display: flex; flex-direction: column; gap: 5px; white-space: nowrap; }
+.ach__title { font-size: 24px; line-height: 26.4px; letter-spacing: .6px; color: #c3cdcd; }
+.ach__line { position: relative; top: .8px; font-size: 16px; line-height: 17.6px; letter-spacing: .32px; }
+/* the figures stand on the foot of their box, not on a line's baseline within it */
+.ach__count { flex: 1; position: relative; top: 12px; text-align: right; font-size: 32px; line-height: 52.8px; letter-spacing: .64px; white-space: nowrap; }
+.ach__count b { font-weight: 400; font-size: 48px; line-height: 1; letter-spacing: .96px; }
+.ach__bar { position: relative; height: 20px; box-sizing: border-box; border: 1px solid #676767; }
+.ach__bar i { position: absolute; left: 1px; top: 1px; bottom: 1px; width: calc((100% - 2px) * var(--v, 0)); background: #6a6a6a var(--ui-normal_gradient) 0 0 / 100% 100%; background-blend-mode: multiply; }
+/* four lines where the client leaves room for three and a half: they close up to fit */
+.ach__rars { flex: none; position: relative; top: .6px; padding-right: 20px; height: 87.8px; display: flex; flex-direction: column; gap: 8px; font-size: 16px; line-height: 17.6px; letter-spacing: .32px; white-space: nowrap; }
+.ach__rar { height: 15.95px; display: flex; gap: 5px; }
+
+/* the table */
+.ach__table { position: absolute; left: 0; top: 137.8px; width: 1244px; height: 829.2px; box-sizing: border-box; border: 1px solid #676767; }
+.ach__heads { position: absolute; left: -1px; top: -1px; width: 1244px; height: 45px; box-sizing: border-box; border: 1px solid #676767; }
+.ach__h { position: absolute; top: 0; height: 43px; padding: 0; border: 0; background: none; display: flex; align-items: center; gap: 5px; color: #c5c3b2; font-family: var(--font-ui); font-size: 16px; line-height: 17.6px; letter-spacing: .32px; white-space: nowrap; }
+.ach__h--what { left: 29px; width: 720.3px; justify-content: center; }
+.ach__h--pct { left: 779.3px; width: 192.1px; justify-content: center; }
+.ach__h--date { left: 1001.4px; width: 201.7px; padding-left: 25px; box-sizing: border-box; }
+.ach__rows { position: absolute; left: 0; top: 44px; width: 1235px; height: 783.2px; box-sizing: border-box; padding: 20px 0 0; overflow-x: hidden; overflow-y: scroll; }
+.ach__rows::-webkit-scrollbar-track { margin: 20px 0; }
+/* this list's handle does not shrink with the table's length */
+.ach__rows::-webkit-scrollbar-thumb { min-height: 86px; }
+/* a row slides under a shadow at the head of the table and another at its foot */
+.ach__table::after {
+  content: ""; position: absolute; left: 0; right: 17px; top: 44px; bottom: 0; z-index: 1; pointer-events: none;
+  background:
+    linear-gradient(#0000004f, #00000048 12.5%, #0000003b 25%, #0000002a 37.5%, #0000001a 50%, #0000000e 62.5%, #00000005 75%, #00000002 87.5%, #0000) 0 0 / 100% 40px no-repeat,
+    linear-gradient(#0000, #00000002 12.5%, #00000004 25%, #0000000a 37.5%, #00000013 50%, #00000020 62.5%, #0000002c 75%, #00000036 87.5%, #0000003b) 0 100% / 100% 40px no-repeat;
+}
+
+.ach__row {
+  position: relative; margin: 0 0 22px 24px; width: 1194px; height: 125px;
+  background: var(--ui-noise_glow), var(--glow, none) 0 0 / 100% 100% no-repeat, var(--ui-background_texture), #000000f5;
+}
+.ach__row:last-child { margin-bottom: 20px; }
+.ach__row::after { content: ""; position: absolute; inset: 0; border: 1px solid #676767; pointer-events: none; }
+.ach__row--common { --glow: var(--ui-common_glow); }
+.ach__row--rare { --glow: var(--ui-epic_glow); }
+.ach__row--legendary { --glow: var(--ui-legendary_glow); }
+.ach__row--seasonal { --glow: var(--ui-seasons_glow); }
+.ach__row--hidden { background: none; }
+.ach__row--hidden::before { content: ""; position: absolute; inset: 0; opacity: .78; background: var(--ui-playercard_facebackground) 0 0 / 100% 100% no-repeat; }
+/* a badge not earned yet is a quarter there */
+.ach__badge { position: absolute; left: 30px; top: 6.5px; width: 98px; height: 112px; opacity: .25; }
+.ach__row.is-earned .ach__badge { opacity: 1; }
+.ach__more { position: absolute; left: 30px; top: 6.5px; width: 98px; height: 112px; display: grid; place-items: center; font-size: 38px; letter-spacing: .76px; color: #d5d7dd; }
+.ach__more img { position: absolute; left: 0; top: 0; }
+.ach__more span { position: relative; }
+.ach__text { position: absolute; left: 158px; top: 12.5px; width: 616px; height: 100px; display: flex; flex-direction: column; justify-content: center; gap: 3.2px; }
+.ach__name { font-size: 24px; line-height: 26.4px; letter-spacing: .6px; white-space: nowrap; }
+.ach__desc { min-height: 20px; display: flex; align-items: center; font-size: 16px; line-height: 17.6px; letter-spacing: .32px; }
+.ach__row--hidden .ach__text { gap: 5px; }
+.ach__row--hidden .ach__name { color: #c3cdcd; }
+.ach__row--hidden .ach__desc { min-height: 0; }
+.ach__pct { position: absolute; left: 804px; top: 0; width: 150px; height: 125px; display: grid; place-items: center; font-size: 18px; letter-spacing: .36px; }
+.ach__date { position: absolute; left: 984px; top: 0; width: 180px; height: 125px; box-sizing: border-box; padding-top: 1.3px; display: grid; place-items: center; font-size: 16px; letter-spacing: .32px; color: #67665a; }
+.ach__row.is-earned .ach__date { color: #c5c3b2; }

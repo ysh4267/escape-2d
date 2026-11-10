@@ -17,7 +17,7 @@
 // counter behind is left out rather than shown as a nought.
 // =========================================================
 
-import { $, el, fmtNum } from '../core/util.js';
+import { $, el, fmtDate, fmtNum } from '../core/util.js';
 import { game } from '../core/state.js';
 import { t, tRich } from '../core/i18n.js';
 import { uiImg, setUiSrc } from '../core/uiart.js';
@@ -33,11 +33,7 @@ const round2 = (v) => String(Math.round((v || 0) * 100) / 100);
 const whole = (v) => String(Math.round(v || 0));
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
-function date(ms) {
-  if (!ms) return '-';
-  const d = new Date(ms);
-  return `${two(d.getDate())}.${two(d.getMonth() + 1)}.${d.getFullYear()}`;
-}
+const date = (ms) => (ms ? fmtDate(ms) : '-');
 
 /** hours and minutes, through the client's own format string */
 function span(seconds) {
@@ -98,20 +94,20 @@ function stashWorth() {
   return v;
 }
 
-export function renderOverall() {
-  const host = $('#overall-host');
-  if (!host) return;
+/**
+ * The character's sheet, the left third of OVERALL and of ACHIEVEMENTS alike:
+ * the level and its badge, the career in six short figures, the side's
+ * emblem, the figure, the nickname and the experience. Its figures are
+ * always the whole career's.
+ */
+export function characterSheet() {
   const p = game.profile;
   const all = career('overall');
-  const n = career(sub);
-  const lifetime = p.registered ? (Date.now() - p.registered) / 1000 : 0;
-
-  // ---- the character's sheet: always the whole career ----
   const badge = el('img', { class: 'ov__rank', alt: '' });
   setUiSrc(badge, `rank${levelGroup(p.level) * 5}`, 'ranks');
   const side = el('img', { class: 'ov__side', alt: '' });
   setUiSrc(side, p.faction === 'BEAR' ? 'icon_bear' : 'icon_usec', 'factions');
-  const sheet = el('div', { class: 'ov__sheet' },
+  return el('div', { class: 'ov__sheet' },
     el('div', { class: 'ov__levelbar' }, badge, el('span', { class: 'ov__level' }, two(p.level)),
       el('div', { class: 'ov__shorts' },
         el('div', {}, tRich('Raids Short', all('raids'))),
@@ -123,10 +119,18 @@ export function renderOverall() {
     side,
     uiImg('cross', 'ov__prestige'),
     // the figure is the client's own flat one until there is a model to turn
-    el('div', { class: 'ov__figure', id: 'overall-character-host' }, uiImg('character_pmc')),
+    el('div', { class: 'ov__figure' }, uiImg('character_pmc')),
     el('div', { class: 'ov__who' },
       el('div', { class: 'ov__nick' }, uiImg('icon_profile_big', '', { w: 27, h: 27 }), el('span', {}, p.name || 'PMC')),
       el('div', { class: 'ov__exp' }, uiImg('icon_experience_big'), el('b', {}, fmtNum(p.exp || 0)))));
+}
+
+export function renderOverall() {
+  const host = $('#overall-host');
+  if (!host) return;
+  const p = game.profile;
+  const n = career(sub);
+  const lifetime = p.registered ? (Date.now() - p.registered) / 1000 : 0;
 
   // ---- OVERALL / PMC / SCAV ----
   const tabs = el('div', { class: 'ov__tabs' },
@@ -232,7 +236,7 @@ export function renderOverall() {
   }
 
   const keep = host.querySelector('.ov__scroll')?.scrollTop || 0;
-  host.replaceChildren(sheet,
+  host.replaceChildren(characterSheet(),
     el('div', { class: 'ov__right' }, tabs, board, el('div', { class: 'ov__stat' }, t('STATISTICS')),
       el('div', { class: 'ov__scroll' }, pairs)));
   host.querySelector('.ov__scroll').scrollTop = keep;

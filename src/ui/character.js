@@ -3,14 +3,12 @@
 //
 // One screen, its tabs along the top in the game's order and words: OVERALL,
 // GEAR, HEALTH, CUSTOMIZATION, SKILLS, MAP, TASKS, ACHIEVEMENTS, PRESTIGE.
-// Each is drawn by its own module but the achievements, which are here.
+// Each is drawn by its own module.
 // =========================================================
 
 import { $, $$, el } from '../core/util.js';
 import { on, emit, EV } from '../core/events.js';
-import { game } from '../core/state.js';
 import { sfx } from '../core/audio.js';
-import { DB } from '../game/db.js';
 import { t } from '../core/i18n.js';
 import { uiImg } from '../core/uiart.js';
 import { showScreen, currentScreen } from './shell.js';
@@ -18,6 +16,7 @@ import { renderOverall } from './overall.js';
 import { renderSkills, initSkills } from './skills-ui.js';
 import { renderMap } from './map-ui.js';
 import { renderJournal } from './journal.js';
+import { renderAchievements } from './achievements.js';
 
 /** the tabs, with the client's locale key and glyph for each (`<ico>_selected` when lit) */
 const TABS = [
@@ -86,27 +85,4 @@ export function initCharacter() {
   on(EV.SCREEN_CHANGED, (id) => { if (id === 'character') { paint(); emit(EV.SCREEN_CHANGED, `character:${tab}`); } });
   on(EV.QUEST, () => { if (currentScreen() === 'character' && tab === 'tasks') renderJournal(); });
   on(EV.LEVEL_UP, () => { if (currentScreen() === 'character' && tab === 'overall') renderOverall(); });
-}
-
-// ---------------------------------------------------------
-// ACHIEVEMENTS
-// ---------------------------------------------------------
-function renderAchievements() {
-  const host = $('#achv-host');
-  if (!host) return;
-  host.replaceChildren();
-  const have = game.profile.achievements || {};
-  const grid = el('div', { class: 'achv-grid' });
-  const list = [...DB.achievements].sort((a, b) => (have[b.id] ? 1 : 0) - (have[a.id] ? 1 : 0) || (b.pct || 0) - (a.pct || 0));
-  for (const a of list) {
-    if (a.hidden && !have[a.id]) continue;
-    grid.append(el('div', { class: `achv-card achv-card--${a.rarity || 'common'}${have[a.id] ? ' is-done' : ''}` },
-      el('div', { class: 'achv-card__art' },
-        a.img ? el('img', { src: `assets/achievements/${a.img}`, alt: '', loading: 'lazy', onerror: function () { this.remove(); } }) : null),
-      el('div', { class: 'achv-card__body' },
-        el('div', { class: 'achv-card__name' }, a.name),
-        el('div', { class: 'achv-card__desc' }, a.desc || ''),
-        el('div', { class: 'achv-card__meta' }, `${(a.rarity || 'common').toUpperCase()} · ${a.pct != null ? `${a.pct}% of players` : ''}`))));
-  }
-  host.append(grid);
 }
