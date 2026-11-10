@@ -24,8 +24,11 @@
 # part_keys.json) and are marked `core`; everything else is keyed by its
 # tarkov id. A slug whose item the live list has dropped stays, from the dump,
 # and stays in every slot and conflict list the dump has it in - the dataset
-# cannot name what it does not list. Artwork is tarkov.dev's grid image, whose
-# size is exactly 63 * cells + 1 px a side - which cross-checks every footprint.
+# cannot name what it does not list. Artwork is tarkov.dev's base image - the
+# item's render with nothing behind it - whose size is exactly 63 * cells + 1
+# px a side, which cross-checks every footprint. Where the CDN has no base
+# image the grid image it has instead is kept and the template says so
+# (`imgFlat`), so the page does not draw a second name over the baked one.
 #
 # Two orders the game reads something off: a magazine lists the rounds of its
 # own calibre first (the first is what a magazine found loaded holds), and a
@@ -80,7 +83,12 @@ SPT412_LFSCONFIG = ['https://raw.githubusercontent.com/sp-tarkov/server-csharp/m
                     'https://raw.githubusercontent.com/sp-tarkov/server-csharp/4.1.2/.lfsconfig']
 # sp-tarkov/server, tag 3.10.1: the last tag where items.json is a plain blob
 SPT3101 = 'https://raw.githubusercontent.com/sp-tarkov/server/3.10.1/project/assets/database/'
-GRID_URL = 'https://assets.tarkov.dev/{id}-grid-image.webp'
+# The picture of an item is its render alone, on nothing: the tile's colour, its
+# frame and the name in its corner are drawn by the page, as the client draws
+# them, so the name can follow the interface language and the same picture
+# can sit in a slot at another size. (The CDN's grid image has all three
+# baked in.)
+ART_URL = 'https://assets.tarkov.dev/{id}-base-image.webp'
 
 UA = {'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
                      '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36')}
@@ -193,6 +201,18 @@ def webp_size(data):
         return (int.from_bytes(data[26:28], 'little') & 0x3FFF,
                 int.from_bytes(data[28:30], 'little') & 0x3FFF)
     return None
+
+
+def webp_has_alpha(data):
+    """whether a webp buffer carries transparency: a base image does, a grid image does not"""
+    if not data or len(data) < 32 or data[:4] != b'RIFF' or data[8:12] != b'WEBP':
+        return False
+    fmt = data[12:16]
+    if fmt == b'VP8X':
+        return bool(data[20] & 0x10)
+    if fmt == b'VP8L':
+        return bool((int.from_bytes(data[21:25], 'little') >> 28) & 1)
+    return False
 
 
 # ---------------------------------------------------------
@@ -620,55 +640,71 @@ def main():
     new_404 = {}
 
     def grab(job):
-        """the grid image of one template: (id, {'img', 'w', 'h'} | {'why'})"""
+        """the picture of one template: (id, {'img', 'w', 'h'[, 'flat']} | {'why'})"""
         tid, url, fn, guess = job
         dest = os.path.join(ASSETS, fn)
-        data, fresh = None, False
+        data, fresh, old = None, False, None
         if os.path.exists(dest) and os.path.getsize(dest) > 500:
             with open(dest, 'rb') as f:
                 data = f.read()
-        elif url in known_404:
-            new_404[url] = known_404[url]
-            return tid, {'why': 'no artwork upstream'}
-        elif no_art:
-            return tid, {'why': 'not downloaded (--no-art)'}
-        else:
-            missing = []
-            data, fresh = fetch(url, binary=True, missing=missing), True
-            if missing:
-                new_404[url] = time.strftime('%Y-%m-%d')
-                return tid, {'why': 'no artwork upstream'}
+            # A file with no transparency is a grid image from before the
+            # page drew its own tiles: the base image is asked for in its
+            # place, and the old one stands in only if there is none.
+            if not webp_has_alpha(data):
+                old, data = data, None
+        if data is None:
+            if url in known_404:
+                new_404[url] = known_404[url]
+            elif not no_art:
+                missing = []
+                data, fresh = fetch(url, binary=True, missing=missing), True
+                if missing:
+                    new_404[url] = time.strftime('%Y-%m-%d')
+                    data = None
+            if data is None:
+                if old is None:
+                    return tid, {'why': 'not downloaded (--no-art)' if no_art and url not in known_404
+                                 else 'no artwork upstream'}
+                data, fresh = old, False
         size = webp_size(data) if data else None
         if not size:
             if not fresh and os.path.exists(dest):
                 os.remove(dest)
             return tid, {'why': 'download failed' if not data else 'not an image'}
         cells = (max(1, round((size[0] - 1) / 63)), max(1, round((size[1] - 1) / 63)))
-        # A picture found under a name the dataset did not give is only the
-        # item's if it is the item's size: 63 px a cell plus one. What is not
-        # is somebody else's sprite filed under this id, and is not kept.
+        # A picture is only the item's if it is the item's size: 63 px a cell
+        # plus one. What is not is somebody else's sprite filed under this id,
+        # or a render of the item as it once was, and is not kept; the grid
+        # image that was here before stands in if there was one.
         if fresh and guess and cells != guess:
             new_404[url] = 'a %dx%d sprite for a %dx%d item' % (cells + guess)
-            return tid, {'why': 'no artwork upstream'}
+            if old is None:
+                return tid, {'why': 'no artwork upstream'}
+            data, fresh = old, False
+            size = webp_size(data)
+            cells = (max(1, round((size[0] - 1) / 63)), max(1, round((size[1] - 1) / 63)))
         if fresh:
             with open(dest, 'wb') as f:
                 f.write(data)
-        return tid, {'img': fn, 'w': cells[0], 'h': cells[1]}
+        res = {'img': fn, 'w': cells[0], 'h': cells[1]}
+        if not webp_has_alpha(data):
+            res['flat'] = True      # a grid image: colour, frame and name are in the picture
+        return tid, res
 
     def art_job(tid, link, fn, size):
         """
-        The dataset's own link where it is a grid image (a preset may point at
+        The dataset's own link where it is a base image (a preset may point at
         another id's); the conventional name otherwise - the dataset marks
         some items as having no picture, or only a JPEG, that the CDN does
-        have a grid image for - and then the picture has to measure `size`.
+        have one for - and then the picture has to measure `size`.
         """
-        if link and link.endswith('-grid-image.webp') and 'unknown-item' not in link:
-            return (tid, link, fn, None)
-        return (tid, GRID_URL.format(id=tid), fn, None if link is None else size)
+        if link and link.endswith('-base-image.webp') and 'unknown-item' not in link:
+            return (tid, link, fn, size)
+        return (tid, ART_URL.format(id=tid), fn, None if link is None else size)
 
     jobs = []
     for iid, rec in recs.items():
-        link = (rec['it'] or rec.get('quest') or {}).get('gridImageLink')
+        link = (rec['it'] or rec.get('quest') or {}).get('baseImageLink')
         jobs.append(art_job(iid, link, iid + '.webp', (int(rec['props'].get('Width') or 1), int(rec['props'].get('Height') or 1))))
     for pid in preset_ids:
         d = preset_data.get(pid)
@@ -680,7 +716,7 @@ def main():
         fn = pid + '.webp'
         if d['default'] and os.path.exists(os.path.join(ASSETS, d['base'] + '-preset.webp')):
             fn = d['base'] + '-preset.webp'
-        jobs.append(art_job(pid, P.get('gridImageLink'), fn, (P['width'], P['height'])))
+        jobs.append(art_job(pid, P.get('baseImageLink'), fn, (P['width'], P['height'])))
     with ThreadPoolExecutor(max_workers=ART_WORKERS) as ex:
         for tid, res in ex.map(grab, jobs):
             art[tid] = res
@@ -730,6 +766,8 @@ def main():
         a = art.get(tid) or {}
         if a.get('img'):
             tpl['img'] = a['img']
+            if a.get('flat'):
+                tpl['imgFlat'] = True
             if (a['w'], a['h']) != (tpl['w'], tpl['h']):
                 warns.append((key, 'sprite %dx%d' % (a['w'], a['h']), 'template %dx%d' % (tpl['w'], tpl['h'])))
         return tpl
@@ -782,6 +820,11 @@ def main():
             grids, filters = lv.grids_of(props, key_of, cat_ids, live.root)
             if grids:
                 tpl['container'] = {'grids': grids}
+                # a rig's pouches are not a row of boxes: the client places each
+                # by a layout it names here (tools/build_layouts.py reads them)
+                layout = props.get('RigLayoutName') or props.get('GridLayoutName')
+                if layout and len(grids) > 1:
+                    tpl['container']['layout'] = layout
                 if any(filters):
                     if all(f == filters[0] for f in filters):
                         tpl['container']['filter'] = filters[0]
@@ -1010,6 +1053,8 @@ def main():
                     a = art.get(pid) or {}
                     if a.get('img'):
                         base['presetImg'] = a['img']
+                        if a.get('flat'):
+                            base['presetFlat'] = True
                         if (a['w'], a['h']) != (fw, fh):
                             warns.append((recs[b]['key'], 'preset sprite %dx%d' % (a['w'], a['h']),
                                           'assembled %dx%d (%s)' % (fw, fh, base['name'])))

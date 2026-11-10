@@ -17,6 +17,15 @@ export const TPL = {};
 export const BY_ID = {};
 
 export const ITEM_ASSET_DIR = 'assets/items/';
+/**
+ * Which set of pictures this is. The files keep their names when the set
+ * changes (grid images gave way to bare renders), and a browser that has
+ * the old ones goes on showing them under the new tiles; asking for them
+ * under a new query makes them new files to it.
+ */
+const ART_REV = '?r2';
+/** where a picture of the item art folder is fetched from */
+export function artUrl(file) { return ITEM_ASSET_DIR + file + ART_REV; }
 
 /**
  * Every gameplay category the game understands. A template's `cat` is
@@ -82,17 +91,38 @@ export function valueTier(tpl) {
 }
 
 export async function loadItems() {
-  const res = await fetch(new URL('./items-db.json', import.meta.url));
+  // the layouts are only how a rig's pouches are set out; without them the
+  // pouches are drawn in a row and everything still works
+  const [res, lay] = await Promise.all([
+    fetch(new URL('./items-db.json', import.meta.url)),
+    fetch(new URL('./grid-layouts.json', import.meta.url)).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
   if (!res.ok) throw new Error(`items-db.json: ${res.status}`);
   const raw = await res.json();
+  const layouts = lay?.layouts || {};
+  const placed = lay?.items || {};
   for (const [key, tpl] of Object.entries(raw)) {
     tpl.key = key;
     tpl.tier = valueTier(tpl);
-    tpl.imgUrl = tpl.img ? ITEM_ASSET_DIR + tpl.img : null;
-    tpl.presetImgUrl = tpl.presetImg ? ITEM_ASSET_DIR + tpl.presetImg : null;
+    tpl.imgUrl = tpl.img ? artUrl(tpl.img) : null;
+    tpl.presetImgUrl = tpl.presetImg ? artUrl(tpl.presetImg) : null;
     // the large render of the default preset, for the modding screen's stage;
     // only the guns it was fetched for have one (tools/fetch_preset_art.py)
     tpl.presetLgUrl = tpl.presetLg ? `${ITEM_ASSET_DIR}${tpl.id}-preset-lg.webp` : null;
+    // where each of a rig's grids sits (tools/build_layouts.py): the layout
+    // the template names, or the one found for it by shape, with the corner
+    // of every grid in the order of the item's own
+    const c = tpl.container;
+    if (c?.grids?.length > 1) {
+      const over = placed[tpl.id];
+      const layout = layouts[over ? over[0] : c.layout];
+      if (layout) {
+        const order = over ? over[1] : c.grids.map((_g, i) => i);
+        if (order.length === c.grids.length && order.every((bi) => layout.g[bi])) {
+          c.place = { w: layout.w, h: layout.h, pos: order.map((bi) => layout.g[bi]) };
+        }
+      }
+    }
     TPL[key] = tpl;
     BY_ID[tpl.id] = tpl;
   }
@@ -161,4 +191,8 @@ export const SLOT_ACCEPTS = {
   secondary: ['weapon'],
   holster: ['pistol'],
   scabbard: ['melee'],
+  armband: ['armband'],
+  special1: ['special'],
+  special2: ['special'],
+  special3: ['special'],
 };

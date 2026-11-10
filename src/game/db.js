@@ -8,7 +8,7 @@
 // the template is filed under.
 // =========================================================
 
-import { TPL, BY_ID } from '../data/items.js';
+import { TPL, BY_ID, artUrl } from '../data/items.js';
 import { localizeStations } from './localize.js';
 
 export const ROUBLES = '5449016a4bdc2d6f028b456f';
@@ -150,7 +150,7 @@ function registerQuestItems() {
       key: q.id, id: q.id, name: q.name, short: q.short || q.name, desc: q.desc || '',
       w: q.w || 1, h: q.h || 1, weight: 0, stack: 1, price: 0,
       cat: 'quest', quest: true, known: true, tier: 0, bg: 'yellow',
-      img: `${q.id}.webp`, imgUrl: `assets/items/${q.id}.webp`,
+      img: `${q.id}.webp`, imgUrl: artUrl(`${q.id}.webp`),
     };
     TPL[q.id] = tpl;
     BY_ID[q.id] = tpl;
