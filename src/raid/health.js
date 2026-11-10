@@ -688,8 +688,11 @@ export class Health {
       p.hp = Math.min(p.max, p.hp + pl.heal);
     }
     if (m.eh) {
+      const fed = this.energy, watered = this.hydration;
       this.energy = clamp(this.energy + (m.eh.en || 0), 0, 100);
       this.hydration = clamp(this.hydration + (m.eh.hy || 0), 0, 100);
+      if (this.energy > fed) this.note('energyGot', this.energy - fed);
+      if (this.hydration > watered) this.note('waterGot', this.hydration - watered);
     }
     if (m.ctImmune) this.addEffect(FX.CTIMM, null, m.ctImmune);
     if (pl.removes.includes(FX.FR) || pl.removes.includes('dp')) this.painTimer = 0;
@@ -804,11 +807,23 @@ export class Health {
 
   /** the Therapist's bill: 30 ₽ an HP plus a flat fee per condition */
   treatmentCost() {
+    return Object.values(this.treatmentPrices()).reduce((a, b) => a + b, 0);
+  }
+  /** the same bill item by item: `hp` is the health missing, the rest each kind of condition */
+  treatmentPrices() {
     let hp = 0;
     for (const def of PARTS) hp += def.max - this.parts[def.key].hp;
-    let cost = Math.round(hp) * G.heal.hpPrice;
-    cost += this.count(FX.LB) * G.lb.price + this.count(FX.HB) * G.hb.price + this.count(FX.FR) * G.fr.price;
-    return cost;
+    return {
+      hp: Math.round(hp) * G.heal.hpPrice,
+      [FX.LB]: this.count(FX.LB) * G.lb.price, [FX.HB]: this.count(FX.HB) * G.hb.price, [FX.FR]: this.count(FX.FR) * G.fr.price,
+    };
+  }
+  /** put right what was paid for, by the names treatmentPrices gives */
+  treat(kinds) {
+    for (const k of kinds) {
+      if (k === 'hp') for (const def of PARTS) { this.parts[def.key].max = def.max; this.parts[def.key].hp = def.max; }
+      else this.effects = this.effects.filter((e) => e.type !== k);
+    }
   }
   needsTreatment() { return this.treatmentCost() > 0; }
   treatAll() {

@@ -256,35 +256,128 @@
 .prn__clock { position: absolute; left: 838.5px; top: 781.5px; }
 .prn__time { position: absolute; left: 896.4px; top: 799.4px; transform: translateY(-50%); font-size: 42px; line-height: 46.2px; letter-spacing: .4px; color: #c5c3b2; white-space: nowrap; }
 
-/* the raid's last screens still stand in the older frame */
-.raidend { position: absolute; inset: 0; display: flex; flex-direction: column; }
-.re__title { flex: none; padding: 22px 0 16px; text-align: center; font-size: 40px; color: var(--e-text-hi); text-transform: uppercase; }
-.re__body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 30px; overflow: auto; }
-.pr__foot { flex: none; display: flex; justify-content: space-between; align-items: center; padding: 14px 80px 36px; }
+/* ---------------- after the raid ----------------
+   RAID ENDED over the screen's own name, five times: how it ended, the kill
+   list, the raid's statistics, the experience, the treatment. The places are
+   the client's (SessionEndUIScene) set against 1080p captures of 1.0; the
+   buttons stand where the walk in keeps them. */
+.raidend { position: absolute; inset: 0; }
+.raidend .pr__sub.re__sub { top: 56.2px; }
+.re__expico { width: 44px; height: 31px; object-fit: contain; }
+.re__expico--small { width: 26px; height: 17px; }
+/* the plate a status is written on: its colour at three fifths, black on it, and a glow */
+.re__plate { position: relative; display: flex; align-items: center; color: #000; }
+.re__plate--green { background: #92de0099; --glow: var(--ui-status_green_glow); }
+.re__plate--red { background: #cc000099; --glow: var(--ui-status_orange_red); }
+.re__plate--orange { background: #e9470099; --glow: var(--ui-status_orange_glow); }
+.re__plate--grey { background: #dedede99; --glow: var(--ui-status_grey_glow); }
+.re__plate::after { content: ""; position: absolute; left: 50%; top: 50%; width: 773px; height: 217px; transform: translate(-50%, -50%); background: var(--glow) 0 0 / 100% 100% no-repeat; mix-blend-mode: plus-lighter; pointer-events: none; }
 
-/* ---------------- after the raid ---------------- */
-.re__title.is-ok { color: #cfe8a0; } .re__title.is-bad { color: #e2a29b; } .re__title.is-warn { color: #e6d29a; }
-.re-status { text-align: center; }
-.re-status__verdict { font-size: 76px; font-weight: 700; color: var(--e-text-hi); }
-.re-status__verdict.is-ok { color: #b6e04a; text-shadow: 0 0 40px rgba(154,211,35,.25); }
-.re-status__verdict.is-bad { color: #d6332c; text-shadow: 0 0 40px rgba(200,32,42,.3); }
-.re-status__verdict.is-warn { color: #e0b64a; }
-.re-status__sub { font-size: 22px; color: var(--e-dim); margin-bottom: 26px; }
-.re-rows { display: inline-grid; grid-template-columns: auto auto; gap: 7px 40px; margin: 0; text-align: left; font-size: 18px; }
-.re-rows dt { color: var(--e-dim); } .re-rows dd { margin: 0; color: var(--e-text-hi); font-weight: 700; text-align: right; }
-.re-rows--wide { gap: 7px 90px; }
-.re-kills { width: 1100px; align-self: flex-start; background: #0a0a0a; border: 1px solid #4a4d4c; }
-.re-kill { display: grid; grid-template-columns: 50px 90px 1fr 70px 120px 1.6fr; gap: 10px; padding: 7px 14px; border-bottom: 1px solid #141618; font-size: 16px; }
-.re-kill--head { color: #6a6a66; font-size: 13px; text-transform: uppercase; }
-.re-stats { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 1100px; align-self: flex-start; }
-.re-loot { width: 100%; }
-.re-loot__list { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; background: #000; border: 1px solid #2a2c2c; min-height: 60px; }
-.re-loot__list .item { position: relative; left: auto; top: auto; --cell: 46px; }
-.re-expwrap { display: flex; flex-direction: column; align-items: center; gap: 30px; }
-.re-exp { width: 560px; background: #0a0a0a; border: 1px solid #4a4d4c; }
-.re-exp__row { display: flex; justify-content: space-between; padding: 8px 18px; border-bottom: 1px solid #141618; font-size: 18px; }
-.re-exp__row b { color: var(--e-green); }
-.re-exp__row--total { font-size: 22px; font-weight: 700; color: var(--e-text-hi); border-bottom: 0; background: #101214; }
-.re-exp__level { text-align: center; }
-.re-exp__lvl { font-size: 26px; color: var(--e-text-hi); }
-.re-exp__num { margin-top: 4px; color: var(--e-dim); }
+/* EARLY EXTRACTION */
+.re__level { position: absolute; left: 669px; top: 127px; width: 284px; height: 96px; }
+.re__rank { position: absolute; left: 8px; top: 2px; width: 92px; height: 92px; }
+.re__level span { position: absolute; left: 109px; top: 12px; height: 72px; line-height: 72px; font-size: 65px; letter-spacing: 1.3px; color: #c5c3b2; }
+.re__fig { left: 720px; top: 49.6px; width: 373px; height: 560px; }
+.re__name { position: absolute; left: 0; width: 1920px; top: 589px; height: 27px; display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 24px; letter-spacing: .6px; color: #ca8a00; white-space: nowrap; }
+.re__status { position: absolute; left: -8px; width: 1920px; top: 639px; height: 51px; display: flex; justify-content: center; align-items: center; gap: 18px; }
+.re__status .re__plate { min-width: 220px; height: 51px; box-sizing: border-box; padding: 0 15px 0 55px; justify-content: center; font-size: 24px; letter-spacing: .5px; white-space: nowrap; }
+.re__status .re__plate img { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); }
+.re__time { position: relative; width: 132px; height: 51px; }
+.re__time span { position: absolute; left: 38px; top: 5px; font-size: 11px; line-height: 12.1px; letter-spacing: .3px; color: #b6c1c7; text-transform: uppercase; white-space: nowrap; }
+.re__time img { position: absolute; left: 0; top: 17px; opacity: .85; }
+.re__time b { position: absolute; left: 39px; top: 19px; font-weight: 400; font-size: 24px; line-height: 26.4px; letter-spacing: .5px; color: #c5c3b2; }
+.re__got { position: absolute; left: 0; width: 1920px; top: 727px; height: 44px; display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 36px; letter-spacing: .8px; color: #b6c1c7; white-space: nowrap; }
+.re__got--exp { top: 856px; }
+.re__warn { position: absolute; left: 960px; top: 795px; height: 81px; transform: translateX(-50%); box-sizing: border-box; padding: 0 30px 0 75px; display: flex; flex-direction: column; justify-content: center; gap: 4px; background: #cc000099; color: #000; white-space: nowrap; }
+.re__warn::after { content: ""; position: absolute; left: 50%; top: 50%; width: 773px; height: 217px; transform: translate(-50%, -50%); background: var(--ui-status_orange_red) 0 0 / 100% 100% no-repeat; mix-blend-mode: plus-lighter; pointer-events: none; }
+.re__warn img { position: absolute; left: 20px; top: 50%; margin-top: -17.5px; }
+.re__warn b { font-size: 24px; line-height: 26.4px; }
+.re__warn span { font-size: 18px; line-height: 19.8px; }
+
+/* YOUR KILL LIST */
+.re__kills { position: absolute; left: 280px; top: 190px; width: 1360px; height: 650px; background: #000000eb; }
+.re__khead { position: absolute; left: 0; top: 0; width: 1360px; height: 58px; font-size: 14px; font-weight: 700; color: #9b9fa1; text-transform: uppercase; }
+.re__khead .re__k { top: 22px; line-height: 15.4px; }
+.re__krows { position: absolute; left: 0; top: 58px; width: 1360px; height: 592px; overflow-x: hidden; overflow-y: auto; }
+.re__kill { position: relative; height: 60px; background: var(--ui-kill_list_separator) 20px 0 / calc(100% - 40px) 1px no-repeat; }
+.re__k { position: absolute; top: 0; line-height: 60px; white-space: nowrap; font-size: 18px; }
+.re__k--n { left: 35px; }
+.re__k--loc { left: 96px; }
+.re__k--time { left: 310px; }
+.re__k--who { left: 446px; }
+.re__k--lvl { left: 784px; }
+.re__k--side { left: 844px; }
+.re__k--how { left: 1014px; }
+.re__kill .re__k--n { font-size: 26px; font-style: italic; color: #fff; }
+.re__kill .re__k--loc, .re__kill .re__k--who { font-weight: 700; color: #f0eed9; }
+.re__kill .re__k--time { font-size: 26px; font-style: italic; color: #616564; }
+.re__kill .re__k--lvl { font-weight: 700; color: #b7c1c7; }
+.re__kill .re__k--side { font-style: italic; color: #f0eed9; text-transform: uppercase; }
+.re__kill .re__k--how { color: #b7c1c7; }
+.re__none { position: absolute; inset: 0; display: grid; place-items: center; font-size: 36px; font-style: italic; color: #b6c1c766; }
+
+/* RAID STATISTICS */
+.re__where { position: absolute; left: 685px; top: 70px; width: 550px; height: 300px; pointer-events: none; }
+.re__banner { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .55; -webkit-mask: linear-gradient(#000 20%, transparent 78%); mask: linear-gradient(#000 20%, transparent 78%); }
+.re__where span { position: absolute; left: 0; right: 0; top: 35px; height: 34px; display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 24px; letter-spacing: .5px; color: #c5c3b2; }
+.re__where span::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: #dfe3e4; }
+.re__stats { position: absolute; left: 462px; top: 170px; width: 1006px; height: 726px; overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+.re__stats .ov__sec { flex: none; width: 996px; }
+
+/* EXPERIENCE GAINED */
+.re__band { position: absolute; left: 0; top: 142px; width: 1920px; height: 159px; background: #00000054; }
+.re__lvlico { position: absolute; top: 30px; width: 100px; height: 100px; }
+.re__lvlico--now { left: 140px; }
+.re__lvlico--next { left: 1549px; }
+.re__lvl { position: absolute; top: 44px; height: 72px; line-height: 72px; font-size: 65px; letter-spacing: 1.3px; color: #c5c3b2; }
+.re__lvl--now { left: 245px; }
+.re__lvl--next { left: 1654px; }
+.re__bar { position: absolute; left: 343px; top: 56px; width: 1192px; height: 27px; box-sizing: border-box; border: 4px solid transparent; border-image: var(--ui-experience_bar_background) 4 fill / 4px stretch; }
+.re__barwas, .re__barnew { position: absolute; top: 0; height: 19px; }
+.re__barwas { left: 0; width: calc(100% * var(--v)); background: linear-gradient(#5a5f61, #3c4042); }
+.re__barnew { left: calc(100% * var(--a)); width: calc(100% * var(--v)); background: #b6c1c769; box-shadow: inset -2px 0 0 #dfe6ea; }
+.re__gain { position: absolute; left: calc(100% * var(--v)); bottom: 27px; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; padding-bottom: 14px; font-size: 24px; color: #b6c1c7; white-space: nowrap; }
+.re__gain::after { content: ""; position: absolute; left: 50%; bottom: 0; margin-left: -9px; border: 9px solid transparent; border-top: 14px solid #dfe6ea; border-bottom: 0; }
+.re__cur, .re__rem { position: absolute; top: 92px; font-size: 24px; line-height: 26.4px; letter-spacing: .5px; color: #b6c1c7; white-space: nowrap; }
+.re__cur { left: 345px; }
+.re__rem { right: 388px; }
+.re__cur span, .re__rem span { color: #949286; }
+.re__xlist { position: absolute; left: 620px; top: 313px; width: 690px; height: 466px; overflow-x: hidden; overflow-y: auto; }
+.re__xsec { width: 680px; margin-bottom: 4px; }
+.re__xhead { position: relative; height: 44px; background: var(--ui-statlist_header) 0 0 / 100% 100%; font-size: 18px; letter-spacing: .35px; color: #c5c3b2; }
+.re__xico { position: absolute; left: 11px; top: 11px; }
+.re__xhead span { position: absolute; left: 44px; top: 11.5px; line-height: 21px; white-space: nowrap; }
+.re__xhead b { position: absolute; right: 45px; top: 11.5px; line-height: 21px; font-weight: 400; color: #b6c1c7; }
+.re__xhead .re__expico { position: absolute; right: 12px; top: 13.5px; }
+.re__xrow { position: relative; height: 34px; margin-top: 1px; background: var(--ui-statlist_item_background) 0 0 / 100% 100%; font-size: 18px; letter-spacing: .35px; }
+.re__xrow span { position: absolute; left: 44px; top: 6.5px; line-height: 21px; color: #c5c3b2; white-space: nowrap; }
+.re__xrow b { position: absolute; right: 45px; top: 6.5px; line-height: 21px; font-weight: 400; color: #b6c1c7; }
+.re__bonus { position: absolute; left: 620px; top: 794px; width: 680px; height: 44px; font-size: 24px; letter-spacing: .5px; white-space: nowrap; }
+.re__bonus > img:first-child { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); max-height: 30px; width: auto; }
+.re__bonus span { position: absolute; left: 43px; top: 0; line-height: 44px; }
+.re__bonus b { position: absolute; right: 46px; top: 0; line-height: 44px; font-weight: 400; }
+.re__bonus .re__expico { position: absolute; right: 12px; top: 13.5px; }
+
+/* AFTER RAID TREATMENT */
+.re__hcap { position: absolute; left: 137px; top: 76px; font-size: 24px; line-height: 26.4px; letter-spacing: .5px; color: #fff; white-space: nowrap; }
+.re__body { position: absolute; left: 95px; top: 115px; width: 626px; height: 870px; background: #00000080; overflow: hidden; }
+/* the health tab's board, drawn a little under size to stand whole in this panel */
+.re__body .hb { transform: scale(.9645); transform-origin: 0 0; margin-left: 23px; }
+.re__note { position: absolute; left: 761px; top: 115px; width: 1064px; height: 81px; box-sizing: border-box; padding: 0 20px 0 62px; display: flex; align-items: center; background: #8ec61f99; font-size: 18px; line-height: 20px; letter-spacing: .3px; color: #000; }
+.re__note img { position: absolute; left: 10px; top: 21px; filter: brightness(0); }
+.re__tpanel { position: absolute; left: 761px; top: 216px; width: 1064px; height: 699px; background: #00000080; }
+.re__tcap { position: absolute; left: 13px; top: 11px; font-size: 24px; line-height: 26.4px; letter-spacing: .5px; color: #fff; white-space: nowrap; }
+.re__treatall { position: absolute; left: 243px; top: 15px; min-width: 150px; height: 18px; padding: 0 12px; border: 0; background: #2b2d2e; font-family: var(--font-ui); font-size: 11px; color: #fff; text-transform: uppercase; }
+.re__trows { position: absolute; left: 8px; top: 70px; width: 1048px; height: 560px; overflow-x: hidden; overflow-y: auto; }
+.re__treat { position: relative; display: block; width: 1040px; height: 65px; margin-bottom: 5px; padding: 0; border: 0; background: #54585b66; font-family: var(--font-ui); text-align: left; }
+.re__treat i { position: absolute; left: 27px; top: 22px; width: 20px; height: 21px; box-sizing: border-box; border: 3px solid transparent; border-image: var(--ui-checkbox) 3 fill / 3px stretch; }
+.re__treat.is-on i { background: var(--ui-checkmark) center / 14px 12px no-repeat; }
+.re__tname { position: absolute; left: 67px; top: 0; line-height: 65px; font-size: 18px; font-weight: 700; letter-spacing: .35px; color: #c5c3b2; white-space: nowrap; }
+.re__treat b { position: absolute; right: 546px; top: 0; line-height: 65px; font-size: 30px; color: #9ad323; }
+.re__tdo { position: absolute; left: 542px; top: 0; line-height: 65px; font-size: 18px; color: #a6b0b5; white-space: nowrap; }
+.re__tcost { position: absolute; right: 9px; top: 0; line-height: 65px; font-size: 18px; letter-spacing: .35px; color: #c5c3b2; white-space: nowrap; }
+.re__full { position: absolute; left: 132px; top: 280px; width: 800px; height: 75px; display: grid; place-items: center; background: #8ec61f99; font-size: 30px; font-weight: 700; color: #000; }
+.re__ttotal { position: absolute; left: 5px; top: 639px; width: 1054px; height: 55px; box-sizing: border-box; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; background: #93e61426; font-size: 18px; font-weight: 700; letter-spacing: .35px; color: #b6c1c7; white-space: nowrap; }
+.re__ttotal b { font-weight: 400; }
+.re__tclock { vertical-align: middle; margin-right: 8px; opacity: .8; }
+.re__tsum b { margin-left: 14px; font-size: 40px; font-weight: 700; color: #c5c3b2; vertical-align: middle; }

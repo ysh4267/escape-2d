@@ -174,7 +174,7 @@ async function boot() {
     game.profile.stats.lastSession = Date.now();
     addStat('raidSec', Math.round(r.duration || 0));
     game.profile.stats.killStreak = Math.max(game.profile.stats.killStreak || 0, r.kills || 0);
-    addStat(r.status === 'survived' ? 'survivedRaids' : r.status);
+    addStat(r.runner ? 'runner' : r.status === 'survived' ? 'survivedRaids' : r.status);
     addStat('shots', r.shots || 0);
     addStat('searched', r.searched || 0);
     const st = game.profile.stats;
@@ -344,6 +344,8 @@ function runDevHooks() {
     return;
   }
   if (mode === 'deploy') { showPane('raid'); return; }
+  // straight onto the ground, past the walk in
+  if (mode === 'raid') { deploy('factory'); return; }
   if (mode === 'health') {
     // a battered body and a bag of meds, on the hideout pane or in a raid
     import('./ui/health-ui.js').then(async (hu) => {

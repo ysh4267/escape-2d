@@ -180,9 +180,20 @@ export function netWorthRub() {
  * Experience goes onto the running total and the level is read off the game's
  * own table (level 2 begins at 1,000, level 3 at 4,017 ... 79 at 172 million).
  */
+// where experience of a kind goes while a raid is keeping count (game/raidexp.js)
+const RAID_LINE = { kill: 'combat/elim', loot: 'looting/items', heal: 'treatment/healed', survive: 'exploring/escape' };
+
 export function addExp(n, why = '') {
   n = Math.round(n);
   if (!(n > 0)) return;
+  // in a raid nothing earned there is the character's yet
+  const line = game.raidExp && RAID_LINE[why];
+  if (line) {
+    const row = game.raidExp[line] || (game.raidExp[line] = { xp: 0, n: 0 });
+    row.xp += n;
+    row.n += 1;
+    return;
+  }
   game.profile.exp += n;
   emit(EV.EXP, { amount: n, why });
   const lvl = levelForExp(game.profile.exp);

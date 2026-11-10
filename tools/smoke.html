@@ -424,6 +424,8 @@ try {
   check('loot is flagged as raid loot', carried.some(i => i.raidLoot));
   check('nothing is found-in-raid yet', carried.every(i => !i.fir));
 
+  // eight minutes in: out this soon after with so little done would be a run through
+  raid2.timeLeft = raid2.map.duration - 8 * 60;
   const exit = raid2.extracts.find(e => !e.req);
   const ep = nav.snap(exit.x, exit.y);
   raid2.player.x = ep[0]; raid2.player.y = ep[1];

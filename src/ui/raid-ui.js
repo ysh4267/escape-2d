@@ -823,10 +823,10 @@ function showResult(result) {
   dndContext.canMove = () => false;
   dndContext.onActivate = null;
 
-  result.statusKey = {
+  result.statusKey = result.runner ? 'runner' : ({
     [RAID_STATUS.SURVIVED]: 'survived', [RAID_STATUS.MIA]: 'mia',
     [RAID_STATUS.KIA]: 'kia', [RAID_STATUS.LEFT]: 'left',
-  }[result.status] || result.status;
+  }[result.status] || result.status);
 
   openRaidEnd(result, () => {
     // what you carried out stays exactly where you packed it — the rig, the

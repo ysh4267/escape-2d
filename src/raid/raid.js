@@ -17,6 +17,7 @@ import { sfx } from '../core/audio.js';
 import { emit, EV } from '../core/events.js';
 import { Health, PART, FX, FX_INFO } from './health.js';
 import { claimLost } from '../game/insurance.js';
+import { openTally, tally, tallied, closeTally, KILL_XP } from '../game/raidexp.js';
 
 export const RAID_STATUS = {
   RUNNING: 'running',
@@ -86,6 +87,10 @@ export class Raid {
     this.killLog = [];
     this.rng = makeRng(seed ?? (Math.random() * 0xffffffff) >>> 0);
     this.status = RAID_STATUS.RUNNING;
+    // from here experience is the raid's, not the character's, until it ends
+    openTally();
+    /** the career's counters as the raid began: what it adds to them is the raid's own statistics */
+    this.careerBefore = { ...game.profile.stats };
     this.time = 0;
     this.timeLeft = mapDef.duration;
     this.containers = [];
@@ -300,7 +305,7 @@ export class Raid {
     if (b.door.nav && b.door.navIndex >= 0) b.door.nav.setDoorOpen(b.door.navIndex, true);
     sfx.openContainer('crate');
     emit(EV.RAID_TOAST, { kind: 'ok', text: `${b.door.name} forced` });
-    addExp(20);
+    tally('looting/breach', 20);
     const resume = b.resume;
     this.breaching = null;
     if (resume) this.moveTo(resume[0], resume[1]);
@@ -894,7 +899,7 @@ export class Raid {
           const uid = c.order[c.found.size];
           c.found.add(uid);
           this.stats.found++;
-          addExp(4, 'loot');
+          tally('looting/search', 4);
           // no chime per item: the game has no search-success cue, the
           // rummage simply keeps going and the item appears in the panel
           emit(EV.LOOT_FOUND, c);
@@ -904,7 +909,7 @@ export class Raid {
           this.stats.searched++;
           if (c.type === 'deadscav' || c.type === 'pmcbody') addStat('bodiesLooted');
           else if (c.type === 'safe' || c.type === 'banksafe') addStat('unlockedSafes');
-          addExp(6, 'loot');
+          tally('looting/search', 6, 0);
           this.searching = null;
           this.searchProgress = 0;
           sfx.searchStop();
@@ -1246,7 +1251,11 @@ export class Raid {
     scav.state = 'dead';
     scav.hp = 0;
     this.stats.kills++;
-    addExp(120, 'kill');
+    // the kill, a tenth or a fifth more for the head, and ten a kill more for every one after the first
+    const worth = KILL_XP[scav.role] ?? KILL_XP[scav.side] ?? KILL_XP.scav;
+    tally('combat/elim', worth);
+    if ((part || scav.lastPart) === 'head') tally('combat/head', worth * (scav.side === 'pmc' ? 0.2 : 0.1));
+    if (this.stats.kills > 1) tally('combat/streak', 10 * this.stats.kills, 0);
     emit(EV.RAID_TOAST, { kind: 'ok', text: bled ? 'Scav bled out' : 'Scav down' });
     const p = this.player;
     const metres = (range ?? dist(p.x, p.y, scav.x, scav.y)) * (this.map.unitsToMetres || 1);
@@ -1342,6 +1351,12 @@ export class Raid {
    */
   drainHealthEvents() {
     const h = this.health;
+    // a point of health put back, of energy or of water taken in, is a point of experience
+    tally('treatment/healed', h.tally.hpHealed || 0, 0);
+    tally('treatment/energy', h.tally.energyGot || 0, 0);
+    tally('treatment/hydration', h.tally.waterGot || 0, 0);
+    delete h.tally.energyGot;
+    delete h.tally.waterGot;
     for (const key in h.tally) addStat(key, h.tally[key]);
     h.tally = {};
     if (!h.events.length) return;
@@ -1410,8 +1425,8 @@ export class Raid {
     const where = u.part ? ` — ${PART[u.part].name.toLowerCase()}` : '';
     emit(EV.RAID_TOAST, { kind: 'ok', text: `${u.item.tpl.short || u.item.tpl.name}${where}: ${pl.note}` });
     if ((u.item.res ?? 0) <= 0) detach(u.item);
-    if (pl.removes.includes(FX.HB) || pl.removes.includes(FX.LB)) addExp(pl.removes.includes(FX.HB) ? 40 : 25, 'heal');
-    if (pl.removes.includes(FX.FR)) addExp(30, 'heal');
+    if (pl.removes.includes(FX.LB)) tally('treatment/healed', 25);
+    if (pl.removes.includes(FX.FR)) tally('treatment/healed', 30);
     emit(EV.INVENTORY_CHANGED);
   }
 
@@ -1479,6 +1494,9 @@ export class Raid {
     this.drainHealthEvents();
     this.tallyCareer();
     const survived = status === RAID_STATUS.SURVIVED;
+    // out inside seven minutes with next to nothing fought for or found is a run through
+    const runner = survived && this.map.duration - this.timeLeft < 7 * 60 && tallied('combat', 'looting') < 200;
+    if (survived) tally('exploring/escape', runner ? 200 : 300);
     if (survived) sfx.extract();
     else if (status === RAID_STATUS.KIA) sfx.death();
     this.using = null;
@@ -1488,6 +1506,7 @@ export class Raid {
     else this.health.afterDeath();
     const result = {
       status,
+      runner,
       extract: viaExtract,
       location: this.location,
       hour: this.hour,
@@ -1506,8 +1525,9 @@ export class Raid {
 
     const eq = game.equipment;
     if (survived) {
+      // what a run through brings out does not count as found in raid
       for (const it of eq.everything()) {
-        if (it.raidLoot) { it.fir = true; delete it.raidLoot; }
+        if (it.raidLoot) { if (!runner) it.fir = true; delete it.raidLoot; }
       }
       // an exit that wants an item handed over takes it on the way through
       if (viaExtract?.req) {
@@ -1520,8 +1540,7 @@ export class Raid {
       for (const d of eq.slotList()) if (d.item) result.kept.push(d.item);
       for (const g of eq.pockets) result.kept.push(...g.items());
       result.value = result.kept.reduce((n, it) => n + it.value, 0);
-      addExp(180 + this.stats.searched * 12, 'survive');
-      game.profile.survived++;
+      if (!runner) game.profile.survived++;
       game.profile.extracted++;
       if (result.value > game.profile.bestHaul) game.profile.bestHaul = result.value;
     } else {
@@ -1537,10 +1556,16 @@ export class Raid {
       // what was insured is looked for where it fell
       claimLost(eq, { location: this.location, loc: this.map.name });
       eq.clearInsecure();
-      addExp(35);
       if (status === RAID_STATUS.KIA) game.profile.died++;
     }
     game.profile.raids++;
+    // the count is closed and the character has what the raid was worth
+    result.exp = closeTally(runner ? 'runner' : status);
+    // what this raid alone put on the career
+    result.career = {};
+    for (const [key, v] of Object.entries(game.profile.stats)) {
+      if (typeof v === 'number' && v !== (this.careerBefore[key] || 0)) result.career[key] = v - (this.careerBefore[key] || 0);
+    }
 
     emit(EV.RAID_END, result);
     return result;

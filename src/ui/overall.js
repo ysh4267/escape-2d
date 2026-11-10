@@ -125,6 +125,66 @@ export function characterSheet() {
       el('div', { class: 'ov__exp' }, uiImg('icon_experience_big'), el('b', {}, fmtNum(p.exp || 0)))));
 }
 
+/**
+ * The three lists that count what was done and what it cost - the body, the
+ * looting, the fighting - for whatever `n` counts: a career, or one raid.
+ * @param {(key: string) => number} n
+ */
+export function conditionSections(n) {
+  return [
+    { ico: 'icon_health', title: 'Health and physical condition', rows: [
+      // a point of health is a millilitre: the client writes the litres
+      { key: 'bloodLost', v: `${round2(n('bloodLost') / 1000)}l` },
+      { key: 'bodypartsLost', v: n('bodypartsLost') },
+      { key: 'lessDamagedPart', v: leastDamaged(n) },
+      { key: 'hpHealed', v: round2(n('hpHealed')) },
+      { key: 'fractures', v: n('fractures') },
+      { key: 'contusions', v: n('contusions') },
+      { key: 'dehydrations', v: n('dehydrations') },
+      { key: 'exhaustions', v: n('exhaustions') },
+      { key: 'drinksUsed', v: n('drinksUsed') },
+      { key: 'foodUsed', v: n('foodUsed') },
+      { key: 'medicineUsed', v: n('medicineUsed') },
+    ] },
+    { ico: 'icon_statscategory_looting', title: 'Looting', rows: [
+      { key: 'kmTraveled', v: round2(n('metresTraveled') / 1000) },
+      { key: 'StatFoundMoneyUSD', v: n('foundUSD') },
+      { key: 'StatFoundMoneyEUR', v: n('foundEUR') },
+      { key: 'StatFoundMoneyRUB', v: n('foundRUB') },
+      { key: 'bodiesLooted', v: n('bodiesLooted') },
+      { key: 'unlockedSafes', v: n('unlockedSafes') },
+      { key: 'weapFound', v: n('weapFound') },
+      { key: 'ammoFound', v: n('ammoFound') },
+      { key: 'modsFound', v: n('modsFound') },
+      { key: 'throwFound', v: n('throwFound') },
+      { key: 'foodDrinksFound', v: n('foodDrinksFound') },
+      { key: 'keysFound', v: n('keysFound') },
+      { key: 'bartitemsFound', v: n('bartitemsFound') },
+      { key: 'eqipFound', v: n('eqipFound') },
+    ] },
+    { ico: 'icon_statscategory_combat', title: 'Combat', rows: [
+      { key: 'damAppliedBody', v: whole(n('damAppliedBody')) },
+      { key: 'damAppliedArmor', v: whole(n('damAppliedArmor')) },
+      { key: 'ammoUsed', v: n('shots') },
+      { key: 'hitCount', v: n('hitCount') },
+      { key: 'fatalHits', v: n('fatalHits') },
+      { key: 'headshots', v: n('headshots') },
+      { key: 'longshotDist', v: round2(n('longestShot')) },
+      { key: 'savageKills', v: n('killsScav') },
+      { key: 'pmcKills', v: n('killsPmc') },
+      { key: 'bossKills', v: n('killsBoss') },
+      { key: 'killStreak', v: n('killStreak') },
+    ] },
+  ];
+}
+
+/** one of the lists as the client draws it: its heading, then a row a figure */
+export function statSection(s) {
+  return el('div', { class: 'ov__sec' },
+    el('div', { class: 'ov__sechead' }, el('span', { class: 'ov__secico' }, uiImg(s.ico)), el('span', {}, t(s.title))),
+    s.rows.map((r) => el('div', { class: 'ov__row' }, el('span', { class: 'ov__k' }, t(r.key)), el('span', { class: 'ov__v' }, String(r.v)))));
+}
+
 export function renderOverall() {
   const host = $('#overall-host');
   if (!host) return;
@@ -182,53 +242,9 @@ export function renderOverall() {
       { key: 'currWinStreak', v: n('streak') },
       { key: 'CommonValue', v: whole(stashWorth()) },
     ] },
-    { ico: 'icon_health', title: 'Health and physical condition', rows: [
-      // a point of health is a millilitre: the client writes the litres
-      { key: 'bloodLost', v: `${round2(n('bloodLost') / 1000)}l` },
-      { key: 'bodypartsLost', v: n('bodypartsLost') },
-      { key: 'lessDamagedPart', v: leastDamaged(n) },
-      { key: 'hpHealed', v: round2(n('hpHealed')) },
-      { key: 'fractures', v: n('fractures') },
-      { key: 'contusions', v: n('contusions') },
-      { key: 'dehydrations', v: n('dehydrations') },
-      { key: 'exhaustions', v: n('exhaustions') },
-      { key: 'drinksUsed', v: n('drinksUsed') },
-      { key: 'foodUsed', v: n('foodUsed') },
-      { key: 'medicineUsed', v: n('medicineUsed') },
-    ] },
-    { ico: 'icon_statscategory_looting', title: 'Looting', rows: [
-      { key: 'kmTraveled', v: round2(n('metresTraveled') / 1000) },
-      { key: 'StatFoundMoneyUSD', v: n('foundUSD') },
-      { key: 'StatFoundMoneyEUR', v: n('foundEUR') },
-      { key: 'StatFoundMoneyRUB', v: n('foundRUB') },
-      { key: 'bodiesLooted', v: n('bodiesLooted') },
-      { key: 'unlockedSafes', v: n('unlockedSafes') },
-      { key: 'weapFound', v: n('weapFound') },
-      { key: 'ammoFound', v: n('ammoFound') },
-      { key: 'modsFound', v: n('modsFound') },
-      { key: 'throwFound', v: n('throwFound') },
-      { key: 'foodDrinksFound', v: n('foodDrinksFound') },
-      { key: 'keysFound', v: n('keysFound') },
-      { key: 'bartitemsFound', v: n('bartitemsFound') },
-      { key: 'eqipFound', v: n('eqipFound') },
-    ] },
-    { ico: 'icon_statscategory_combat', title: 'Combat', rows: [
-      { key: 'damAppliedBody', v: whole(n('damAppliedBody')) },
-      { key: 'damAppliedArmor', v: whole(n('damAppliedArmor')) },
-      { key: 'ammoUsed', v: n('shots') },
-      { key: 'hitCount', v: n('hitCount') },
-      { key: 'fatalHits', v: n('fatalHits') },
-      { key: 'headshots', v: n('headshots') },
-      { key: 'longshotDist', v: round2(n('longestShot')) },
-      { key: 'savageKills', v: n('killsScav') },
-      { key: 'pmcKills', v: n('killsPmc') },
-      { key: 'bossKills', v: n('killsBoss') },
-      { key: 'killStreak', v: n('killStreak') },
-    ] },
+    ...conditionSections(n),
   ];
-  const section = (s) => el('div', { class: 'ov__sec' },
-    el('div', { class: 'ov__sechead' }, el('span', { class: 'ov__secico' }, uiImg(s.ico)), el('span', {}, t(s.title))),
-    s.rows.map((r) => el('div', { class: 'ov__row' }, el('span', { class: 'ov__k' }, t(r.key)), el('span', { class: 'ov__v' }, String(r.v)))));
+  const section = statSection;
   // the lists stand two abreast, and the next two start under the longer one
   const pairs = [];
   for (let i = 0; i < sections.length; i += 2) {
