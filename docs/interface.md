@@ -70,8 +70,25 @@ a key; `--report` lists the ones the dump does not have (use
 has, and the client therefore has no key for, is written out at the call site
 in each language: `own('Reset game profile', '게임 프로필 초기화')`.
 
+Some of the client's strings carry their own colours
+(`R: <color=#C3C5BBFF>{0}</color>`); `tRich(key, ...args)` gives those back as
+nodes with the colour applied. Placeholders are filled as the client fills
+them, padding included: `t('{0}h{1:00}m', 4, 7)` is `4h07m`.
+
 Numbers are written the way the game writes them: `fmtNum()` sets thousands
 apart with a space, `fmtShort()` gives `2.4M`.
+
+## Type
+
+The layout dump gives every label's size and colour, and the size is right:
+cap heights in a capture agree with it. The width is not. The client sets its
+type a little wider than the font's own advance - about 0.02 em a letter for
+mixed case, nearer 0.04 em for a line of capitals - so a label at the dump's
+size comes out 4 to 7 % short. Measure the line in a capture against the same
+line in `tools/shot.py`'s picture and close the difference with
+`letter-spacing` on that label (the OVERALL tab in `styles/eft-character.css`
+is done this way throughout). Do not make the type larger to fit: the height
+is already right.
 
 ## Stylesheets
 
@@ -92,7 +109,8 @@ errors; it lines up pixel for pixel with a 1080p capture of the game, so put
 the two side by side. The page exposes what a script needs as
 `window.ESCAPE2D` (`game`, `DB`, `showScreen`, `openCharacter`, `Quests`,
 `Traders`, `Mail`, ...). Serve the repo root without caching on port 8777
-first. `--lang en|ko` boots it in a given language.
+first. `--lang en|ko` boots it in a given language. Scroll bars are in the
+picture, as they are in a browser window.
 
 `python tools/sweep.py` walks every screen the way a player gets there - the
 bar, a tab, a card - and reports each step that threw, logged an error or

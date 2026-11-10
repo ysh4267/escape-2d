@@ -24,23 +24,68 @@
 .gear-foot__stat em { font-style: normal; font-size: 11px; color: #8a8a8a; }
 .field { border-radius: 0; border-color: #2a2c2c; background: #1a1c1c; }
 
-/* ---- OVERALL ---- */
-.overall { display: grid; grid-template-columns: 520px 1fr; gap: 14px; height: 100%; overflow: auto; }
-.overall__left { display: flex; flex-direction: column; gap: 12px; }
-.overall__right { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-content: start; }
-.ov-card { display: flex; gap: 16px; align-items: center; padding: 16px; background: rgba(5,7,7,.82); border: 1px solid var(--e-line); }
-.ov-card__badge { position: relative; width: 92px; height: 92px; display: grid; place-items: center; flex: none; }
-.ov-card__badge img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-.ov-card__badge b { position: relative; font-size: 30px; color: #fff; text-shadow: 0 0 5px #000, 0 0 2px #000; }
-.ov-card__name { font-size: 26px; font-weight: 700; color: var(--e-text-hi); }
-.ov-card__side { color: var(--e-dim); font-size: 14px; }
-.ov-card__xp span { display: block; margin-top: 3px; font-size: 13px; color: var(--e-dim); }
-.ov-block { background: rgba(5,7,7,.82); border: 1px solid var(--e-line); }
-.ov-block__head { padding: 3px 26px 3px 8px; display: inline-block; background: linear-gradient(180deg, #1e2022, #131617); color: #aeb9c1; font-size: 14px; font-weight: 700; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
-.ov-rows { display: grid; grid-template-columns: 1fr auto; margin: 0; padding: 4px 12px 10px; }
-.ov-rows dt, .ov-rows dd { margin: 0; padding: 5px 0; border-bottom: 1px solid #17191b; font-size: 16px; }
-.ov-rows dt { color: var(--e-dim); }
-.ov-rows dd { color: var(--e-text-hi); text-align: right; font-weight: 700; }
+/* ---- OVERALL ----
+   The client's OverallScreen. Every position is its own, less the 43 px of
+   the tab strip the pane hangs under: the sheet is LeftSide [10,48 624x967],
+   the rest RightSide [650.5,48 1245x967]. The client sets its type a little
+   wider than the font's own advance; the letter-spacing here is that
+   difference, measured off 1080p captures line by line. */
+#pane-overall { padding: 0; }
+.overall { position: absolute; inset: 0; }
+
+.ov__sheet { position: absolute; left: 10px; top: 5px; width: 624px; height: 967px; background: #000000e6; overflow: hidden; }
+.ov__sheet::before { content: ""; position: absolute; inset: 0; background: var(--ui-traderbar_texture_square_big) 0 0 / 60px 60px; opacity: .06; }
+.ov__levelbar { position: absolute; left: 9px; top: 11px; width: 606px; height: 85px; }
+.ov__rank { position: absolute; left: 0; top: 10px; width: 65px; height: 65px; }
+.ov__level { position: absolute; left: 84px; top: 0; line-height: 85px; font-size: 60.9px; color: #dbdee1; }
+/* three rows of two: R, K, L/R down the first column, S/R, K/D, Online down the second */
+.ov__shorts {
+  position: absolute; left: 426px; top: 3.4px; display: grid; grid-auto-flow: column;
+  grid-template: repeat(3, 25.5px) / 70px 110px; font-size: 15px; line-height: 17px; letter-spacing: .3px; color: #91928b;
+}
+.ov__side { position: absolute; left: 6px; top: 118.4px; width: 128px; height: 127.25px; }
+.ov__prestige { position: absolute; left: 60px; top: 312px; }
+.ov__figure { position: absolute; left: 30.5px; top: -36px; width: 563px; height: 845px; pointer-events: none; }
+.ov__figure img { width: 100%; height: 100%; }
+.ov__who { position: absolute; left: 0; right: 0; top: 877.9px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.ov__nick, .ov__exp { display: flex; align-items: center; gap: 5px; font-size: 24px; line-height: 27px; }
+.ov__nick { height: 27px; color: #c3c5b2; letter-spacing: .55px; }
+.ov__nick img { margin: 0 1px; }
+.ov__exp { height: 31px; color: #b6c1c7; }
+.ov__exp b { font-weight: 700; letter-spacing: 1px; }
+
+.ov__right { position: absolute; left: 650.5px; top: 5px; width: 1254.8px; height: 967px; }
+.ov__tabs { position: absolute; left: 0; top: 0; width: 1245px; height: 58px; background: #000000a0; }
+.ov__tab { position: absolute; top: 13.8px; width: 251.7px; height: 30px; padding: 0; font-size: 20px; letter-spacing: .8px; color: #c5c3b2; }
+.ov__tab:nth-child(1) { left: 120px; }
+.ov__tab:nth-child(2) { left: 496.7px; }
+.ov__tab:nth-child(3) { left: 873.3px; }
+
+.ov__board { position: absolute; left: 0; top: 58px; width: 1245px; height: 244.7px; background: #0000007f; }
+.ov__board::before { content: ""; position: absolute; inset: 8px; background: var(--ui-chtoto) 0 0 / 64px 64px; }
+.ov__line { position: absolute; left: 10px; width: 1215px; display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+.ov__line--first { top: 2px; height: 144.7px; column-gap: 35px; }
+.ov__line--second { top: 146.6px; height: 101.1px; column-gap: 25px; }
+.ov__cell { position: relative; }
+.ov__cellico { position: absolute; left: 50%; top: 20px; height: 35.8px; width: auto; transform: translateX(-50%); }
+/* a count sits on the bottom edge of its box and the words hang from the top of theirs */
+.ov__count { position: absolute; left: 0; right: 0; bottom: calc(100% - 84.6px); font-size: 26px; line-height: 29px; letter-spacing: .35px; color: #e9eadb; white-space: nowrap; }
+.ov__cell--time .ov__count { bottom: calc(100% - 82.6px); }
+.ov__desc { position: absolute; left: 0; right: 0; top: 86.9px; font-size: 15px; line-height: 17px; letter-spacing: .3px; color: #91928b; }
+.ov__line--second .ov__count { bottom: calc(100% - 44.5px); }
+.ov__line--second .ov__desc { top: 44.5px; }
+
+.ov__stat { position: absolute; left: 8.7px; top: 322px; height: 30px; line-height: 30px; font-size: 23px; letter-spacing: .89px; color: #c3c5b2; text-transform: uppercase; }
+.ov__scroll { position: absolute; left: 0; top: 352.1px; width: 1254.8px; height: 615px; overflow-y: auto; padding-top: 15.9px; box-sizing: border-box; }
+.ov__scroll::-webkit-scrollbar-track { margin-top: 10px; }
+.ov__pair { display: flex; align-items: flex-start; gap: 15px; width: 1244.8px; margin-bottom: 15px; }
+.ov__sec { flex: 1 1 0; min-width: 0; }
+.ov__sechead { position: relative; height: 44px; background: var(--ui-statlist_header) 0 0 / 100% 100%; font-size: 18px; line-height: 21px; letter-spacing: .35px; color: #c5c3b2; }
+.ov__sechead > span:last-child { position: absolute; left: 42px; top: 11.5px; white-space: nowrap; }
+.ov__secico { position: absolute; left: 7px; top: 7px; width: 30px; height: 30px; display: grid; place-items: center; }
+.ov__row { position: relative; height: 34px; margin-top: 1px; background: var(--ui-statlist_item_background) 0 0 / 100% 100%; font-size: 18px; line-height: 21px; letter-spacing: .35px; }
+.ov__k { position: absolute; left: 44px; top: 6.5px; color: #c5c3b2; white-space: nowrap; }
+.ov__v { position: absolute; right: 10px; top: 5.5px; color: #b6c1c7; white-space: nowrap; }
 
 /* ---- SKILLS ---- */
 .skills { height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding: 4px 6px; }

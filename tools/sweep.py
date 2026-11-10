@@ -36,6 +36,10 @@ STEPS: list[tuple[str, str]] = [
     ("character", "E.showScreen('character')"),
     ("gear", "E.openCharacter('gear'); await sleep(400); seen('#stash-host .item'); seen('#equipment-host .gslot'); seen('#carry-host .gcont')"),
     ("health", "E.openCharacter('health'); await sleep(400); seen('#health-panel-host .hb'); seen('#stash-host .item')"),
+    ("overall", """
+        E.openCharacter('overall'); await sleep(400); seen('.ov__sheet .ov__level'); seen('.ov__cell'); seen('.ov__row');
+        for (const b of document.querySelectorAll('.ov__tab')) { b.click(); await sleep(150); seen('.ov__row'); }
+    """),
     ("character tabs", """
         for (const b of document.querySelectorAll('#screen-character .ptab:not(:disabled)')) { b.click(); await sleep(350); }
     """),
@@ -91,7 +95,8 @@ def main() -> int:
         shots.mkdir(parents=True, exist_ok=True)
     failed = 0
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
+        browser = p.chromium.launch(headless=True, ignore_default_args=["--hide-scrollbars"],
+                                    args=["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
         page = browser.new_page(viewport={"width": 1920, "height": 1080})
         if args.lang:
             page.add_init_script(f"try {{ localStorage.setItem('escape2d.lang', '{args.lang}'); }} catch (e) {{}}")

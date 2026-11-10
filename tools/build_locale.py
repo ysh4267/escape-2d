@@ -10,7 +10,7 @@ client's own key - t('QuestsShowCompleted'), t('DEAL!') - so the wording is
 the game's, in whichever language is loaded. This reads every such key out of
 src/ and writes, for each language, a table of just those keys.
 
-A key is anything passed as a literal to t(...) or tOr(...); any `label:`,
+A key is anything passed as a literal to t(...), tOr(...) or tRich(...); any `label:`,
 `key:` or `title:` of a table in src/ whose text is a key of the locale (the
 bars and tab strips keep their entries in tables and translate them as they
 draw); and every key matching one of FAMILIES (the ones the page builds at
@@ -54,7 +54,7 @@ FAMILIES = [
 ]
 
 QUOTED = r"""(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")"""
-T_CALL = re.compile(r"\bt(?:Or)?\(\s*" + QUOTED)
+T_CALL = re.compile(r"\bt(?:Or|Rich)?\(\s*" + QUOTED)
 TABLE_KEY = re.compile(r"\b(?:label|key|title)\s*:\s*" + QUOTED)
 
 # strings the client's table spells with a letter from the wrong alphabet

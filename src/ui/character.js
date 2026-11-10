@@ -20,6 +20,7 @@ import { renderTaskView, taskRow } from './tasks-ui.js';
 import { t } from '../core/i18n.js';
 import { uiImg, loadUiGroup, hasUi, setUiSrc } from '../core/uiart.js';
 import { showScreen, currentScreen } from './shell.js';
+import { renderOverall } from './overall.js';
 
 /** the tabs, with the client's locale key and glyph for each (`<ico>_selected` when lit) */
 const TABS = [
@@ -89,90 +90,6 @@ export function initCharacter() {
   on(EV.SCREEN_CHANGED, (id) => { if (id === 'character') { paint(); emit(EV.SCREEN_CHANGED, `character:${tab}`); } });
   on(EV.QUEST, () => { if (currentScreen() === 'character' && tab === 'tasks') renderJournal(); });
   on(EV.LEVEL_UP, () => { if (currentScreen() === 'character' && tab === 'overall') renderOverall(); });
-}
-
-// ---------------------------------------------------------
-// OVERALL
-// ---------------------------------------------------------
-function pct(a, b) { return b ? `${((a / b) * 100).toFixed(1)}%` : '0%'; }
-
-function fmtDate(ms) {
-  const d = new Date(ms || Date.now());
-  const p = (n) => String(n).padStart(2, '0');
-  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()}`;
-}
-
-/** the badge of the level bracket a character is in: one picture every five levels */
-function rankBadge(level) {
-  const img = el('img', { alt: '' });
-  setUiSrc(img, `rank${levelGroup(level) * 5}`, 'ranks');
-  return img;
-}
-
-export function renderOverall() {
-  const host = $('#overall-host');
-  if (!host) return;
-  host.replaceChildren();
-  const p = game.profile;
-  const st = p.stats || {};
-  const [into, span] = levelProgress(p.exp);
-  const raids = p.raids || 0;
-  const kills = st.kills || 0;
-  const deaths = p.died || 0;
-
-  const card = el('div', { class: 'ov-card' },
-    el('div', { class: 'ov-card__badge' },
-      rankBadge(p.level),
-      el('b', {}, String(p.level))),
-    el('div', { class: 'ov-card__id' },
-      el('div', { class: 'ov-card__name' }, p.name || 'PMC'),
-      el('div', { class: 'ov-card__side' }, `${p.faction || 'USEC'} · ${editionInfo(p.edition).name}`),
-      el('div', { class: 'ov-card__xp' },
-        el('div', { class: 'xpbar' }, el('i', { style: { width: span ? `${(into / span) * 100}%` : '100%' } })),
-        el('span', {}, span ? `${fmtNum(into)} / ${fmtNum(span)}` : `${fmtNum(p.exp)} — level ${MAX_LEVEL()}`))));
-
-  const block = (title, rows) => el('div', { class: 'ov-block' },
-    el('div', { class: 'ov-block__head' }, title),
-    el('dl', { class: 'ov-rows' }, ...rows.flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, String(v))])));
-
-  const tc = taskCounts();
-  host.append(
-    el('div', { class: 'overall__left' }, card,
-      block('PROFILE', [
-        ['Registration date', fmtDate(p.registered)],
-        ['Experience', fmtNum(p.exp)],
-        ['Level', p.level],
-        ['Tasks completed', `${tc.done} / ${tc.total}`],
-        ['Tasks active', tc.active],
-      ])),
-    el('div', { class: 'overall__right' },
-      block('PMC — RAIDS', [
-        ['Raids', raids],
-        ['Survived', p.survived || 0],
-        ['Killed in Action', st.kia ?? deaths],
-        ['Missing in Action', st.mia || 0],
-        ['Run Through', st.runner || 0],
-        ['Left the Action', st.left || 0],
-        ['Survival rate', pct(p.survived || 0, raids)],
-        ['Current winstreak', st.streak || 0],
-        ['Longest winstreak', st.bestStreak || 0],
-      ]),
-      block('PMC — COMBAT', [
-        ['Kills', kills],
-        ['Scavs killed', st.killsScav || 0],
-        ['PMCs killed', st.killsPmc || 0],
-        ['Bosses killed', st.killsBoss || 0],
-        ['K/D ratio', deaths ? (kills / deaths).toFixed(2) : kills.toFixed(2)],
-        ['Headshots', st.headshots || 0],
-        ['Longest shot', `${Math.round(st.longestShot || 0)} m`],
-        ['Rounds fired', fmtNum(st.shots || 0)],
-      ]),
-      block('LOOTING', [
-        ['Containers searched', fmtNum(st.searched || 0)],
-        ['Items found', fmtNum(st.found || 0)],
-        ['Best haul', `${fmtNum(p.bestHaul || 0)} ${CUR_SYM.RUB}`],
-        ['Distance covered', `${fmtNum(Math.round((st.distance || 0)))} m`],
-      ])));
 }
 
 // ---------------------------------------------------------

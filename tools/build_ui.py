@@ -83,12 +83,16 @@ ROUNDS = 200_000
 # ---------------------------------------------------------------------------
 ALWAYS = """
 lvl ll check checkbox checkmark condition exp levelling shade button background
-keys camera setlock mass
+keys camera setlock mass cross chtoto
 """.split()
 
 # sprites that share a name with another one: say which export is meant
 PREFER = {
     "icon_presets_big": "b_menu/nav_taskbar/icon_presets_big.png",
+    # the career's headings draw these at 30 px; the smaller cut is the raid report's
+    "icon_statscategory_overall": "d_player/stats_icons/icon_statscategory_overall~5935.png",
+    "icon_statscategory_looting": "d_player/stats_icons/icon_statscategory_looting~5332.png",
+    "icon_statscategory_combat": "d_player/stats_icons/icon_statscategory_combat~6058.png",
 }
 
 # whole folders of the extraction that go into the core pack as they are
