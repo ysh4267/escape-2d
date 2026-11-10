@@ -211,7 +211,7 @@
 }
 
 /* purchase dialog */
-.purchase { width: min(430px, 92vw); }
+.purchase { width: min(430px, calc(var(--sw) * 0.92)); }
 .purchase__row { display: flex; gap: 12px; margin-bottom: 14px; }
 .purchase__art {
   width: 84px; height: 84px; flex: none;
@@ -527,7 +527,7 @@
 }
 .floorplan__panel {
   display: flex; flex-direction: column;
-  width: min(1180px, 94vw); height: min(880px, 92vh);
+  width: min(1180px, calc(var(--sw) * 0.94)); height: min(880px, calc(var(--sh) * 0.92));
   background: var(--panel-solid);
   border: 1px solid var(--line-2);
   box-shadow: 0 24px 80px rgba(0,0,0,.7);
@@ -616,7 +616,7 @@
 
 /* ---------------- result ---------------- */
 #screen-result { align-items: center; justify-content: center; }
-.result-wrap { width: min(880px, 92vw); max-height: 88vh; display: flex; flex-direction: column; gap: 16px; }
+.result-wrap { width: min(880px, calc(var(--sw) * 0.92)); max-height: calc(var(--sh) * 0.88); display: flex; flex-direction: column; gap: 16px; }
 .result-head { text-align: center; }
 .result-verdict { font-size: 44px; letter-spacing: .3em; color: var(--ok); }
 .result-verdict.is-bad { color: var(--danger); }
@@ -632,7 +632,7 @@
 .result-loot__list .item { position: relative; }
 .result-loot--lost { flex: 0 0 auto; }
 .result-loot--lost h3 { color: var(--danger); }
-.result-loot--lost .result-loot__list { max-height: 26vh; border-color: var(--danger-dk); }
+.result-loot--lost .result-loot__list { max-height: calc(var(--sh) * 0.26); border-color: var(--danger-dk); }
 .result-loot--lost .item { opacity: .45; filter: grayscale(.4); }
 #btn-result-continue { align-self: center; }
 
@@ -645,49 +645,13 @@
    fixed-height box, where it was clipped with no way to scroll to it — so the
    columns only get narrower here, and only collapse to one at the width where
    a single column is genuinely all that fits. */
-/* The character screen is a wide thing — three columns of slots at the stash's
-   own cell size — so the cell steps down at the width where GEAR, INVENTORY
-   and a 10-wide stash stop fitting side by side, rather than letting the stash
-   scroll sideways. Each breakpoint is the measured sum of the three: the doll
-   at its widest gear, a 5-wide Pilgrim, and ten stash cells plus a scrollbar. */
-@media (max-width: 1599px) {
-  :root { --cell: 54px; }
-  .pane-grid--stash { grid-template-columns: minmax(410px, 482px) minmax(276px, 296px) 1fr; }
-  .overlay__grid { grid-template-columns: 1fr minmax(276px, 296px) minmax(410px, 482px); }
-  .overlay__grid.is-solo { grid-template-columns: minmax(276px, 296px) minmax(410px, 482px); }
-}
-@media (max-width: 1419px) {
-  :root { --cell: 48px; }
-  .pane-grid--stash { grid-template-columns: minmax(370px, 439px) minmax(246px, 268px) 1fr; }
-  .overlay__grid { grid-template-columns: 1fr minmax(246px, 268px) minmax(370px, 439px); }
-  .overlay__grid.is-solo { grid-template-columns: minmax(246px, 268px) minmax(370px, 439px); }
-}
-@media (max-width: 1360px) {
-  .trade__body { grid-template-columns: 34fr 26fr 34fr; }
-}
-@media (max-width: 1289px) {
-  .deploy { grid-template-columns: 1fr; }
-  /* one column now really is one column: let the pane scroll instead of
-     clipping whatever lands below the fold */
-  .pane { overflow: auto; }
-  .pane-grid, .trade { height: auto; min-height: 100%; }
-  .pane-grid--stash { grid-template-columns: 1fr; }
-  .trade__col, .pane-grid--stash > .panel { min-height: 340px; }
-}
-@media (max-width: 1100px) {
-  .trade__body { grid-template-columns: 1fr; }
-  .tbar__rep { display: none; }
-}
-/* From 1900 across there is room to stand the worn block and the carried block
-   side by side, which is how the character screen itself reads; below that they
-   wrap and the carried block drops underneath. Last in the file on purpose:
-   .overlay__grid's own rule is further down than the stash pane's, so an
-   override placed at the top of the sheet lost to it. */
-@media (min-width: 1900px) {
-  .pane-grid--stash { grid-template-columns: minmax(660px, 820px) minmax(316px, 336px) 1fr; }
-  .overlay__grid { grid-template-columns: 1fr minmax(316px, 336px) minmax(660px, 820px); }
-  .overlay__grid.is-solo { grid-template-columns: minmax(316px, 336px) minmax(660px, 820px); }
-}
+/* The interface is laid out for the game's own 1920 x 1080 frame and scaled
+   whole (src/core/stage.js), so there are no breakpoints: the stage is never
+   narrower than 1920 of its own pixels. The worn block and the carried block
+   stand side by side, the way the character screen itself reads. */
+.pane-grid--stash { grid-template-columns: minmax(660px, 820px) minmax(316px, 336px) 1fr; }
+.overlay__grid { grid-template-columns: 1fr minmax(316px, 336px) minmax(660px, 820px); }
+.overlay__grid.is-solo { grid-template-columns: minmax(316px, 336px) minmax(660px, 820px); }
 
 /* ---------------- repair bench ---------------- */
 .deal-wrap--repair { gap: 8px; }

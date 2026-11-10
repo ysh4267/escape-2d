@@ -1,0 +1,96 @@
+/* =========================================================
+   The main menu and the walk into and out of a raid.
+   Shared parts and the frame are in eft.css.
+   ========================================================= */
+
+/* ---------------- main menu ----------------
+   Five lines of text on the scene, each the middle of a plate the client
+   sizes from the label written bold between three underscores a side. The
+   logo is part of the scene, not of the menu: it hangs in the room. */
+.menu { position: absolute; inset: 0; }
+.menu__logo {
+  position: absolute; left: 443px; top: -29px; width: 1060px; height: 530px; pointer-events: none;
+  background: var(--menu-logo, none) center / 100% 100% no-repeat; opacity: .92;
+}
+.menu__glow { position: absolute; left: 0; top: 0; width: 1920px; height: 512px; pointer-events: none; background: var(--ui-glow_top_regular) 0 0 / 100% 100% no-repeat; opacity: .6; }
+.menu__item {
+  position: absolute; left: 960px; transform: translate(-50%, -50%);
+  padding: 8px 20px; height: 55.6px; box-sizing: border-box; font-size: 36px; letter-spacing: .5px;
+}
+.menu__item--big { height: 65px; min-width: 525px; font-size: 42px; letter-spacing: .2px; }
+.menu__sizer { visibility: hidden; font-weight: 700; white-space: pre; }
+.menu__label { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; }
+.menu__ico { position: absolute; left: 24px; top: 50%; width: 28px; height: 28px; margin-top: -14px; opacity: 0; transition: opacity .13s; }
+.menu__item::before { transition: opacity .13s; }
+.menu__item:hover { color: #26241a; }
+.menu__item:hover .menu__ico { opacity: 1; }
+.menu__mode { position: absolute; right: 0; top: 956px; height: 65px; display: flex; align-items: center; gap: 4px; color: #9dbac2; font-size: 24px; text-transform: uppercase; pointer-events: none; }
+.menu__mode img { display: block; }
+
+/* ---------------- before the raid ---------------- */
+.preraid, .raidend { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.pr__title, .re__title { flex: none; padding: 22px 0 16px; text-align: center; font-size: 40px; color: var(--e-text-hi); text-transform: uppercase; }
+.pr__body, .re__body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 30px; overflow: auto; }
+.pr__foot { flex: none; display: flex; justify-content: space-between; align-items: center; padding: 14px 80px 36px; }
+.pr-sides { display: flex; gap: 40px; }
+.pr-side { width: 360px; padding-bottom: 14px; background: #0a0a0a; border: 1px solid #4a4d4c; text-align: center; }
+.pr-side:hover:not(:disabled) { border-color: #d8d2b2; }
+.pr-side.is-active { border-color: #d8d2b2; box-shadow: 0 0 0 1px #d8d2b2 inset, 0 0 40px rgba(216,210,178,.12); }
+.pr-side:disabled { opacity: .4; cursor: default; }
+.pr-side__art { height: 380px; display: grid; place-items: end center; background: linear-gradient(180deg, #17191b, #0a0b0c); overflow: hidden; }
+.pr-side__fig { width: 300px; height: 380px; color: #2b2e31; stroke: none; }
+.pr-side.is-active .pr-side__fig { color: #4a4f54; }
+.pr-side__name { margin-top: 12px; font-size: 32px; color: var(--e-text-hi); }
+.pr-side__sub { font-size: 14px; color: var(--e-dim); }
+.pr-side__note { margin-top: 4px; font-size: 13px; color: var(--e-unmet); text-transform: uppercase; }
+.pr-locwrap { display: grid; grid-template-columns: 620px 520px; gap: 26px; align-items: start; }
+.pr-locs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pr-loc { display: flex; align-items: center; justify-content: space-between; height: 54px; padding: 0 16px; background: #0a0a0a; border: 1px solid #4a4d4c; color: var(--e-text); font-size: 20px; }
+.pr-loc:hover:not(:disabled) { background: #b3b1a9; color: #101214; }
+.pr-loc.is-active { background: var(--e-cream); color: #101214; border-color: #f3eac0; }
+.pr-loc.is-locked { opacity: .38; cursor: default; }
+.pr-locinfo { padding: 18px 20px; background: #0a0a0a; border: 1px solid #4a4d4c; min-height: 300px; }
+.pr-locinfo__name { font-size: 30px; color: var(--e-text-hi); }
+.pr-locinfo__desc { margin: 8px 0 14px; font-size: 15px; line-height: 1.45; color: var(--e-dim); }
+.pr-locinfo__rows { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; margin: 0; font-size: 16px; }
+.pr-locinfo__rows dt { color: var(--e-dim); } .pr-locinfo__rows dd { margin: 0; color: var(--e-text-hi); }
+.pr-times { display: flex; gap: 6px; }
+.pr-time { padding: 3px 12px; background: #1a1c1c; border: 1px solid #4a4d4c; color: var(--e-text); font-size: 16px; }
+.pr-time.is-active { background: var(--e-cream); color: #101214; border-color: #f3eac0; }
+.pr-ready { width: 560px; padding: 22px 26px; background: #0a0a0a; border: 1px solid #4a4d4c; }
+.pr-ready__loc { font-size: 32px; color: var(--e-text-hi); }
+.pr-ready__time { color: #d0a856; margin: 2px 0 14px; }
+.pr-ready__vitals { margin-top: 14px; color: var(--e-dim); font-size: 15px; }
+.pr-load { margin: auto; text-align: center; }
+.pr-load__loc { font-size: 46px; color: var(--e-text-hi); text-transform: uppercase; }
+.pr-load__step { margin-top: 26px; font-size: 20px; color: var(--e-dim); }
+.pr-load__bar { width: 520px; height: 6px; margin: 12px auto; background: #000; border: 1px solid #343738; }
+.pr-load__bar i { display: block; height: 100%; width: 0; background: #c8ccc9; transition: width .1s linear; }
+.pr-load__count { font-size: 70px; color: var(--e-text-hi); min-height: 84px; }
+
+/* ---------------- after the raid ---------------- */
+.re__title.is-ok { color: #cfe8a0; } .re__title.is-bad { color: #e2a29b; } .re__title.is-warn { color: #e6d29a; }
+.re-status { text-align: center; }
+.re-status__verdict { font-size: 76px; font-weight: 700; color: var(--e-text-hi); }
+.re-status__verdict.is-ok { color: #b6e04a; text-shadow: 0 0 40px rgba(154,211,35,.25); }
+.re-status__verdict.is-bad { color: #d6332c; text-shadow: 0 0 40px rgba(200,32,42,.3); }
+.re-status__verdict.is-warn { color: #e0b64a; }
+.re-status__sub { font-size: 22px; color: var(--e-dim); margin-bottom: 26px; }
+.re-rows { display: inline-grid; grid-template-columns: auto auto; gap: 7px 40px; margin: 0; text-align: left; font-size: 18px; }
+.re-rows dt { color: var(--e-dim); } .re-rows dd { margin: 0; color: var(--e-text-hi); font-weight: 700; text-align: right; }
+.re-rows--wide { gap: 7px 90px; }
+.re-kills { width: 1100px; align-self: flex-start; background: #0a0a0a; border: 1px solid #4a4d4c; }
+.re-kill { display: grid; grid-template-columns: 50px 90px 1fr 70px 120px 1.6fr; gap: 10px; padding: 7px 14px; border-bottom: 1px solid #141618; font-size: 16px; }
+.re-kill--head { color: #6a6a66; font-size: 13px; text-transform: uppercase; }
+.re-stats { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 1100px; align-self: flex-start; }
+.re-loot { width: 100%; }
+.re-loot__list { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; background: #000; border: 1px solid #2a2c2c; min-height: 60px; }
+.re-loot__list .item { position: relative; left: auto; top: auto; --cell: 46px; }
+.re-expwrap { display: flex; flex-direction: column; align-items: center; gap: 30px; }
+.re-exp { width: 560px; background: #0a0a0a; border: 1px solid #4a4d4c; }
+.re-exp__row { display: flex; justify-content: space-between; padding: 8px 18px; border-bottom: 1px solid #141618; font-size: 18px; }
+.re-exp__row b { color: var(--e-green); }
+.re-exp__row--total { font-size: 22px; font-weight: 700; color: var(--e-text-hi); border-bottom: 0; background: #101214; }
+.re-exp__level { text-align: center; }
+.re-exp__lvl { font-size: 26px; color: var(--e-text-hi); }
+.re-exp__num { margin-top: 4px; color: var(--e-dim); }

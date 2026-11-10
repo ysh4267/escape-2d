@@ -2,28 +2,53 @@
 // ESCAPE 2D — bootstrap
 // =========================================================
 
-import { $, el, fmtNum } from './core/util.js';
+import { $, el } from './core/util.js';
 import { on, emit, EV } from './core/events.js';
 import { loadItems, TPL } from './data/items.js';
 import { MAPS } from './data/maps.js';
 import { buildAssortments } from './data/traders.js';
 import { buildLootPools } from './data/loot.js';
 import { loadGeometry } from './raid/nav.js';
-import { game, initState, load, save, saveSoon, addMoney, netWorthRub, wipe } from './core/state.js';
+import { game, initState, load, save, saveSoon, addMoney, wipe, addStat } from './core/state.js';
 import { Item, autoPlace, moveToSlot, detach } from './inventory/model.js';
 import { spawnWeapon } from './inventory/weapon.js';
 import { initDnd, isDragging } from './inventory/dnd.js';
 import { initTooltip } from './inventory/tooltip.js';
 import { initContextMenu, confirmDialog } from './inventory/dialogs.js';
-import { initAudio, audioState, setEnabled, setVolume } from './core/audio.js';
-import { initShell, showScreen, showPane, refreshTopbar, bootProgress, toast } from './ui/shell.js';
+import { initAudio } from './core/audio.js';
+import { initShell, showScreen, showPane, refreshTopbar, bootProgress, toast, setBarBadge, setBarHandler } from './ui/shell.js';
 import { initStash, renderStash, activateStashContext } from './ui/stash.js';
-import { initDeploy, renderDeploy } from './ui/deploy.js';
-import { initTrade, renderTrade, activateTradeContext, rerollFence } from './ui/trade.js';
+import { initTrade, rerollFence } from './ui/trade.js';
 import { startRaid, consumePendingMIA } from './ui/raid-ui.js';
 import { initFloorplan } from './ui/floorplan.js';
 import { initHealthPane, renderHealthPane } from './ui/health-ui.js';
 import { markOpenable } from './ui/stash.js';
+import { initCharacter, openCharacter } from './ui/character.js';
+import { initMenu, setPlayHandler } from './ui/menu.js';
+import { initTradersList } from './ui/traders-list.js';
+import { initPreraid, openPreraid } from './ui/preraid.js';
+import { initRaidEnd } from './ui/raidend.js';
+import { initMessenger, toggleMessenger, messengerOpen, openMessenger } from './ui/messenger.js';
+import { initHandbook } from './ui/handbook.js';
+import { initHideout } from './ui/hideout.js';
+import { initFlea, openFlea } from './ui/flea.js';
+import { initNotices } from './ui/notices.js';
+import { initSettings } from './ui/settings.js';
+import { showScene } from './ui/scene.js';
+import { initStage } from './core/stage.js';
+import { loadUiArt } from './core/uiart.js';
+import { loadLocale, LANGUAGES } from './core/i18n.js';
+import { localizeData } from './game/localize.js';
+import { DB, loadMeta } from './game/db.js';
+import * as Quests from './game/quests.js';
+import * as Traders from './game/traders.js';
+import * as Mail from './game/mail.js';
+import * as Skills from './game/skills.js';
+import * as Profile from './game/profile.js';
+import * as Flea from './game/flea.js';
+import * as Hideout from './game/hideout.js';
+import * as Wishlist from './game/wishlist.js';
+import { weaponStats } from './inventory/weapon.js';
 
 let geo = null;
 
@@ -57,10 +82,29 @@ function installErrorReporter() {
   console.error = (...a) => { origErr(...a); push('CONSOLE', a.map(String).join(' ')); };
 }
 
+/** the interface language, kept outside the profile so it survives a wipe and is known before the profile loads */
+function savedLanguage() {
+  let lang = null;
+  try { lang = localStorage.getItem('escape2d.lang'); } catch { /* storage is off: go by the browser */ }
+  // a first visit speaks the browser's language when the game has it, as the client follows the system's
+  if (!lang) lang = (navigator.language || 'en').slice(0, 2).toLowerCase();
+  return LANGUAGES[lang] ? lang : 'en';
+}
+
 async function boot() {
   installErrorReporter();
+  initStage();
+  // the interface's own art, typeface and wording come first: everything
+  // built after this draws with them. The scene behind the menus is only a
+  // picture and can arrive when it arrives.
+  bootProgress(0.04, 'loading interface');
+  await Promise.all([loadUiArt(), loadLocale(savedLanguage())]);
+  showScene();
   bootProgress(0.08, 'loading item templates');
   await loadItems();
+  bootProgress(0.26, 'loading traders and tasks');
+  await loadMeta();
+  await localizeData();
   buildAssortments(TPL);
   buildLootPools(TPL);
 
@@ -70,7 +114,7 @@ async function boot() {
   bootProgress(0.66, 'restoring profile');
   initState();
   const restored = load();
-  if (!restored) seedNewProfile();
+  if (!restored) startNewProfile();
   else if (consumePendingMIA()) {
     // the last session was closed mid-raid — that run ends as MIA, exactly
     // as if the timer had run out: unsecured gear does not come home
@@ -89,38 +133,67 @@ async function boot() {
   initTooltip();
   initContextMenu();
   initStash();
+  initCharacter();
+  initMenu();
+  initTradersList();
   initTrade();
-  initDeploy(geo, deploy);
+  initPreraid({ geo, deploy });
+  initRaidEnd();
+  initMessenger();
+  initHandbook();
+  initHideout();
+  initFlea();
   initFloorplan();
   initHealthPane(markOpenable);
+  Quests.setWeaponStats(weaponStats);
+  Quests.initQuests();
+  initNotices();
+  initSettings({ onWipe: hardReset });
+  Mail.expireMail();
+
+  // the raid reports what happened; the tasks and the career numbers listen
+  on(EV.RAID_KILL, (k) => {
+    addStat('kills');
+    addStat(k.side === 'pmc' ? 'killsPmc' : /^boss/i.test(k.role || '') ? 'killsBoss' : 'killsScav');
+    if (k.part === 'head') addStat('headshots');
+    if ((k.dist || 0) > (game.profile.stats.longestShot || 0)) game.profile.stats.longestShot = k.dist;
+    Quests.onKill(k);
+  });
+  on(EV.RAID_END, (r) => {
+    const status = { survived: 'survived', kia: 'killed', mia: 'mia', left: 'left' }[r.status] || r.status;
+    addStat(r.status === 'survived' ? 'survivedRaids' : r.status);
+    addStat('shots', r.shots || 0);
+    addStat('searched', r.searched || 0);
+    const st = game.profile.stats;
+    if (r.status === 'survived') { st.streak = (st.streak || 0) + 1; st.bestStreak = Math.max(st.bestStreak || 0, st.streak); }
+    else st.streak = 0;
+    Quests.onRaidEnd({ location: r.location, status, exit: r.extract?.key || r.extract?.name || null });
+  });
+
+  setPlayHandler(() => openPreraid());
+  setBarBadge('messenger', () => Mail.unreadCount());
+  setBarBadge('messenger:att', () => Mail.attachmentCount());
+  // the messenger is a window over whatever screen is up, not a screen
+  setBarHandler('messenger', { toggle: toggleMessenger, isOpen: messengerOpen });
 
   on(EV.SCREEN_CHANGED, (id) => {
-    if (id === 'hideout:stash') { activateStashContext(); renderStash(); }
-    if (id === 'hideout:traders') { activateTradeContext(); renderTrade(); }
-    // the deploy pane has no grids of its own, but a floating container window
-    // survives the pane switch — without its own context, an item ctrl+clicked
-    // in that window on the RAID pane still flew to the trader's sell table
-    if (id === 'hideout:raid') { activateStashContext(); renderDeploy(); }
-    // the health pane borrows the stash context: meds are used out of the stash
-    if (id === 'hideout:health') { activateStashContext(); renderHealthPane(); }
+    if (id === 'character:gear') { activateStashContext(); renderStash(); }
+    // the health tab borrows the stash context: meds are used out of the stash
+    if (id === 'character:health') { activateStashContext(); renderHealthPane(); }
+    // these have no grids of their own, but a floating container window
+    // survives the switch — without a context, an item ctrl+clicked in that
+    // window would still fly to the last trader's sell table
+    if (id === 'menu' || id === 'preraid' || id === 'traders' || id.startsWith('character:')) {
+      if (id !== 'character:gear' && id !== 'character:health') activateStashContext();
+    }
   });
-
-  // the brief is what the player reads to decide whether to go; a container
-  // window emptied over the deploy pane must not leave its numbers lying
-  on(EV.INVENTORY_CHANGED, () => {
-    if ($('#pane-raid')?.classList.contains('is-active')) renderDeploy();
-  });
-
-  wireGlobalKeys();
 
   bootProgress(1, 'ready');
-  refreshTopbar();
   activateStashContext();
   renderStash();
 
   setTimeout(() => {
-    showScreen('hideout');
-    showPane('stash');
+    showScreen('menu');
     runDevHooks();
   }, 260);
 
@@ -130,7 +203,21 @@ async function boot() {
   // Item and moveToSlot are here so the headless pass can dress the PMC in the
   // widest gear in the game; importing model.js from the harness page instead
   // builds a second copy of the module with an empty template registry.
-  window.ESCAPE2D = { game, TPL, save, wipe: hardReset, Item, moveToSlot };
+  window.ESCAPE2D = { game, TPL, save, wipe: hardReset, Item, moveToSlot, DB, Quests, Traders, Mail, Skills, Profile, Flea, Hideout, Wishlist, showScreen, openCharacter, openMessenger, openFlea };
+}
+
+/**
+ * A character on day one. The kit is the game's own starting profile for the
+ * edition and faction; a build whose item table does not carry most of that
+ * kit yet falls back to the small hand-picked one below so nobody starts
+ * with an empty stash.
+ */
+function startNewProfile() {
+  const stat = Profile.createProfile({ name: 'PMC', faction: 'USEC', edition: 'standard' });
+  if (stat.made >= 60) return;
+  initState();
+  game.profile.stashRows = game.stash.h;
+  seedNewProfile();
 }
 
 // ---------------------------------------------------------
@@ -579,102 +666,22 @@ function runSelfTest() {
   }
 }
 
-function deploy(mapId) {
+function deploy(mapId, opts = {}) {
   const mapDef = MAPS[mapId];
   if (!mapDef) return;
   startRaid({
     mapDef,
     geo,
+    location: opts.location || mapDef.locationId,
+    hour: opts.hour ?? 12,
     onFinish: () => {
       rerollFence();
-      showScreen('hideout');
-      showPane('stash');
+      showScreen('menu');
       activateStashContext();
       renderStash();
       refreshTopbar();
       saveSoon();
     },
-  });
-}
-
-// ---------------------------------------------------------
-function wireGlobalKeys() {
-  $('#btn-settings').addEventListener('click', openSettings);
-
-  const soundBtn = $('#btn-sound');
-  const paintSound = () => {
-    const { enabled } = audioState();
-    soundBtn.querySelector('use').setAttribute('href', enabled ? '#i-sound' : '#i-mute');
-    soundBtn.style.color = enabled ? '' : 'var(--danger)';
-    soundBtn.title = enabled ? 'Sound on — click to mute' : 'Muted — click to unmute';
-  };
-  soundBtn.addEventListener('click', () => {
-    setEnabled(!audioState().enabled);
-    paintSound();
-  });
-  paintSound();
-
-  document.addEventListener('keydown', (e) => {
-    const tag = e.target?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
-    // a dialog owns the keyboard, and switching panes mid-drag drops the item
-    if (!$('#modal-root').hidden || isDragging()) return;
-    const hideout = $('#screen-hideout').classList.contains('is-active');
-    if (!hideout) return;
-    if (e.key === '1') showPane('stash');
-    if (e.key === '2') showPane('traders');
-    if (e.key === '3') showPane('health');
-    if (e.key === '4') showPane('raid');
-  });
-}
-
-function volumeRow() {
-  const { volume } = audioState();
-  const slider = el('input', {
-    type: 'range', min: '0', max: '100', value: String(Math.round(volume * 100)),
-    style: { flex: '1', accentColor: 'var(--pale)' },
-  });
-  const readout = el('span', { class: 'muted', style: { width: '38px', textAlign: 'right' } },
-    `${Math.round(volume * 100)}%`);
-  slider.addEventListener('input', () => {
-    setVolume(Number(slider.value) / 100);
-    readout.textContent = `${slider.value}%`;
-  });
-  return el('div', {
-    style: {
-      display: 'flex', alignItems: 'center', gap: '12px',
-      marginTop: '14px', paddingTop: '12px', borderTop: '1px solid var(--line-1)',
-    },
-  }, el('span', { class: 'hint', style: { width: '58px' } }, 'VOLUME'), slider, readout);
-}
-
-function openSettings() {
-  const { openModal } = window.__dialogs || {};
-  void openModal;
-  const stats = game.profile;
-  import('./inventory/dialogs.js').then(({ openModal: om }) => {
-    om((box, done) => {
-      box.append(
-        el('div', { class: 'modal__head' }, 'PROFILE'),
-        el('div', { class: 'modal__body' },
-          el('dl', { class: 'tooltip__rows' },
-            el('dt', {}, 'LEVEL'), el('dd', {}, String(stats.level)),
-            el('dt', {}, 'EXPERIENCE'), el('dd', {}, String(stats.exp)),
-            el('dt', {}, 'RAIDS'), el('dd', {}, String(stats.raids)),
-            el('dt', {}, 'SURVIVED'), el('dd', {}, String(stats.survived)),
-            el('dt', {}, 'EXTRACTED'), el('dd', {}, String(stats.extracted)),
-            el('dt', {}, 'DIED'), el('dd', {}, String(stats.died)),
-            el('dt', {}, 'BEST HAUL'), el('dd', {}, `${Math.round(stats.bestHaul).toLocaleString('en-US')} ₽`),
-            el('dt', {}, 'NET WORTH'), el('dd', {}, `${fmtNum(netWorthRub())} ₽`)),
-          volumeRow(),
-          el('div', { class: 'tooltip__desc', style: { marginTop: '14px', borderTop: '1px solid var(--line-1)', paddingTop: '10px' } },
-            'Non-commercial fan project. Escape From Tarkov is a trademark of Battlestate Games. '
-            + 'Map geometry from the-hideout/tarkov-dev-svg-maps (CC BY-NC-SA 4.0); item artwork from '
-            + 'assets.tarkov.dev; item templates and prices from the SPT database dumps.')),
-        el('div', { class: 'modal__foot' },
-          el('button', { class: 'btn btn--danger', onclick: () => { done(); hardReset(); } }, 'WIPE PROFILE'),
-          el('button', { class: 'btn btn--primary', onclick: () => done() }, 'CLOSE')));
-    });
   });
 }
 

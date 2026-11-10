@@ -11,6 +11,12 @@
 <link rel="stylesheet" href="styles/screens.css">
 <link rel="stylesheet" href="styles/health.css">
 <link rel="stylesheet" href="styles/modding.css">
+<link rel="stylesheet" href="styles/eft.css">
+<link rel="stylesheet" href="styles/eft-menu.css">
+<link rel="stylesheet" href="styles/eft-character.css">
+<link rel="stylesheet" href="styles/eft-traders.css">
+<link rel="stylesheet" href="styles/eft-misc.css">
+<link rel="stylesheet" href="styles/eft-settings.css">
 </head>
 <body>
 
@@ -96,9 +102,28 @@
   <symbol id="i-gauge" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 12l4.5-4.5"/><path d="M12 5v1.5M19 12h-1.5M5 12h1.5"/></symbol>
   <symbol id="i-biohazard" viewBox="0 0 24 24"><circle cx="12" cy="13" r="3"/><path d="M12 3.5a5 5 0 0 1 4.3 7.5M12 3.5a5 5 0 0 0-4.3 7.5"/><path d="M4 18.5a5 5 0 0 1 3.4-8M20 18.5a5 5 0 0 0-3.4-8"/><path d="M8 20.5a5 5 0 0 0 8 0"/></symbol>
   <symbol id="i-radiation" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 3a9 9 0 0 1 7.8 4.5L15 10a3.5 3.5 0 0 0-3-1.8z"/><path d="M4.2 7.5A9 9 0 0 1 12 3v5.2A3.5 3.5 0 0 0 9 10z"/><path d="M12 21a9 9 0 0 1-7.8-4.5L9 14a3.5 3.5 0 0 0 6 0l4.8 2.5A9 9 0 0 1 12 21z"/></symbol>
+  <!-- the strip along the bottom, the character screen's tabs, the notifications -->
+  <symbol id="i-bb-home" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/></symbol>
+  <symbol id="i-bb-hideout" viewBox="0 0 24 24"><path d="M3 20V9l9-5 9 5v11"/><path d="M3 20h18M8 20v-7h8v7M8 16h8"/></symbol>
+  <symbol id="i-bb-character" viewBox="0 0 24 24"><circle cx="12" cy="6.5" r="3"/><path d="M6 21v-6a6 6 0 0 1 12 0v6"/><path d="M9.5 21v-5M14.5 21v-5"/></symbol>
+  <symbol id="i-bb-traders" viewBox="0 0 24 24"><path d="M4 9h16l-1.5 11h-13z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></symbol>
+  <symbol id="i-bb-flea" viewBox="0 0 24 24"><path d="M3 8h18l-2 6H5z"/><path d="M5 14v6h14v-6M9 20v-4h6v4M3 8l2-4h14l2 4"/></symbol>
+  <symbol id="i-bb-handbook" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 8h6"/></symbol>
+  <symbol id="i-bb-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="1"/><path d="M3 7l9 6.5L21 7"/></symbol>
+  <symbol id="i-bb-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></symbol>
+  <symbol id="i-n-task" viewBox="0 0 24 24"><path d="M7 4h10v17H7z"/><path d="M9.5 4V2.5h5V4M9.5 9l1.5 1.5L14 8M9.5 14.5h5M9.5 17.5h5"/></symbol>
+  <symbol id="i-n-exp" viewBox="0 0 24 24"><path d="M12 4l8 14H4z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-ct-overall" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M7 11h10M4.5 14a7.5 7.5 0 0 0 15 0"/></symbol>
+  <symbol id="i-ct-gear" viewBox="0 0 24 24"><path d="M8 4h8l3 4v12H5V8z"/><path d="M9 4v4h6V4M9 13h6"/></symbol>
+  <symbol id="i-ct-health" viewBox="0 0 24 24"><path d="M10 3h4v7h7v4h-7v7h-4v-7H3v-4h7V3z"/></symbol>
+  <symbol id="i-ct-skills" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M8.5 14.5a6 6 0 1 1 7 0c-.6.5-1 1.2-1 2H9.500c0-.8-.4-1.5-1-2z"/></symbol>
+  <symbol id="i-ct-map" viewBox="0 0 24 24"><path d="M12 21s6.500-6.200 6.500-11a6.500 6.500 0 0 0-13 0c0 4.800 6.500 11 6.500 11z"/><circle cx="12" cy="10" r="2.300"/></symbol>
+  <symbol id="i-ct-tasks" viewBox="0 0 24 24"><path d="M7 4h10v17H7z"/><path d="M9.500 4V2.500h5V4M9.500 9l1.500 1.500L14 8M9.500 14.500h5M9.500 17.500h5"/></symbol>
+  <symbol id="i-ct-achv" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.500"/><circle cx="12" cy="12" r="4.500"/><circle cx="12" cy="12" r="1" fill="currentColor"/></symbol>
   <symbol id="i-fx-lowhp" viewBox="0 0 24 24"><path d="M12 20.5s-8-5-8-11a4.3 4.3 0 0 1 8-2.2A4.3 4.3 0 0 1 20 9.5c0 6-8 11-8 11z"/><path d="M4.5 12h4l1.5-3 2 6 1.5-3h6"/></symbol>
 </svg>
 
+<div id="stage">
 <div id="app">
 
   <!-- ===================== BOOT ===================== -->
@@ -113,55 +138,42 @@
     </div>
   </section>
 
-  <!-- ===================== HIDEOUT SHELL ===================== -->
-  <section class="screen" id="screen-hideout">
-    <header class="topbar">
-      <div class="topbar__mark"><span class="topbar__a">ESCAPE</span><span class="topbar__b">2D</span></div>
-      <nav class="tabs" id="hideout-tabs">
-        <button class="tab is-active" data-tab="stash"><svg class="ico"><use href="#i-stash"/></svg><span>STASH</span></button>
-        <button class="tab" data-tab="traders"><svg class="ico"><use href="#i-trader"/></svg><span>TRADERS</span></button>
-        <button class="tab" data-tab="health"><svg class="ico"><use href="#i-health"/></svg><span>HEALTH</span></button>
-        <button class="tab" data-tab="raid"><svg class="ico"><use href="#i-map"/></svg><span>RAID</span></button>
-      </nav>
-      <div class="topbar__stats">
-        <div class="stat" title="Roubles"><svg class="ico"><use href="#i-cash"/></svg><span id="stat-rub">0</span><em>₽</em></div>
-        <div class="stat" title="Dollars"><span id="stat-usd">0</span><em>$</em></div>
-        <div class="stat" title="Euros"><span id="stat-eur">0</span><em>€</em></div>
-        <div class="stat stat--sep" title="Level"><span class="stat__k">LVL</span><span id="stat-level">1</span></div>
-        <button class="btn btn--ghost btn--sm" id="btn-sound" title="Sound on/off">
-          <svg class="ico"><use href="#i-sound"/></svg></button>
-        <button class="btn btn--ghost btn--sm" id="btn-settings" title="Profile and settings">…</button>
-      </div>
-    </header>
+  <!-- ===================== MAIN MENU ===================== -->
+  <section class="screen" id="screen-menu">
+    <div class="menu" id="menu-host"></div>
+  </section>
 
-    <div class="hideout-body">
-      <!-- ---- STASH PANE ---- -->
+  <!-- ===================== CHARACTER ===================== -->
+  <!-- OVERALL / GEAR / HEALTH / SKILLS / MAP / TASKS / ACHIEVEMENTS, as the
+       game's character screen has them. GEAR is the stash screen. -->
+  <section class="screen" id="screen-character">
+    <nav class="chartabs" id="char-tabs"></nav>
+
+    <div class="char-body">
+      <div class="pane" id="pane-overall"><div class="overall" id="overall-host"></div></div>
+
+      <!-- ---- GEAR ---- -->
       <div class="pane is-active" id="pane-stash">
         <div class="pane-grid pane-grid--stash">
           <div class="panel" id="panel-equipment">
-            <div class="panel__head">
-              <h2>GEAR</h2>
-              <div class="panel__meta"><svg class="ico"><use href="#i-weight"/></svg><span id="equip-weight">0.00</span> kg</div>
-            </div>
             <div class="panel__body panel__body--scroll" id="equipment-host"></div>
+            <div class="gear-foot">
+              <div class="gear-foot__stat" title="Carried weight"><svg class="ico"><use href="#i-weight"/></svg><span id="equip-weight">0.00</span><em>KG</em></div>
+            </div>
           </div>
           <div class="panel" id="panel-carry">
-            <div class="panel__head">
-              <h2>INVENTORY</h2>
-              <div class="panel__meta hint">double-click a bag to pop it out</div>
-            </div>
             <div class="panel__body panel__body--scroll" id="carry-host"></div>
           </div>
           <div class="panel" id="panel-stash">
-            <div class="panel__head">
-              <h2>STASH</h2>
+            <div class="panel__head stash-head">
+              <div class="stash-money" id="stash-money"></div>
               <div class="panel__tools">
                 <div class="field field--search">
                   <svg class="ico"><use href="#i-search"/></svg>
-                  <input type="text" id="stash-search" placeholder="filter items" autocomplete="off" spellcheck="false">
+                  <input type="text" id="stash-search" placeholder="" autocomplete="off" spellcheck="false">
                 </div>
                 <button class="btn btn--sm" id="btn-unload-gear" title="Empty your rig, pockets, backpack and pouch into the stash">UNLOAD</button>
-                <button class="btn btn--sm" id="btn-sort-stash">SORT</button>
+                <button class="btn btn--sm" id="btn-sort-stash" title="Sort the stash">SORT</button>
               </div>
             </div>
             <div class="panel__body panel__body--scroll" id="stash-host"></div>
@@ -169,77 +181,47 @@
         </div>
       </div>
 
-      <!-- ---- TRADERS PANE ---- -->
-      <div class="pane" id="pane-traders">
-        <div class="trade">
-          <div class="trade__tabs" id="trader-tabs"></div>
-          <div class="trade__bar" id="trader-bar"></div>
-          <!-- three columns, as in the real screen: showcase | trading table |
-               stash. The table is a full-height middle column, not a strip
-               under the shelf. -->
-          <div class="trade__body">
-            <div class="trade__col trade__col--shop">
-              <div class="col-head">
-                <span class="col-head__tab">SHOWCASE</span>
-                <div class="col-head__right" id="assort-tools"></div>
-              </div>
-              <div class="trade__content" id="trader-content"></div>
-            </div>
-
-            <div class="trade__col trade__col--table">
-              <div class="col-head">
-                <div class="trade__modes">
-                  <button class="seg is-active" data-mode="buy" data-sfx="own">BUY</button>
-                  <button class="seg" data-mode="sell" data-sfx="own">SELL</button>
-                  <button class="seg" data-mode="repair" data-sfx="own" hidden>REPAIR</button>
-                </div>
-                <button class="btn btn--icon col-head__clear" id="btn-trade-clear" data-sfx="own" title="Clear the table">
-                  <svg class="ico"><use href="#i-discard"/></svg>
-                </button>
-              </div>
-              <div class="deal-col" id="trade-table-host"></div>
-            </div>
-
-            <aside class="trade__col trade__col--stash">
-              <div class="col-head">
-                <span class="col-head__tab">STASH</span>
-                <span class="col-head__right muted" id="trade-stash-note"></span>
-              </div>
-              <div class="trade__content trade__content--scroll" id="trade-stash-host"></div>
-            </aside>
-          </div>
-        </div>
-      </div>
-
-      <!-- ---- HEALTH PANE ---- -->
+      <!-- ---- HEALTH ---- -->
       <div class="pane" id="pane-health">
         <div class="pane-grid pane-grid--health">
           <div class="panel" id="panel-health">
-            <div class="panel__head">
-              <h2>HEALTH</h2>
-              <div class="panel__meta hint">seven parts · conditions · therapist</div>
-            </div>
             <div class="panel__body panel__body--scroll" id="health-panel-host"></div>
           </div>
           <div class="panel" id="panel-health-stash">
-            <div class="panel__head">
-              <h2>STASH</h2>
-              <div class="panel__meta hint">right-click a med: USE</div>
-            </div>
             <div class="panel__body panel__body--scroll" id="health-stash-host"></div>
           </div>
         </div>
       </div>
 
-      <!-- ---- RAID PANE ---- -->
-      <div class="pane" id="pane-raid">
-        <div class="deploy">
-          <div class="deploy__maps" id="deploy-maps"></div>
-          <div class="deploy__brief" id="deploy-brief"></div>
-        </div>
-      </div>
+      <div class="pane" id="pane-skills"><div class="skills" id="skills-host"></div></div>
+      <div class="pane" id="pane-map"><div class="charmap" id="charmap-host"></div></div>
+      <div class="pane" id="pane-tasks"><div class="tasks" id="tasks-host"></div></div>
+      <div class="pane" id="pane-achievements"><div class="achv" id="achv-host"></div></div>
     </div>
   </section>
+
+  <!-- ===================== TRADERS (the list) ===================== -->
+  <section class="screen" id="screen-traders">
+    <div class="tlist" id="traders-host"></div>
+  </section>
+
+  <!-- ===================== ONE TRADER ===================== -->
+  <!-- The client's own arrangement: three tabs top-left (TRADING, TASKS,
+       SERVICES), VISIT in the middle and BACK top-right; under them, between
+       two khaki rules, a strip with every trader's card and, to its right,
+       the player's block; under that, the tab's own body. src/ui/trade.js
+       builds all of it. -->
+  <section class="screen" id="screen-trader"></section>
+  <section class="screen" id="screen-settings"></section>
+
+  <!-- ===================== HIDEOUT / FLEA / HANDBOOK / MESSENGER ===================== -->
+  <section class="screen" id="screen-hideout"><div class="hideout" id="hideout-host"></div></section>
+  <section class="screen" id="screen-flea"><div class="flea" id="flea-host"></div></section>
+  <section class="screen" id="screen-handbook"><div class="handbook" id="handbook-host"></div></section>
+  <section class="screen" id="screen-messenger"><div class="messenger" id="messenger-host"></div></section>
+
+  <!-- ===================== BEFORE THE RAID ===================== -->
+  <section class="screen" id="screen-preraid"><div class="preraid" id="preraid-host"></div></section>
 
   <!-- ===================== RAID ===================== -->
   <section class="screen" id="screen-raid">
@@ -378,21 +360,11 @@
     </div>
   </section>
 
-  <!-- ===================== RESULT ===================== -->
-  <section class="screen" id="screen-result">
-    <div class="result-wrap">
-      <div class="result-head">
-        <div class="result-verdict" id="result-verdict">SURVIVED</div>
-        <div class="result-sub" id="result-sub">Factory · Gate 3</div>
-      </div>
-      <div class="result-stats" id="result-stats"></div>
-      <div class="result-loot">
-        <h3>EXTRACTED</h3>
-        <div class="result-loot__list" id="result-loot"></div>
-      </div>
-      <button class="btn btn--primary btn--lg" id="btn-result-continue">CONTINUE</button>
-    </div>
-  </section>
+  <!-- ===================== AFTER THE RAID ===================== -->
+  <section class="screen" id="screen-raidend"><div class="raidend" id="raidend-host"></div></section>
+
+  <!-- the strip along the bottom of every screen outside a raid -->
+  <nav class="bottombar" id="bottombar" hidden></nav>
 
 </div>
 
@@ -400,8 +372,12 @@
 <div id="drag-layer" class="drag-layer"></div>
 <div id="tooltip" class="tooltip" hidden></div>
 <div id="context-menu" class="ctx" hidden></div>
+<!-- the messenger: a window over whatever screen is up (src/ui/messenger.js) -->
+<div id="messenger-layer" class="msgr-layer" hidden></div>
 <div id="modal-root" class="modal-root" hidden></div>
 <div id="toasts" class="toasts"></div>
+<div id="notify" class="notify"></div>
+</div><!-- /stage -->
 
 <script type="module" src="src/main.js"></script>
 </body>
