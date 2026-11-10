@@ -23,3 +23,6 @@ tools/__pycache__/
 # the sealed container that tools/pack_sfx.py builds is tracked.
 assets/sfx-eft/*
 !assets/sfx-eft/pack.bin
+
+# local-only workspace rules and session logs
+.claude/
