@@ -1126,8 +1126,10 @@ let fenceStock = null;
 function randomFenceStock() {
   const t = TRADER_BY_ID.fence;
   if (fenceStock) return fenceStock;
+  // the set the game shipped with: Fence's shelf is rolled from the same
+  // pool it always was until real stock replaces it
   const pool = Object.values(TPL).filter((x) =>
-    !['money', 'secure'].includes(x.cat) && x.price > 3000 && x.price < 260000);
+    x.core && !['money', 'secure'].includes(x.cat) && x.price > 3000 && x.price < 260000);
   fenceStock = [];
   const used = new Set();
   for (let i = 0; i < (t.randomAssort || 12) && pool.length; i++) {

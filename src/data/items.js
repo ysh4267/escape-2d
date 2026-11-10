@@ -1,23 +1,40 @@
 // =========================================================
 // item template registry
 //
-// items-db.json is produced by tools/build_items.py:
-//   names / descriptions / handbook prices come from the public SPT data dump,
-//   grid footprints and artwork come from assets.tarkov.dev grid images.
+// items-db.json is produced by tools/build_items.py: every item of the live
+// game, from tarkov.dev's dataset (what exists and its numbers today) laid
+// over the public SPT template dumps (everything deeper), with artwork from
+// assets.tarkov.dev grid images.
+//
+// A template is keyed by its 24-hex tarkov id. The items the game shipped
+// with before the database was complete also keep a slug (`salewa`, `w_akm`)
+// and are marked `core`; getTpl() takes either.
 // =========================================================
 
-/** @type {Record<string, any>} keyed by slug */
+/** @type {Record<string, any>} keyed by slug, or by tarkov id where there is no slug */
 export const TPL = {};
 /** @type {Record<string, any>} keyed by the 24-hex tarkov item id */
 export const BY_ID = {};
 
 export const ITEM_ASSET_DIR = 'assets/items/';
 
-/** every gameplay category the game understands */
+/**
+ * Every gameplay category the game understands. A template's `cat` is
+ * derived from its tarkov category chain (`cats`) by the builder.
+ *
+ * The last row is what the full item list brought with it: an armour plate
+ * and a helmet's shield or mandible are items of their own, night vision
+ * goes on a helmet mount, special-slot equipment (markers, cameras, jammers,
+ * a compass), the two repair kits, sealed cases that open into loot, the
+ * hand-fired signal cartridge, quest items, and `preset` - a named build of
+ * a gun or a plated vest that a trader lists, which is not an item to hold
+ * but the recipe for one (see presetOf).
+ */
 export const CATEGORIES = [
   'money', 'meds', 'food', 'drink', 'barter', 'electronics', 'valuables', 'info',
   'key', 'container', 'secure', 'backpack', 'rig', 'armor', 'helmet', 'headset',
-  'glasses', 'facecover', 'armband', 'weapon', 'pistol', 'melee', 'grenade', 'mag', 'ammo', 'mod',
+  'glasses', 'facecover', 'armband', 'weapon', 'pistol', 'melee', 'grenade', 'mag', 'ammo', 'ammobox', 'mod',
+  'plate', 'gearmod', 'nvg', 'special', 'repairkit', 'lootbox', 'flare', 'quest', 'preset',
 ];
 
 export const CAT_LABEL = {
@@ -27,7 +44,10 @@ export const CAT_LABEL = {
   rig: 'Tactical rig', armor: 'Body armor', helmet: 'Headwear', headset: 'Headset',
   glasses: 'Eyewear', facecover: 'Face cover', armband: 'Armband', weapon: 'Weapon',
   pistol: 'Pistol', melee: 'Melee', grenade: 'Throwable', mag: 'Magazine', ammo: 'Ammo',
-  mod: 'Weapon part',
+  ammobox: 'Ammo pack', mod: 'Weapon part',
+  plate: 'Armor plate', gearmod: 'Gear component', nvg: 'Night vision', special: 'Special equipment',
+  repairkit: 'Repair kit', lootbox: 'Sealed case', flare: 'Signal flare', quest: 'Quest item',
+  preset: 'Preset',
 };
 
 /** modType -> label, for parts (the handbook's own families) */
@@ -38,6 +58,7 @@ export const MOD_TYPE_LABEL = {
   mount: 'Mount', ironsight: 'Iron sight', reflex: 'Reflex sight',
   scope: 'Scope', tactical: 'Tactical device', charge: 'Charging handle',
   aux: 'Auxiliary part', bipod: 'Bipod', magazine: 'Magazine',
+  launcher: 'Underbarrel launcher',
 };
 
 /** the fire modes as the game prints them on the weapon card */
@@ -69,10 +90,22 @@ export async function loadItems() {
     tpl.tier = valueTier(tpl);
     tpl.imgUrl = tpl.img ? ITEM_ASSET_DIR + tpl.img : null;
     tpl.presetImgUrl = tpl.presetImg ? ITEM_ASSET_DIR + tpl.presetImg : null;
-    // the large render of the default preset, for the modding screen's stage
-    tpl.presetLgUrl = tpl.presetImg ? ITEM_ASSET_DIR + tpl.presetImg.replace('-preset.webp', '-preset-lg.webp') : null;
+    // the large render of the default preset, for the modding screen's stage;
+    // only the guns it was fetched for have one (tools/fetch_preset_art.py)
+    tpl.presetLgUrl = tpl.presetLg ? `${ITEM_ASSET_DIR}${tpl.id}-preset-lg.webp` : null;
     TPL[key] = tpl;
     BY_ID[tpl.id] = tpl;
+  }
+  // A preset names the gun it is a build of; the tree itself is kept once, on
+  // the gun (its default as `preset`, the others in `wpn.alts`), and hung on
+  // the preset here. A vest's or a helmet's preset carries its own.
+  for (const tpl of Object.values(TPL)) {
+    if (tpl.cat !== 'preset') continue;
+    const base = TPL[tpl.base];
+    if (!base?.wpn) continue;
+    if (tpl.def) { tpl.tree = base.preset || {}; continue; }
+    const alt = (base.wpn.alts || []).find((a) => a.id === tpl.id);
+    if (alt) { tpl.tree = alt.tree; if (alt.load) tpl.load = alt.load; }
   }
   // one exchange rate everywhere: the handbook quotes currency below the FX
   // table, and two disagreeing rates open buy-low/sell-high loops
@@ -84,6 +117,20 @@ export async function loadItems() {
 
 export function getTpl(keyOrId) {
   return TPL[keyOrId] || BY_ID[keyOrId] || null;
+}
+
+/**
+ * What a preset template stands for: the template to make and what to hang
+ * on it - {base, tree, plates, load} - or null when `keyOrId` is not a
+ * preset. `tree` is the shape applyPreset() takes; `plates` names the plate
+ * each plate slot of a vest ships with; `load` is the rounds in the magazine.
+ */
+export function presetOf(keyOrId) {
+  const tpl = getTpl(keyOrId);
+  if (!tpl || tpl.cat !== 'preset') return null;
+  const base = getTpl(tpl.base);
+  if (!base) return null;
+  return { base, tree: tpl.tree || {}, plates: tpl.plates || {}, load: tpl.load || [] };
 }
 
 export function allTpls() { return Object.values(TPL); }

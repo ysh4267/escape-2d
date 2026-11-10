@@ -256,7 +256,10 @@ function presetKeys(tpl, out = new Set()) {
  * templates, so it runs after loadItems().
  */
 export function buildAssortments(TPL) {
-  const all = Object.values(TPL);
+  // The database now holds every item of the live game; these rules were
+  // written for the set the game shipped with (`core`) and are kept to it,
+  // so the shelves stay what they were until real trader stock replaces them.
+  const all = Object.values(TPL).filter((t) => t.core);
   const weapons = all.filter((t) => t.wpn);
   // part key -> weapons it goes straight onto
   const fitsOn = new Map();
@@ -270,7 +273,7 @@ export function buildAssortments(TPL) {
     t.assort = (t.assort || []).filter((o) => !o.generated);
     const have = new Set(t.assort.map((o) => o.key));
     const add = (key, ll, stock, cur) => {
-      if (have.has(key) || !TPL[key]) return;
+      if (have.has(key) || !TPL[key]?.core) return;
       have.add(key);
       const off = { key, ll, stock, base: stock, generated: true };
       if (cur) off.cur = cur;
@@ -282,7 +285,7 @@ export function buildAssortments(TPL) {
       } else if (r.kind === 'fits') {
         for (const [k, ws] of fitsOn) {
           const tpl = TPL[k];
-          if (!r.of.some((w) => ws.has(w))) continue;
+          if (!tpl?.core || !r.of.some((w) => ws.has(w))) continue;
           if (r.types && !r.types.includes(tpl.modType)) continue;
           if (r.maxPrice && tpl.price > r.maxPrice) continue;
           if (r.minPrice && tpl.price < r.minPrice) continue;
@@ -312,8 +315,9 @@ export function buildAssortments(TPL) {
     }
   }
   // a gun is sold assembled, so it is priced assembled: the receiver alone
-  // would be a quarter of what the parts on it are worth
-  for (const w of weapons) w.presetPrice = presetKeys(w).size
+  // would be a quarter of what the parts on it are worth (every gun, not
+  // only the ones the rules above stock)
+  for (const w of Object.values(TPL)) if (w.wpn) w.presetPrice = presetKeys(w).size
     ? Array.from(presetKeys(w)).reduce((n, k) => n + (TPL[k]?.price || 0), w.price)
     : w.price;
 }

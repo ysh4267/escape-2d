@@ -24,8 +24,9 @@
 //    exact only through the magazine's own windows, otherwise a guess
 //
 // Sources: the wiki's Ballistics, Armor and Weapon Malfunctions pages
-// (tools/cache/wiki_*.txt), the SPT 3.10.1 item and globals dumps for every
-// number on an item, and the client's penetration curve in ballistics.js.
+// (tools/cache/wiki_*.txt), the item database for every number on an item
+// (tarkov.dev's live figures over the SPT template dumps), the SPT globals
+// dump, and the client's penetration curve in ballistics.js.
 // Numbers that the game keeps in the client rather than the item dumps
 // (aim settle, spread scale, malfunction thresholds) are named constants
 // below and say where they come from.
@@ -115,7 +116,8 @@ const HEAT_WEAR_MAX = 3;
 const RELOAD_TIME = { pistol: 1.7, smg: 2.1, assaultRifle: 2.5, assaultCarbine: 2.5, shotgun: 2.9, default: 2.4 };
 /**
  * Rounds by hand (globals): BaseLoadTime 0.85 s a round, scaled by the
- * magazine's LoadUnloadModifier (a drum +60%, a PMAG -10%); a tube gun with
+ * magazine's LoadUnloadModifier (a drum +5 to +15%, a ten-round magazine
+ * -35%, as the live game has them); a tube gun with
  * the slow-reload flag takes a little longer per shell. BaseCheckTime 3 s
  * for the magazine check.
  */

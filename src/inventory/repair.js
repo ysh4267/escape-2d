@@ -108,13 +108,22 @@ export function traderRepair(trader, item, points, ll = 1, rng = rand) {
 // ---------------------------------------------------------
 // repair kits
 // ---------------------------------------------------------
+/**
+ * A kit that mends guns. The body armor repair kit is a template too now
+ * (`repairKit.type: 'armor'`), but nothing here mends armour yet, so it is
+ * not offered for a gun and does not answer to USE ON WEAPON.
+ */
+function mendsGuns(item) {
+  return item?.tpl.repairKit?.type === 'weapon';
+}
+
 export function isRepairKit(item) {
-  return !!item?.tpl.repairKit && (item.res ?? 0) > 0;
+  return mendsGuns(item) && (item.res ?? 0) > 0;
 }
 
 /** durability points the kit's remaining resource buys */
 export function kitPointsLeft(kit) {
-  if (!kit?.tpl.repairKit) return 0;
+  if (!mendsGuns(kit)) return 0;
   return Math.floor((kit.res ?? 0) / KIT_RESOURCE_PER_POINT);
 }
 
@@ -138,7 +147,7 @@ export function repairKitsIn(grids) {
 
 /** mend `item` with `kit`: resource off the kit, points on the gun, kit wear on the max */
 export function kitRepair(kit, item, points, rng = rand) {
-  if (!kit?.tpl.repairKit) return { ok: false, reason: 'not a repair kit' };
+  if (!mendsGuns(kit)) return { ok: false, reason: 'not a weapon repair kit' };
   if (!isRepairable(item)) return { ok: false, reason: 'cannot be repaired' };
   const need = repairNeeded(item);
   const pts = Math.min(points, need, kitPointsLeft(kit));

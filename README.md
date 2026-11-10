@@ -76,16 +76,45 @@ it is where the rig and the bags open up so you can actually shuffle loot.
 
 ## What is modelled
 
+**Every item of the live game.** The item database is not a selection: all
+4,998 items tarkov.dev lists for the live game have a template, plus the 499
+presets the traders deal in and the 138 quest items — 165 guns, 2,085 parts,
+224 magazines, 201 cartridges, 229 ammo packs, 200 containers, 259 keys, 225
+pieces of armour. Nothing in a template is typed in by hand: what exists and
+its numbers today (footprint, weight, price, stack, slots and their filters,
+ballistics, armour, grids, medical effects) come from tarkov.dev's dataset, and
+what that does not carry (the item's sound, whether it is known on sight, heat,
+malfunctions, repair wear, what a med's effect costs) from the SPT template
+dumps; an item newer than the dumps borrows those from the item of its category
+it most resembles. A template is keyed by its tarkov id; the 987 the game
+shipped with before keep their slugs (`salewa`, `w_akm`) and are marked `core`,
+and until real trader stock and loot tables arrive, those are still what the
+shelves and the crates are filled from.
+
 **Grid inventory.** Items occupy `w × h` cells, never overlap, and rotate 90°.
 Grid-to-grid drops onto occupied cells are rejected outright — Tarkov has no
 grid swap; only equipment slots swap. Stacks merge up to the template's real
 `StackMaxSize` and a found-in-raid stack never launders a non-FiR one.
 
 **Containers.** Every container carries its real internal grid layout, so a
-BlackRock rig really is seven separate pouches and a Documents case really is
-1×2 outside and 4×4 inside, filtered to keys, intel and money. Nesting is
-blocked for cycles (an item inside itself), for backpack-in-backpack, and past
-a depth cap.
+BlackRock rig really is seven separate pouches and a Document case really is
+1×2 outside and 4×4 inside. Each grid filters by the template's own lists —
+the tarkov categories and single items it takes and the ones it refuses — so
+the Document case takes keys, intel, maps and money, the S I C C keys and
+cash, an injector case stimulants (and morphine), and a backpack will not
+take a secure container. Nesting is blocked for cycles (an item inside
+itself), for backpack-in-backpack, and past a depth cap.
+
+**Armour as the game has had it since 0.14.** A vest or a helmet is built-in
+soft inserts — each with a class, a durability, a material and the zones it
+covers — and slots that take a plate; the 38 plates are items of their own, and
+so are a helmet's shields and mandibles, which go into its slots the way a
+part goes onto a gun. Every template carries that structure (`armor`). Combat
+still reads one flat summary per wearable — class, durability, material and
+the body parts covered — and that is derived from the configuration the item
+ships in: the plate in its front plate slot where there is one, else the
+built-in soft armour, whose inserts are one layer with their durability added
+up.
 
 **Equipment.** Headwear, earpiece, face cover, eyewear, body armor, tactical
 rig, backpack, secure container, on-sling, on-back, holster and sheath, plus
@@ -95,16 +124,22 @@ than a single cell fits in a pocket and items never span two of them.
 **Weapons are built out of parts.** Every gun carries the real template's mod
 slots — gas block, handguard, muzzle, pistol grip, dust cover, rear sight,
 stock, magazine, charging handle, mounts — and every part that goes into any
-of them is in the game: 610 parts, 46 magazines and 61 cartridges, generated
-as the transitive closure of the twelve guns' `Slots` filters, so a dovetail
-mount brings the scopes that mount on it and the AK buffer-tube adapter brings
-the AR stocks. Slot filters, `ConflictingItems`, required (vital) parts and the
-`ExtraSize` each part adds to the gun's footprint are all the template's own; a
-built AK-74N is 5×2, strip the stock and it is 4×2, fold the AKS-74U and it is
-3×2, and every one of the twelve default builds lands on exactly the size of
-tarkov.dev's preset sprite. A gun that will not fit where it lies refuses the
-part. Guns bought or found come assembled to their default preset (globals.json
-`ItemPresets`), worn inside the template's spawn range and, often, part loaded.
+of them is in the game: all 165 guns of the live game, 2,085 parts, 224
+magazines and 201 cartridges, so every slot filter resolves on its own — a
+dovetail mount brings the scopes that mount on it and the AK buffer-tube
+adapter brings the AR stocks. (The traders and the crates still deal in the
+twelve guns the game began with, and the 610 parts, 44 magazines and 61
+cartridges that fit them.) Slot filters, `ConflictingItems`, required (vital)
+parts and the `ExtraSize` each part adds to the gun's footprint are all the
+template's own; a built AK-74N is 5×2, strip the stock and it is 4×2, fold the
+AKS-74U and it is 3×2, and every one of the 163 default builds — and of the
+401 named builds in all — lands on exactly the size the live game gives its
+preset. A gun that will not fit where it lies refuses the part. Guns bought or
+found come assembled to their default preset (globals.json `ItemPresets`, or
+tarkov.dev's preset where the gun is newer than the dump), worn inside the
+template's spawn range and, often, part loaded. A preset a trader lists is a
+template of its own that names the gun it is a build of; asking for it makes
+that gun, built that way.
 
 The modding screen (right-click → MODDING, or double-click a gun) is the
 game's own WEAPON MODDING screen: the gun large in the middle, its slots hung
@@ -146,11 +181,12 @@ for the wiki's table of every round of that calibre you have examined, coloured
 on the wiki's own six-step scale. Every one of those numbers is what lands in
 the field, below.
 
-**Ammo packs and cases.** The 86 ammo packs (every `AmmoBox` whose round we
-carry — the 120-round 5.45 PS pack, the 20-round 7.62x39 boxes, the 16 and 50
-of 9x18, the 25 of 12/70) are items of their own, priced as their rounds and
-unpacked (right-click → UNPACK) into stacks; the ammo case and the two weapon
-cases (5×10 and 6×15 inside) file them as ammunition.
+**Ammo packs and cases.** The ammo packs (all 229 of them; the 86 that hold a
+round of the first twelve guns are the ones in stock — the 120-round 5.45 PS
+pack, the 20-round 7.62x39 boxes, the 16 and 50 of 9x18, the 25 of 12/70) are
+items of their own, priced as their rounds and unpacked (right-click →
+UNPACK) into stacks; the ammo case and the two weapon cases (5×10 and 6×15
+inside) file them as ammunition.
 
 **Builds.** BUILDS in the modding screen is the game's weapon-presets panel:
 the factory's builds of the gun (the default, and the alternates globals.json
@@ -186,7 +222,7 @@ consequence when the trigger is pulled (`src/raid/gunplay.js`):
   shells. The HUD's ammo row shows the mode beside the gun.
 - *Where the shot goes.* The spread is a cone built from the gun's numbers:
   the receiver's MOA, the ergonomics deciding how long the aim takes to settle
-  after a move or a turn (an AKM at 26 ergo about a second, a light carbine
+  after a move or a turn (an AKM at 28 ergo about a second, a light carbine
   half that), a sprint or a walk opening it, the vertical recoil climbing the
   aim across a string and recovering between shots, the horizontal recoil
   scattering the string from the second shot on, a shell's pellets each taking
@@ -307,9 +343,10 @@ time** — matching the real game, where the Attention skill is raised per item
 uncovered and its elite perk is a chance to find an item instantly. Nothing you
 have not uncovered can be picked up, and walking away cancels the search.
 
-Uncovering an item is not the same as identifying it. 27 of the 195 templates —
-keys, rare electronics, high-value gear — are not `ExaminedByDefault`, so they
-come out as a hatched **Unknown item** plate. Examining runs on its own timer,
+Uncovering an item is not the same as identifying it. 36 of the 987 templates
+loot is drawn from — keys, rare electronics, high-value gear — are not
+`ExaminedByDefault` (655 of all 5,637 are not), so they come out as a hatched
+**Unknown item** plate. Examining runs on its own timer,
 one at a time, and is learned per profile: examine one LEDX and every LEDX you
 ever find is recognised. Right-click or double-click to examine.
 
@@ -449,13 +486,14 @@ python -m http.server 8777
 
 | file | what it does |
 |---|---|
-| `tools/build_items.py` | builds `src/data/items-db.json` and downloads item artwork |
-| `tools/selection.py` | the curated item list the builder resolves |
-| `tools/weapons_expand.py` | expands the guns in the selection into every part, magazine and cartridge they can take, and reads the modding numbers, ballistics, repair numbers, the default and alternate factory presets, the ammo packs, the repair kit and the weapon cases |
+| `tools/build_items.py` | builds `src/data/items-db.json` — a template for every item of the live game — and downloads item artwork |
+| `tools/items_live.py` | the live game's side of it: tarkov.dev's numbers laid over a template, the stand-in for an item newer than the dumps, the gameplay category of every tarkov category, armour plates and inserts and the flat summary combat reads, container filters, a preset's tree rebuilt from its list of parts |
+| `tools/weapons_expand.py` | what a template says about a gun and what goes on it or in it: the modding numbers, ballistics, repair numbers, magazines and cylinders, a preset as the tree the game hangs on a new gun |
+| `tools/selection.py`, `tools/part_keys.json` | the slugs of the 987 items the game shipped with before the database was complete, frozen (saves, loot tables and trader rules refer to them); nothing else is typed in |
 | `tools/build_map.py` | extracts all four Factory storeys, finds every opening in them, derives the stairwell links, and folds in tarkov.dev's exits / locks / spawns / loot spots — all into `src/data/map-factory.json` |
 | `tools/pack_sfx.py` | compresses and seals the sound pack (and `--unpack` reverses it) |
 | `tools/extract_tarkov_models.py` | reads every weapon's and part's prefab out of the installed client — meshes, diffuse maps, the `mod_*` slot transforms — and writes one sealed, quantised pack per item plus `src/data/models-index.json` |
-| `tools/fetch_preset_art.py` | pulls the 8x grid render of each gun's default preset from tarkov.dev (through a headless Chromium — the CDN answers plain fetches with 403) and stores it downscaled as `assets/items/<id>-preset-lg.webp` for the modding screen's stage |
+| `tools/fetch_preset_art.py` | pulls the 8x grid render of each gun's default preset from tarkov.dev (through a headless Chromium — the CDN answers plain fetches with 403) and stores it downscaled as `assets/items/<id>-preset-lg.webp` for the modding screen's stage; the twelve first guns have one, `--all` fetches the rest (their stage shows the grid-sized sprite until then) |
 | `tools/verify3d.py` | opens the 3D viewer in a real-time headless Chromium (Playwright — the sealed packs need WebCrypto, which the virtual-time headless runs never finish) and asserts the gun assembles, a click on a part picks its slot, and a part dropped on the view is fitted |
 | `tools/sfx_picks.py` | which clip backs which cue |
 | `tools/smoke.html` | headless assertion suite over inventory, map, raid, search, examine, trader and save logic |
@@ -472,11 +510,25 @@ python build_items.py --report
 python build_map.py
 ```
 
-The item builder joins three public data sets: grid footprints, weights, stack
-sizes and container layouts come from the SPT template dump, English names and
-descriptions from the SPT locale dump, base prices and categories from the SPT
-handbook, and artwork from `assets.tarkov.dev` — whose grid images are exactly
-`63 × cells + 1` pixels, which the builder uses to cross-check every footprint.
+The item builder joins public data sets in a fixed order of authority. What
+exists and its numbers today — names, footprint, weight, price, stack, the
+category chain, slots and filters, ballistics, armour plates and inserts,
+container grids, medical effects, the presets the traders sell — is
+tarkov.dev's static dataset (`json.tarkov.dev/regular/items`). Everything a
+template has that the dataset does not carry — `ItemSound`,
+`ExaminedByDefault`, examine time and experience, `RaidModdable`, heat and
+malfunction numbers, repair degradation, what a med's effect costs, folding,
+chambers — is the SPT template dump: tag 4.1.2 of `sp-tarkov/server-csharp`,
+then tag 3.10.1 of `sp-tarkov/server` for anything it lacks. An item newer
+than both (about a fifth of the live game) takes those deep fields from the
+most similar item of its own category. Artwork is `assets.tarkov.dev`, whose
+grid images are exactly `63 × cells + 1` pixels — which cross-checks every
+footprint, and a built gun's footprint (the sum of what its parts add) is
+checked against the size the dataset gives the preset. The 4.1.2 `items.json`
+is a Git-LFS object; the builder reads its pointer, fetches it from the LFS
+server the repository names and keeps it only if the sha256 matches. The run
+leaves `tools/cache/items_all/build_report.json`: what came from where, which
+items had no artwork upstream, every disagreement it found.
 
 ---
 
@@ -494,9 +546,13 @@ Battlestate Games; this project is not affiliated with or endorsed by them.
   their factions, the transits, the four locked doors and the key each one
   wants, the 85 player spawn points, the 167 static container spots and the
   144 loose-loot spots, all in the game's own coordinates.
+- **Items: what exists, names, numbers, presets** — `json.tarkov.dev/regular/items`
+  (and `/tasks` for the quest items), the dataset [tarkov.dev](https://tarkov.dev)
+  itself reads.
 - **Item artwork** — `assets.tarkov.dev`, from the same project.
-- **Item templates, names and handbook prices** — the public
-  [SPT](https://github.com/sp-tarkov/server) database dumps.
+- **Item templates' deeper fields and the default presets** — the public
+  [SPT](https://github.com/sp-tarkov/server-csharp) database dumps (tag 4.1.2,
+  and tag 3.10.1 of [sp-tarkov/server](https://github.com/sp-tarkov/server)).
 - **What the places are called, and door behaviour** — the Escape From Tarkov
   wiki. The health tab's figure is the wiki's capture of the character
   screen's own (`HealthOverview.png`), traced for the outline

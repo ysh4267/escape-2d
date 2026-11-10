@@ -580,7 +580,10 @@ export class Raid {
     let placed = 0;
     for (const id of ids) {
       const tpl = BY_ID[id];
-      if (!tpl) continue;
+      // only what this build's loot is drawn from (`core`): a spot lists
+      // everything that can lie there, and with every item of the game in
+      // the database that would fill the spot with all of it at once
+      if (!tpl?.core) continue;
       const item = new Item(tpl.key, { stack: tpl.stack > 1 ? this.rng.int(1, Math.min(tpl.stack, 3)) : 1 });
       item.raidLoot = true;
       for (const d of item.descendants()) d.raidLoot = true;
@@ -590,7 +593,7 @@ export class Raid {
       const spot = c.grid.findSpot(item);
       if (spot) { c.grid.place(item, spot.x, spot.y, spot.rot); placed++; }
     }
-    // the recorded item is not in this build's 195 templates: fall back to a
+    // nothing recorded for the spot is among those templates: fall back to a
     // roll so the spot is not simply empty
     if (!placed) this.rollLoot(c);
   }

@@ -40,10 +40,17 @@ const NEST_DENY = {
 // ---------------------------------------------------------
 export class Item {
   constructor(tplId, opts = {}) {
-    const tpl = getTpl(tplId);
-    if (!tpl) throw new Error(`unknown item template: ${tplId}`);
+    const asked = getTpl(tplId);
+    if (!asked) throw new Error(`unknown item template: ${tplId}`);
+    // a preset is a recipe, not a thing to hold: what gets made is the gun
+    // (or the vest) it is a build of, with that build's parts on it
+    const recipe = asked.cat === 'preset' ? asked : null;
+    const tpl = recipe ? getTpl(recipe.base) : asked;
+    if (!tpl) throw new Error(`preset of an unknown template: ${tplId}`);
     this.uid = opts.uid || uid('i');
-    this.tplId = tplId;
+    // always the template's own key, whichever of its key and its tarkov id
+    // the caller had: slot filters, stacks and saves all compare this
+    this.tplId = tpl.key;
     this.rot = opts.rot ? 1 : 0;
     this.stack = clamp(opts.stack ?? 1, 1, tpl.stack || 1);
     this.fir = opts.fir ?? false;
@@ -74,8 +81,10 @@ export class Item {
     /** @type {Grid[]|null} */
     this.grids = null;
     if (tpl.container) {
-      this.grids = tpl.container.grids.map((g, i) => {
-        const grid = new Grid(g[0], g[1], { filter: tpl.container.filter, label: tpl.container.labels?.[i] });
+      // one filter for every grid, or one per grid where the template's differ
+      const c = tpl.container;
+      this.grids = c.grids.map((g, i) => {
+        const grid = new Grid(g[0], g[1], { filter: c.filters ? c.filters[i] : c.filter, label: c.labels?.[i] });
         grid.owner = this;
         return grid;
       });
@@ -84,9 +93,11 @@ export class Item {
     this.holder = null; // { kind:'grid', grid, x, y } | { kind:'slot', slot } | { kind:'mod', slot }
 
     // a weapon is born assembled the way the game's default preset assembles
-    // it, unless the caller is restoring one from a save (bare:true) or wants
-    // the stripped receiver on purpose
-    if (tpl.preset && !opts.bare) applyPreset(this, tpl.preset);
+    // it (or the way the preset it was asked for by does), unless the caller
+    // is restoring one from a save (bare:true) or wants the stripped receiver
+    // on purpose
+    const tree = recipe?.tree && Object.keys(recipe.tree).length ? recipe.tree : tpl.preset;
+    if (tree && !opts.bare) applyPreset(this, tree);
   }
 
   get tpl() { return getTpl(this.tplId); }
@@ -509,14 +520,27 @@ export class Grid {
     return h && h.kind === 'grid' && h.grid === this ? { x: h.x, y: h.y } : null;
   }
 
-  /** category filter check only */
+  /** filter check only */
   accepts(item) {
     // hosts can install an arbitrary gate (the trading table only takes what
     // the active trader actually buys)
     if (this.mayAccept && !this.mayAccept(item)) return false;
     const f = this.filter;
     if (!f) return true;
-    // a box of rounds is rounds as far as a case is concerned
+    // A template's own filter, as the game keeps it: the tarkov categories
+    // (`c`) and single items (`i`) a grid takes, and the ones it refuses
+    // (`xc`, `xi`). A category matches anywhere along the item's chain, so
+    // "Weapon mod" takes a magazine and "Key" a keycard.
+    if (f.c || f.i || f.xc || f.xi) {
+      const chain = item.tpl.cats || [];
+      if (f.xi && f.xi.includes(item.tplId)) return false;
+      if (f.xc && f.xc.some((c) => chain.includes(c))) return false;
+      if ((f.c || f.i)
+          && !(f.i && f.i.includes(item.tplId))
+          && !(f.c && f.c.some((c) => chain.includes(c)))) return false;
+    }
+    // a hand-made filter by gameplay category (the trading table, the tests);
+    // a box of rounds is rounds as far as it is concerned
     const cat = FILTER_ALIAS[item.cat] || item.cat;
     if (f.allow && !f.allow.includes(cat) && !f.allow.includes(item.cat)) return false;
     if (f.deny && (f.deny.includes(cat) || f.deny.includes(item.cat))) return false;

@@ -2,8 +2,8 @@
 // loot containers and their loot pools
 //
 // Container grid sizes and search times follow the real ones documented on
-// the EFT wiki; the item pools are drawn from the 190 templates this build
-// ships with.
+// the EFT wiki; the item pools are drawn from the templates the game shipped
+// with before the database held every item (the ones marked `core`).
 // =========================================================
 
 export const CONTAINERS = {
@@ -165,7 +165,10 @@ export const POOLS = P;
  * way the loose loot on Factory actually skews.
  */
 export function buildLootPools(TPL) {
-  const all = Object.values(TPL);
+  // only the set these pools were written for (`core`): the database holds
+  // every item of the live game now, and real loot tables are what will
+  // bring the rest in
+  const all = Object.values(TPL).filter((t) => t.core);
   const rarity = (p) => (p < 4000 ? 8 : p < 12000 ? 5 : p < 30000 ? 3 : p < 80000 ? 1.5 : 0.6);
   P.mods.length = 0;
   for (const t of all) {
