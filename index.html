@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="styles/eft-traders.css">
 <link rel="stylesheet" href="styles/eft-misc.css">
 <link rel="stylesheet" href="styles/eft-settings.css">
+<link rel="stylesheet" href="styles/eft-raid.css">
 </head>
 <body>
 
@@ -206,7 +207,6 @@
         </div>
       </div>
       <div class="hud-center">
-        <div class="hud-clock"><svg class="ico"><use href="#i-timer"/></svg><span id="raid-timer">40:00</span></div>
         <div class="hud-floors" id="hud-floors"></div>
       </div>
       <div class="hud-right">
@@ -223,7 +223,7 @@
         <div class="hud-keys">
           <span><b>LMB</b> move &nbsp; on a container: search &nbsp; on a door: open</span>
           <span><b>R</b> reload / clear &nbsp; <b>B</b> fire mode &nbsp; <b>T</b> check mag</span>
-          <span><b>M</b> floor plan &nbsp; <b>TAB</b> inventory &nbsp; <b>F</b> extract &nbsp; <b>H</b> health</span>
+          <span><b>M</b> floor plan &nbsp; <b>TAB</b> inventory &nbsp; <b>O</b> time, twice for exits &nbsp; <b>H</b> health</span>
         </div>
       </div>
     </div>
@@ -255,14 +255,13 @@
       <div class="interact-prompt__bar"><i id="med-fill"></i></div>
     </div>
 
-    <button class="extract-prompt" id="extract-prompt" hidden>
-      <svg class="ico ico--lg"><use href="#i-extract"/></svg>
-      <div>
-        <div class="extract-prompt__name" id="extract-name">EXTRACT</div>
-        <div class="extract-prompt__bar"><i id="extract-fill"></i></div>
-        <div class="extract-prompt__hint">hold this button</div>
-      </div>
-    </button>
+    <!-- the raid's clock and its exits, top right; the count on its plate while an exit is stood in -->
+    <div class="xpanel" id="xpanel" data-mode="none">
+      <div class="xpanel__head"><i></i><span id="xpanel-title"></span></div>
+      <div class="xpanel__clock" id="xpanel-clock"></div>
+      <div class="xpanel__rows" id="xpanel-rows"></div>
+    </div>
+    <div class="xplate" id="xplate" hidden><i></i><span id="xplate-text"></span></div>
 
     <!-- standing on a staircase: pick a floor -->
     <div class="stairs-prompt" id="stairs-prompt" hidden>

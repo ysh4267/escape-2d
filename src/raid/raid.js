@@ -1006,7 +1006,9 @@ export class Raid {
     for (const ex of this.extracts) {
       if (dist(p.x, p.y, ex.x, ex.y) <= ex.r) { this.nearExtract = ex; break; }
     }
-    if (!this.nearExtract) this.extractHold = 0;
+    // standing in an exit is leaving by it: the count runs by itself and stepping out stops it
+    if (this.nearExtract) this.holdExtract(dt);
+    else this.extractHold = 0;
 
     // stairs under the player, which is what offers the floor change
     this.nearStairs = this.stairAt(p.x, p.y, STAIR_RANGE);
@@ -1448,7 +1450,6 @@ export class Raid {
     const ex = this.nearExtract;
     if (!ex) return;
     if (ex.req && !this.hasKey(ex.req)) {
-      emit(EV.RAID_TOAST, { kind: 'warn', text: `${ex.name} — needs ${ex.reqName}` });
       this.extractHold = 0;
       return;
     }
@@ -1456,7 +1457,8 @@ export class Raid {
     if (this.extractHold >= EXTRACT_HOLD) this.finish(RAID_STATUS.SURVIVED, ex);
   }
 
-  releaseExtract() { this.extractHold = 0; }
+  /** seconds left before the exit stood in takes the character out */
+  extractLeft() { return Math.max(0, EXTRACT_HOLD - this.extractHold); }
 
   // ---------------------------------------------------------
   /** the money on the character, by currency */

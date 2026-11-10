@@ -1,0 +1,42 @@
+/* =========================================================
+   In a raid: what the client lays over the ground. Places are its own in
+   the 1080p frame (GameUIScene and the battle screen), set against 1080p
+   and 4K captures of 1.0 to 1.3.
+   ========================================================= */
+
+/* ---------------- the raid's clock and its exits, top right ----------------
+   A green header and the clock beside it, a row an exit under them. Out of
+   sight until asked for: the first seconds of a raid, O for the clock, O
+   twice for the lot, and the while an exit is stood in. */
+.xpanel { position: absolute; left: 1344px; top: 4px; width: 572px; pointer-events: none; }
+.xpanel__head {
+  position: absolute; left: 0; top: 0; width: 430px; height: 55px; background: #7cb704db; color: #000;
+  font-size: 24px; font-weight: 700; line-height: 55px; letter-spacing: .3px; white-space: nowrap; overflow: hidden;
+  transition: opacity .25s, clip-path .4s; clip-path: inset(0 0 0 0);
+}
+.xpanel__head i { position: absolute; left: 18px; top: 12.5px; width: 30px; height: 30px; background: #000; -webkit-mask: var(--ui-icon_find_point) center / contain no-repeat; mask: var(--ui-icon_find_point) center / contain no-repeat; }
+.xpanel__head span { position: absolute; left: 58px; top: 0; }
+.xpanel__clock { position: absolute; left: 432px; top: 0; width: 140px; height: 55px; background: #000000b5; text-align: center; font-size: 24px; font-weight: 700; line-height: 55px; letter-spacing: .5px; color: #b6c1c7; transition: opacity .25s; }
+.xpanel__clock.is-short { color: #ae1a1a; }
+.xpanel__rows { position: absolute; left: 0; top: 57px; width: 572px; display: flex; flex-direction: column; gap: 2px; transition: opacity .25s; }
+.xrow { display: flex; gap: 2px; min-height: 50px; }
+.xrow__what { width: 430px; box-sizing: border-box; padding: 0 15px; background: #000000b5; display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; color: #b6c1c7; white-space: nowrap; overflow: hidden; }
+.xrow__what b { font-size: 24px; letter-spacing: .5px; line-height: 50px; }
+.xrow__what span { font-size: 18px; letter-spacing: .35px; }
+.xrow__what i { flex-basis: 100%; margin: -6px 0 10px; font-size: 18px; color: #b6c1c7; }
+.xrow__clock { width: 140px; background: #000000b5; text-align: center; font-size: 24px; font-weight: 700; line-height: 50px; letter-spacing: .5px; color: #b6c1c7; }
+.xrow.is-here b { color: #8dd502; }
+.xrow.is-here .xrow__clock { color: #c20e23; }
+.xrow.is-shut b { color: #bb0c07; }
+.xpanel[data-mode="none"] > * { opacity: 0; }
+.xpanel[data-mode="none"] .xpanel__head, .xpanel[data-mode="clock"] .xpanel__head { clip-path: inset(0 0 0 100%); opacity: 0; }
+.xpanel[data-mode="clock"] .xpanel__rows { opacity: 0; }
+
+/* the count while an exit is stood in: the status plate, bottom centre */
+.xplate {
+  position: absolute; left: 960px; top: 870px; height: 50px; min-width: 350px; transform: translateX(-50%); box-sizing: border-box; padding: 0 32px;
+  display: flex; align-items: center; justify-content: center; gap: 15px; background: #92de0099; color: #000; font-size: 24px; letter-spacing: .5px; white-space: nowrap; pointer-events: none;
+}
+.xplate[hidden] { display: none; }
+.xplate::after { content: ""; position: absolute; left: 50%; top: 50%; width: 773px; height: 217px; transform: translate(-50%, -50%); background: var(--ui-status_green_glow) 0 0 / 100% 100% no-repeat; mix-blend-mode: plus-lighter; }
+.xplate i { width: 40px; height: 40px; background: var(--ui-exit_status_runner) center / contain no-repeat; }

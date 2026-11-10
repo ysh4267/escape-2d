@@ -25,6 +25,7 @@ import { startExamine, examining, needsExamine, isKnown, cancelExamine } from '.
 import { paintExamine } from '../inventory/view.js';
 import { showScreen, raidToast, toast, refreshTopbar } from './shell.js';
 import { emit, on, EV } from '../core/events.js';
+import { t } from '../core/i18n.js';
 import { mountHudHealth, drawHudHealth, useInRaid, renderHealthPanel } from './health-ui.js';
 
 import { openRaidEnd } from './raidend.js';
@@ -35,7 +36,6 @@ let overlayHealth = null;
 let rafId = 0;
 let lastT = 0;
 let overlayOpen = false;
-let holdingF = false;
 let firing = false;
 let aim = null;
 let wasMoving = false;
@@ -74,6 +74,8 @@ export function startRaid({ mapDef, geo, onFinish, location = null, hour = 12 })
   startAmbient();
   mountHudHealth(raid.health);
   $('#btn-hud-sprint').classList.remove('is-on');
+  // the exits show themselves as a raid begins
+  askExits('full', 7);
   raidToast(`Inserted — ${raid.player.spawnName}`, 'ok', 3400);
   raidToast(`${raid.containers.length} containers across ${raid.map.levels.length} floors`, 'info', 3400);
 
@@ -109,7 +111,6 @@ function loop(now) {
 
   if (raid.status === RAID_STATUS.RUNNING) {
     raid.update(dt);
-    if (holdingF && raid.nearExtract) raid.holdExtract(dt);
     if (firing && aim && !overlayOpen) {
       const enemy = raid.scavAt(aim[0], aim[1], 2.4);
       raid.playerFire(enemy ? enemy.x : aim[0], enemy ? enemy.y : aim[1], { held: true });
@@ -209,10 +210,7 @@ function drawHud() {
 
   drawGunHud();
 
-  const clock = $('#raid-timer');
-  clock.textContent = fmtClock(raid.timeLeft);
-  clock.parentElement.classList.toggle('is-low', raid.timeLeft < 300);
-  clock.parentElement.classList.toggle('is-crit', raid.timeLeft < 60);
+  drawExits();
 
   // while searching, progress lives in the loot panel itself; the HUD prompt
   // instead narrates the walk toward a container that was clicked from afar
@@ -232,22 +230,68 @@ function drawHud() {
     ip.hidden = true;
   }
 
-  // extract prompt
-  const ep = $('#extract-prompt');
-  if (raid.nearExtract && raid.status === RAID_STATUS.RUNNING) {
-    ep.hidden = false;
-    const locked = raid.nearExtract.req && !raid.hasKey(raid.nearExtract.req);
-    ep.classList.toggle('is-locked', !!locked);
-    $('#extract-name').textContent = locked
-      ? `${raid.nearExtract.name} — NEEDS ${(raid.nearExtract.reqName || 'AN ITEM').toUpperCase()}`
-      : raid.nearExtract.name.toUpperCase();
-    $('#extract-fill').style.width = `${(raid.extractHold / 6) * 100}%`;
-  } else {
-    ep.hidden = true;
-    holdingF = false;
+  drawStairsPrompt();
+}
+
+// ---------------------------------------------------------
+// the raid's clock and its exits, top right, as the client keeps them: out of
+// sight but for the first seconds of a raid, a press of O (the clock) or two
+// (the exits as well), and the while an exit is stood in
+// ---------------------------------------------------------
+/** what is asked for: 'full' the header, clock and rows, 'clock' the clock alone; `until` is when it lapses */
+let exitsAsked = { mode: 'none', until: 0 };
+let lastO = 0;
+/** the exit whose count was running, for the word to get back to it */
+let leftExit = { until: 0 };
+
+function askExits(mode, seconds) {
+  exitsAsked = { mode, until: performance.now() + seconds * 1000 };
+}
+
+/** h:mm:ss, the hours bare */
+function raidClock(sec) {
+  const s = Math.max(0, Math.ceil(sec));
+  const two = (n) => String(n).padStart(2, '0');
+  return `${Math.floor(s / 3600)}:${two(Math.floor((s % 3600) / 60))}:${two(s % 60)}`;
+}
+
+function drawExits() {
+  const panel = $('#xpanel');
+  const plate = $('#xplate');
+  const now = performance.now();
+  const near = raid.status === RAID_STATUS.RUNNING ? raid.nearExtract : null;
+  const open = near && !(near.req && !raid.hasKey(near.req));
+  if (open) leftExit = { until: now + 4000 };
+
+  const mode = near ? 'full' : now < leftExit.until ? 'full' : now < exitsAsked.until ? exitsAsked.mode : 'none';
+  panel.dataset.mode = mode;
+  if (mode !== 'none') {
+    $('#xpanel-title').textContent = open ? t('StayInEpInside') : now < leftExit.until && !near ? t('StayInEpOutside') : t('FindEp');
+    const clock = $('#xpanel-clock');
+    clock.textContent = raidClock(raid.timeLeft);
+    clock.classList.toggle('is-short', raid.timeLeft < 600);
+    // in an exit only that exit is listed, its own count where a row's clock goes
+    const exits = raid.allExtracts.filter((e) => e.faction !== 'scav');
+    const listed = near ? [near] : exits;
+    const key = listed.map((e) => `${e.id}${e === near ? (open ? '+' : '-') : ''}${e.req && !raid.hasKey(e.req) ? '!' : ''}`).join('|');
+    const rows = $('#xpanel-rows');
+    if (rows.dataset.key !== key) {
+      rows.dataset.key = key;
+      rows.replaceChildren(...listed.map((e) => {
+        const shut = e.req && !raid.hasKey(e.req);
+        return el('div', { class: `xrow${e === near && open ? ' is-here' : ''}${shut ? ' is-shut' : ''}` },
+          el('div', { class: 'xrow__what' },
+            el('b', {}, `${t('EXFIL')}${String(exits.indexOf(e) + 1).padStart(2, '0')}`), el('span', {}, e.name),
+            shut ? el('i', {}, e.reqName || '') : null),
+          el('div', { class: 'xrow__clock' }));
+      }));
+    }
+    const own = rows.querySelector('.xrow.is-here .xrow__clock');
+    if (own) own.textContent = raidClock(raid.extractLeft());
   }
 
-  drawStairsPrompt();
+  plate.hidden = !open;
+  if (open) $('#xplate-text').textContent = t('Extraction in {0:F1}').replace('{0:F1}', raid.extractLeft().toFixed(1));
 }
 
 /**
@@ -409,7 +453,7 @@ function bindRaidInput(canvas) {
   });
 
   window.addEventListener('pointerup', (e) => { if (e.button === 0) releaseTrigger(); });
-  window.addEventListener('blur', () => { releaseTrigger(); holdingF = false; });
+  window.addEventListener('blur', () => { releaseTrigger(); });
 
   canvas.addEventListener('pointermove', (e) => {
     if (!raid) return;
@@ -456,15 +500,6 @@ function bindRaidInput(canvas) {
     sprintBtn.classList.toggle('is-on', raid.player.sprint);
   });
   $('#btn-hud-leave').addEventListener('click', () => abandonRaid());
-
-  // hold the extract panel with the mouse to channel the exfil
-  const ep = $('#extract-prompt');
-  const startHold = (e) => { e.preventDefault(); holdingF = true; };
-  const endHold = () => { holdingF = false; if (raid) raid.releaseExtract(); };
-  ep.addEventListener('pointerdown', startHold);
-  ep.addEventListener('pointerup', endHold);
-  ep.addEventListener('pointerleave', endHold);
-  ep.addEventListener('pointercancel', endHold);
 
   on(EV.LOOT_OPENED, () => { closeFloorplan(); openOverlay(); });
   on(EV.LOOT_FOUND, () => { if (overlayOpen) renderOverlay(); });
@@ -518,8 +553,11 @@ function onKeyDown(e) {
   } else if (e.key === 'Shift') {
     if (!e.repeat && !raid.health.canSprint()) noSprint();
     else raid.player.sprint = raid.health.canSprint();
-  } else if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') {
-    holdingF = true;
+  } else if (!e.repeat && (e.key === 'o' || e.key === 'O' || e.key === 'ㅐ')) {
+    // once for the clock, twice for the exits as well
+    const now = performance.now();
+    askExits(now - lastO < 400 ? 'full' : 'clock', now - lastO < 400 ? 6 : 4);
+    lastO = now;
   } else if (!e.repeat && (e.key === 'r' || e.key === 'R' || e.key === 'ㄱ')) {
     const w = raid.activeWeapon();
     if (!w) return;
@@ -550,10 +588,6 @@ function onKeyDown(e) {
 function onKeyUp(e) {
   if (!raid) return;
   if (e.key === 'Shift') raid.player.sprint = false;
-  if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') {
-    holdingF = false;
-    raid.releaseExtract();
-  }
 }
 
 // ---------------------------------------------------------
@@ -787,7 +821,6 @@ function activateRaidContext() {
 on(EV.RAID_END, (result) => {
   stopLoop();
   overlayHealth = null;
-  holdingF = false;
   releaseTrigger();
   cancelExamine();               // whatever was being inspected is moot now
   closeFloorplan();
