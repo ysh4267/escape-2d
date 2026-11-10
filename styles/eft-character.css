@@ -210,13 +210,89 @@
 .sktip__buff b { color: #59aad5; }
 .sktip__buff em { font-style: normal; color: #c78b2c; }
 
-/* ---- MAP ---- */
-.charmap { height: 100%; overflow: auto; }
-.cm-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.cm-row { padding: 12px 14px; background: rgba(5,7,7,.82); border: 1px solid var(--e-line); }
-.cm-row__name { font-size: 22px; font-weight: 700; color: var(--e-text-hi); text-transform: uppercase; }
-.cm-row__meta { font-size: 13px; color: #d0a856; margin: 2px 0 6px; }
-.cm-row__desc { font-size: 14px; line-height: 1.45; color: var(--e-dim); }
+/* ---- MAP ----
+   The client's MapScreen; positions are its own less the 43 px of the tab
+   strip. The plan lies under everything and is moved by the script; the
+   zoomer is ZoomScroll [74,784], the legend's tab LegendToggle [1698,1019],
+   the square of the map in hand DropDownItem [1793,74]. */
+#pane-map { padding: 0; }
+.charmap { position: absolute; inset: 0; overflow: hidden; }
+.pmap__empty {
+  position: absolute; left: 120px; right: 120px; top: 77px; height: 840px; display: grid; place-items: center;
+  font-size: 27px; letter-spacing: .55px; color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+}
+.pmap { position: absolute; inset: 0; }
+.pmap__view { position: absolute; inset: 0; overflow: hidden; }
+.pmap__sheet { position: absolute; }
+.pmap__img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pmap__loading { position: absolute; left: 938px; top: 495px; width: 44px; height: 44px; animation: pmap-spin 1s linear infinite; }
+.pmap__loading img { width: 100%; height: 100%; }
+@keyframes pmap-spin { to { transform: rotate(360deg); } }
+/* a marker stays its own size however far the plan is zoomed: 32 x 38 about its middle, a soft shadow under it */
+.pmap__marker { position: absolute; width: 32px; height: 38px; margin: -19px 0 0 -16px; }
+.pmap__marker[hidden] { display: none; }
+.pmap__marker::before { content: ""; position: absolute; left: -26px; top: -23px; width: 84px; height: 84px; background: var(--ui-map_marker_shadow) 0 0 / 100% 100% no-repeat; pointer-events: none; }
+.pmap__marker > img { position: absolute; left: 0; top: 3px; width: 32px; height: 32px; }
+.pmap__note {
+  display: none; position: absolute; left: 10.6px; top: -4.6px; width: 400px; box-sizing: border-box; padding: 5px 15px; z-index: -1;
+  font-size: 14px; line-height: 16px; color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; overflow-wrap: anywhere;
+}
+.pmap__note::before { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .8; border-style: solid; border-width: 4px 0 4px 8px; border-image: var(--ui-map_market_note_back) 4 0 4 8 fill stretch; }
+.pmap__marker:hover { z-index: 5; }
+.pmap__marker:hover .pmap__note { display: block; }
+
+.pmap__zbtn { position: absolute; left: 74px; width: 20px; height: 20px; padding: 0; border: 0; display: grid; place-items: center; background: #0000009a; }
+.pmap__zbtn--plus { top: 741px; }
+.pmap__zbtn--minus { top: 957px; }
+.pmap__ztrack { position: absolute; left: 78px; top: 763px; width: 12px; height: 192px; background: #0000009a; }
+.pmap__zhandle { position: absolute; left: 2.4px; width: 7.2px; height: 8px; background: #fff; pointer-events: none; }
+
+.pmap__count { position: absolute; left: 1617.4px; top: 974px; height: 25px; display: flex; align-items: center; gap: 2.7px; font-size: 14px; color: #fff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; }
+.pmap__legendbtn { position: absolute; left: 1698px; top: 976px; width: 128px; height: 21px; padding: 0; border: 0; background: var(--ui-header_slot) 0 0 / 100% 100% no-repeat; color: #fff; font-family: var(--font-ui); font-size: 14px; font-weight: 700; }
+.pmap__legendbtn span { position: absolute; left: 6px; top: 1.7px; line-height: 16px; }
+.pmap__legendbtn i { position: absolute; left: 110px; top: 0; width: 48px; height: 21px; display: grid; place-items: center; background: var(--ui-opener) 0 0 / 100% 100% no-repeat; }
+/* the panel's box takes in its wide shadow, which lies over the tab that opens it: only the rows take the pointer */
+.pmap__legend { position: absolute; left: 1528.9px; top: 733px; width: 376px; height: 304px; pointer-events: none; }
+.pmap__legend::before { content: ""; position: absolute; inset: 0; border: 68px solid transparent; border-image: var(--ui-map_legend_back) 68 fill / 68px stretch; }
+.pmap__lrow { position: absolute; left: 82.6px; width: 210px; height: 28px; padding: 0; border: 0; background: none; pointer-events: auto; color: #fff; font-family: var(--font-ui); font-size: 14px; text-align: left; }
+.pmap__lrow:nth-child(1) { top: 84.1px; }
+.pmap__lrow:nth-child(2) { top: 120px; }
+.pmap__lrow:nth-child(3) { top: 156px; }
+.pmap__lrow:nth-child(4) { top: 191.9px; }
+.pmap__chk { position: absolute; left: 0; top: 3.5px; width: 20px; height: 21px; box-sizing: border-box; border: 3px solid transparent; border-image: var(--ui-checkbox) 3 fill / 3px stretch; }
+.pmap__chk img { position: absolute; left: 1px; top: 1.5px; width: 14px; height: 12px; display: none; }
+.pmap__lrow.is-on .pmap__chk img { display: block; }
+.pmap__lrow > img { position: absolute; left: 22.1px; top: -2px; width: 32px; height: 32px; }
+.pmap__lrow span { position: absolute; left: 54.1px; top: 0; line-height: 16px; white-space: nowrap; }
+
+/* the map in hand: its tile, the tall button beside it when there are more, their tiles under it */
+.pmap__pick { position: absolute; left: 1793px; top: 31px; width: 64px; height: 64px; --cell: 63px; }
+.pmap__tile { position: relative; pointer-events: none; }
+.pmap__picktoggle { position: absolute; left: 64px; top: -1px; width: 23px; height: 66px; padding: 0; border: 0; background: var(--ui-button_mod_dropdown_open) 0 0 / 100% 100% no-repeat; }
+.pmap__picktoggle.is-open { background-image: var(--ui-button_mod_dropdown_close); }
+.pmap__picklist { position: absolute; left: 0; top: 73px; display: flex; flex-direction: column; gap: 8px; }
+.pmap__picklist button { width: 64px; height: 64px; padding: 0; border: 0; background: none; }
+
+/* the two rows a right press brings up */
+.pmap__ctx { position: absolute; z-index: 30; display: flex; flex-direction: column; gap: 2px; background: #000; }
+.pmap__ctx button { height: 20px; padding: 0 10px; border: 0; background: #141414; color: #fff; font-family: var(--font-ui); font-size: 11px; text-align: left; white-space: nowrap; }
+.pmap__ctx button:hover { background: #c3c1b0; color: #000; }
+
+/* EDIT MARKER: Window [760,456.3 400x207.4] */
+.pmw { position: absolute; z-index: 40; left: 760px; top: 413.3px; width: 400px; box-sizing: border-box; padding: 2px; background: #000; }
+.pmw::before { content: ""; position: absolute; inset: -5px; border: 5px solid transparent; border-image: var(--ui-border_shadow) 5 / 5px stretch; pointer-events: none; }
+.pmw__cap { height: 20px; padding: 0 2px; display: flex; align-items: center; background: #54585b4d; font-size: 14px; color: #fff; }
+.pmw__cap span { flex: 1; line-height: 15.4px; }
+.pmw__x { flex: none; width: 27px; height: 17px; padding: 0; border: 0; display: grid; place-items: center; background: var(--ui-close_button) 0 0 / 100% 100% no-repeat; }
+.pmw__body { padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.pmw__types { width: 376px; height: 36px; display: flex; align-items: center; }
+.pmw__type { flex: none; width: 36px; height: 36px; padding: 0; border: 0; background: none; opacity: .25; }
+.pmw__type.is-on { opacity: 1; }
+.pmw__count { margin-left: auto; font-size: 18px; color: #7d7b6f; }
+.pmw__input { position: relative; width: 376px; height: 70px; }
+.pmw__input::before { content: ""; position: absolute; inset: -4px; border: 5px solid transparent; border-image: var(--ui-border_shadow) 5 / 5px stretch; pointer-events: none; }
+.pmw__text { position: absolute; left: 5px; top: 5px; width: 361px; height: 60px; padding: 0; border: 0; outline: 0; resize: none; background: none; color: #fff; font-family: var(--font-ui); font-size: 18px; line-height: 20px; }
+.pmw__save { min-width: 160px; height: 42.4px; margin-top: 5px; padding: 8px 20px; font-size: 24px; }
 
 /* ---- ACHIEVEMENTS ---- */
 .achv { height: 100%; overflow: auto; }

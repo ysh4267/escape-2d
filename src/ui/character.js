@@ -3,8 +3,8 @@
 //
 // One screen, its tabs along the top in the game's order and words: OVERALL,
 // GEAR, HEALTH, CUSTOMIZATION, SKILLS, MAP, TASKS, ACHIEVEMENTS, PRESTIGE.
-// OVERALL, GEAR, HEALTH and SKILLS are drawn by their own modules; the rest
-// are here: the places you may be sent, the task journal, the achievements.
+// OVERALL, GEAR, HEALTH, SKILLS and MAP are drawn by their own modules; the
+// task journal and the achievements are here.
 // =========================================================
 
 import { $, $$, el } from '../core/util.js';
@@ -19,6 +19,7 @@ import { uiImg } from '../core/uiart.js';
 import { showScreen, currentScreen } from './shell.js';
 import { renderOverall } from './overall.js';
 import { renderSkills, initSkills } from './skills-ui.js';
+import { renderMap } from './map-ui.js';
 
 /** the tabs, with the client's locale key and glyph for each (`<ico>_selected` when lit) */
 const TABS = [
@@ -67,7 +68,7 @@ function paint() {
   }
   if (tab === 'overall') renderOverall();
   else if (tab === 'skills') renderSkills();
-  else if (tab === 'map') renderMapTab();
+  else if (tab === 'map') renderMap();
   else if (tab === 'tasks') renderJournal();
   else if (tab === 'achievements') renderAchievements();
 }
@@ -89,26 +90,6 @@ export function initCharacter() {
   on(EV.SCREEN_CHANGED, (id) => { if (id === 'character') { paint(); emit(EV.SCREEN_CHANGED, `character:${tab}`); } });
   on(EV.QUEST, () => { if (currentScreen() === 'character' && tab === 'tasks') renderJournal(); });
   on(EV.LEVEL_UP, () => { if (currentScreen() === 'character' && tab === 'overall') renderOverall(); });
-}
-
-// ---------------------------------------------------------
-// MAP
-// ---------------------------------------------------------
-function renderMapTab() {
-  const host = $('#charmap-host');
-  if (!host) return;
-  host.replaceChildren();
-  const seen = new Set();
-  const list = el('div', { class: 'cm-list' });
-  for (const l of DB.progress?.locations || []) {
-    if (seen.has(l.key)) continue;
-    seen.add(l.key);
-    list.append(el('div', { class: 'cm-row' },
-      el('div', { class: 'cm-row__name' }, l.name),
-      el('div', { class: 'cm-row__meta' }, `${l.duration || '—'} min · ${l.players || '—'} players`),
-      el('div', { class: 'cm-row__desc' }, l.desc || '')));
-  }
-  host.append(list);
 }
 
 // ---------------------------------------------------------

@@ -280,6 +280,8 @@ export class Item {
     const units = unitsOf(this.tpl);
     if (units != null && (o.d != null || o.res != null)) o.u = units;
     if (this.folded) o.fd = 1;
+    // a plan map's markers: [{ x, y, type, note }], the place as shares of the plan
+    if (this.markers && this.markers.length) o.mk = this.markers;
     if (this.rounds && this.rounds.length) o.rd = this.rounds.map((r) => [r.t, r.n]);
     if (this.chamber && this.chamber.length) o.ch = this.chamber.slice();
     if (this.grids) o.g = this.grids.map((g) => g.toJSON());
@@ -318,6 +320,7 @@ export class Item {
       uid: o.uid, rot: o.r, stack: o.s, fir: o.f, examined: o.e,
       res, dura, maxDura, folded: o.fd, bare: !legacy,
     });
+    if (Array.isArray(o.mk)) it.markers = o.mk;
     if (o.g && it.grids) {
       o.g.forEach((gj, i) => { if (it.grids[i]) it.grids[i].loadJSON(gj); });
     }

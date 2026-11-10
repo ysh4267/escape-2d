@@ -361,6 +361,19 @@ def map_tree(tree, key_of):
 
 
 # ---------------------------------------------------------
+def plan_sizes():
+    """each pocket map's size in pixels at full scale, by plan name"""
+    path = os.path.join(HERE, 'cache', 'client', 'index.json')
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding='utf-8') as f:
+        plans = json.load(f).get('pocket_maps') or []
+    return {p['plan']: [p['size'][0] * p['scale'], p['size'][1] * p['scale']] for p in plans}
+
+
+PLAN_SIZES = plan_sizes()
+
+
 def main():
     report_mode = '--report' in sys.argv
     no_art = '--no-art' in sys.argv
@@ -830,6 +843,16 @@ def main():
                         tpl['container']['filter'] = filters[0]
                     else:
                         tpl['container']['filters'] = filters
+
+        # --- a plan map: the plan it unfolds to, how far it zooms, how many
+        # markers it takes; the plan's size at full scale is the client's own
+        # (tools/cache/client/index.json), where that has been extracted ---
+        if 'PocketMap' in str(props.get('ConfigPathStr') or ''):
+            plan = props['ConfigPathStr'].split('/')[-2].lower()
+            tpl['map'] = {'plan': plan, 'min': props.get('scaleMin'), 'max': props.get('scaleMax'),
+                          'markers': props.get('MaxMarkersCount')}
+            if plan in PLAN_SIZES:
+                tpl['map']['size'] = PLAN_SIZES[plan]
 
         # --- meds, food and drink ---
         if props.get('MaxHpResource'):

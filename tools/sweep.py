@@ -48,6 +48,13 @@ STEPS: list[tuple[str, str]] = [
         click('.skl__tab:not(.is-hover)'); await sleep(200); seen('.skl__search');
         click('.skl__tab:not(.is-hover)'); await sleep(200); seen('.sk');
     """),
+    ("map", """
+        E.openCharacter('map'); await sleep(300); seen('.pmap__empty');
+        const m = await import('/src/inventory/model.js');
+        m.autoPlace(new m.Item('5798a2832459774b53341029', { examined: true }), [E.game.stash]);
+        E.openCharacter('gear'); E.openCharacter('map'); await sleep(1800); seen('.pmap__img'); seen('.pmap__zbtn');
+        click('.pmap__legendbtn'); await sleep(150); seen('.pmap__lrow');
+    """),
     ("character tabs", """
         for (const b of document.querySelectorAll('#screen-character .ptab:not(:disabled)')) { b.click(); await sleep(350); }
     """),

@@ -150,6 +150,13 @@ SCENES = {
     "peacefulsky": ("still_endings_forhumanity", "eft_logo_04_for_humanity", (1.0, 0.5, 0.46)),
 }
 
+# The plan maps a character can carry (Customs plan map and its five
+# fellows): the client keeps each as tiles at four scales; the extraction
+# stitches one of them (e_raid/pocket_maps/<plan>_scale<n>.png). Each is a
+# pack of its own, plan_<name>.bin holding plan_<name>, fetched when the MAP
+# tab unfolds that map.
+PLANS = ["customsplan", "factoryplan", "interchangeplan", "sanatoriumplan", "shorelineplan", "woodsplan"]
+
 FONTS = [
     ("Bender", 400, "normal", "Jovanny Lemonad - Bender.otf"),
     ("Bender", 700, "normal", "Jovanny Lemonad - Bender Bold.otf"),
@@ -385,6 +392,14 @@ def main() -> None:
         p.add_image(f"backdrop_{scene}", scene_file(still), None, 1920, 80, crop)
         p.add_image(f"scene_logo_{scene}", scene_file(logo), None, 1024, 90)
         groups.append((f"scene_{scene}", p))
+
+    for plan in PLANS:
+        files = sorted((EXPORT / "e_raid" / "pocket_maps").glob(f"{plan}_scale*.png"))
+        if not files:
+            raise SystemExit(f"no stitched plan for {plan}; run tools/extract_tarkov_ui.py export")
+        p = Pack()
+        p.add_image(f"plan_{plan}", files[0], None, 3000, 82)
+        groups.append((f"plan_{plan}", p))
 
     def size_of(p: Pack) -> int:
         return sum(len(b) for b in p.blobs)
