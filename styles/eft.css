@@ -109,6 +109,14 @@ img { -webkit-user-drag: none; user-select: none; }
 .dbtn--22 { font-size: 22px; }
 .dbtn--20 { font-size: 20.3px; }
 .dbtn--42 { font-size: 42px; }
+/* the button a screen stands on: its plate is as wide as the label written
+   bold between three underscores a side, and a glyph may come up with it */
+.sbtn { min-width: 250px; height: 55.6px; box-sizing: border-box; padding: 8px 20px; letter-spacing: .5px; }
+.sbtn:disabled { color: #e7e5d44d; }
+.sbtn__sizer { visibility: hidden; font-weight: 700; white-space: pre; }
+.sbtn__label { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; }
+.sbtn__ico { position: absolute; left: 20px; top: 50%; margin-top: -11px; opacity: 0; transition: opacity .12s; }
+.sbtn:hover:not(:disabled) .sbtn__ico { opacity: 1; }
 
 /* older buttons keep working; they just stop being teal */
 .ebtn, .btn {
@@ -271,6 +279,7 @@ img { -webkit-user-drag: none; user-select: none; }
 /* a window taller than 16:9 leaves room under the frame; the bar's black runs down into it */
 .bottombar::after { content: ""; position: absolute; left: 0; right: 0; top: 102px; height: 4000px; background: #020304; }
 .bottombar[hidden] { display: none; }
+.bottombar.is-dim { opacity: .3; pointer-events: none; }
 .bottombar__in {
   position: absolute; left: calc(50% - 960px); width: 1920px; box-sizing: border-box; bottom: 1px; height: 28px; pointer-events: auto;
   display: flex; align-items: stretch; gap: 9px; padding: 0 10px;

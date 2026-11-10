@@ -208,22 +208,38 @@ def load_index() -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 # what the page names
 # ---------------------------------------------------------------------------
+def rides_alone(rec: dict) -> bool:
+    """
+    A big picture of one of the side packs - a location's banner, the map of
+    the region, the logo. Naming one in the page does not bring it into the
+    core pack: the screen that shows it opens its pack.
+    """
+    folder = rec["path"].rsplit("/", 1)[0]
+    return max(rec["w"], rec["h"]) > 256 and any(folder == g[1] for g in GROUPS)
+
+
 def scan(index: dict[str, dict]) -> tuple[set[str], set[str]]:
     wanted: set[str] = set()
     missing: set[str] = set()
     css_var = re.compile(r"--ui-([a-z0-9_]+)")
     quoted = re.compile(r"""['"`]([a-z0-9_]+)['"`]""")
     files = list((ROOT / "styles").glob("*.css")) + [ROOT / "index.html"]
+    def named(name: str) -> None:
+        if name not in index:
+            missing.add(name)
+        elif not rides_alone(index[name]):
+            wanted.add(name)
+
     for f in files:
         for name in css_var.findall(f.read_text(encoding="utf-8")):
-            (wanted if name in index else missing).add(name)
+            named(name)
     for f in (ROOT / "src").rglob("*.js"):
         text = f.read_text(encoding="utf-8")
         for name in css_var.findall(text):
-            (wanted if name in index else missing).add(name)
+            named(name)
         for name in quoted.findall(text):
             if "_" in name and name in index:
-                wanted.add(name)
+                named(name)
     for name in ALWAYS:
         (wanted if name in index else missing).add(name)
     # a tab's glyph has a lit twin the page asks for by adding to the name

@@ -11,7 +11,25 @@
 
 import { el } from '../core/util.js';
 import { sfx } from '../core/audio.js';
-import { uiImg } from '../core/uiart.js';
+import { uiIcon, uiImg } from '../core/uiart.js';
+
+/**
+ * The button the client's screens stand on (DefaultUIButton): a bare label,
+ * and under the pointer the torn cream plate with the label gone black. The
+ * plate is as wide as the label written bold between three underscores a
+ * side and never under 250; `ico` is a glyph that comes up at its left end
+ * with the plate, as NEXT's chevrons do.
+ * @param {{ label: string, ico?: string|null, cls?: string, disabled?: boolean, onClick?: () => void }} o
+ */
+export function screenButton(o) {
+  const b = el('button', { class: `dbtn sbtn${o.cls ? ` ${o.cls}` : ''}`, type: 'button', disabled: !!o.disabled },
+    el('span', { class: 'sbtn__sizer' }, `___${o.label}___`),
+    o.ico ? uiIcon(o.ico, 'sbtn__ico') : null,
+    el('span', { class: 'sbtn__label' }, o.label));
+  // the shell gives every button of this kind its two sounds
+  b.addEventListener('click', () => o.onClick?.());
+  return b;
+}
 
 /** only one list is ever open; a press anywhere else shuts it */
 let openBox = null;

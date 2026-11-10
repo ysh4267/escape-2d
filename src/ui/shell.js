@@ -70,9 +70,22 @@ export function showScreen(id, arg = null) {
   current = id;
   document.body.dataset.screen = id;
   const bar = $('#bottombar');
-  if (bar) bar.hidden = !BAR_SCREENS.has(id);
+  if (bar) { bar.hidden = !BAR_SCREENS.has(id); bar.classList.remove('is-dim'); }
   paintBar();
   emit(EV.SCREEN_CHANGED, id, arg);
+}
+
+/**
+ * The walk into a raid is one screen here and several in the game, and they
+ * do not agree about the bar: the first ones keep it, the wait for deployment
+ * shows it dimmed and out of reach, the rest have none. The walk says which.
+ * @param {'show'|'dim'|'hide'} mode
+ */
+export function setBar(mode) {
+  const bar = $('#bottombar');
+  if (!bar) return;
+  bar.hidden = mode === 'hide';
+  bar.classList.toggle('is-dim', mode === 'dim');
 }
 
 export function currentScreen() { return current; }
