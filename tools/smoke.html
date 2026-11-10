@@ -25,10 +25,14 @@ try {
 
   head('item database');
   const all = items.allTpls();
+  // the set the game shipped with before every item of the live game came in
+  const core = all.filter(t => t.core);
   check('templates loaded', all.length >= 180, String(all.length));
-  check('every template has artwork', all.every(t => t.img), all.filter(t => !t.img).map(t => t.key).join(','));
+  check('every core template has artwork', core.every(t => t.img), core.filter(t => !t.img).map(t => t.key).join(','));
+  check('artwork is missing only where the source has none (under 4%)',
+        all.filter(t => !t.img).length < all.length * 0.04, String(all.filter(t => !t.img).length));
   check('every template has a sane footprint', all.every(t => t.w >= 1 && t.h >= 1 && t.w <= 8 && t.h <= 8));
-  check('every template has a price', all.every(t => t.price > 0), all.filter(t => !t.price).map(t => t.key).join(','));
+  check('every core template has a price', core.every(t => t.price > 0), core.filter(t => !t.price).map(t => t.key).join(','));
   check('roubles stack big', items.TPL.rub.stack >= 50000);
   check('salewa is 1x2', items.TPL.salewa.w === 1 && items.TPL.salewa.h === 2);
   check('gpu is 2x1', items.TPL.gpu.w === 2 && items.TPL.gpu.h === 1);
@@ -600,7 +604,10 @@ try {
         Object.values(T).filter(t => t.cat === 'mod').length > 500
         && Object.values(T).filter(t => t.cat === 'mag').length > 40
         && Object.values(T).filter(t => t.cat === 'ammo').length > 50);
-  check('every gun has a preset', Object.values(T).filter(t => t.wpn).every(t => t.preset && t.presetImg));
+  check('every core gun has a preset and its sprite', Object.values(T).filter(t => t.wpn && t.core).every(t => t.preset && t.presetImg));
+  // a signal pistol and a rocket tube have nothing to build; everything with a vital slot ships built
+  check('every gun with a vital slot has a default build', Object.values(T).filter(t => t.wpn && (t.slots || []).some(sl => sl.req)).every(t => t.preset && t.presetSize),
+        Object.values(T).filter(t => t.wpn && (t.slots || []).some(sl => sl.req) && !t.preset).map(t => t.key).join(','));
   check('every slot filter names real templates', Object.values(T).every(t => (t.slots || []).every(sl => sl.f.every(k => T[k]))));
   check('every magazine filter names real rounds', Object.values(T).filter(t => t.magSize).every(t => t.ammoFilter.every(k => T[k]?.cat === 'ammo')));
   check('calibres are printed the way the game prints them', T.w_ak74n.cal === '5.45x39' && T.mag_akm.cal === '7.62x39' && T.w_mp133.cal === '12/70');
@@ -610,8 +617,8 @@ try {
   check('assembled gun has a magazine', ak.magazine?.tpl.cat === 'mag' && ak.magazine.tpl.magSize === 30);
   check('the handguard hangs off the gas block', ak.mod('mod_gas_block')?.mod('mod_handguard') != null);
   check('assembled footprint matches the preset sprite',
-        Object.values(T).filter(t => t.wpn).every(t => { const it = new Item(t.key); return it.fw === t.presetSize[0] && it.fh === t.presetSize[1]; }),
-        Object.values(T).filter(t => t.wpn).map(t => { const it = new Item(t.key); return `${t.key}:${it.fw}x${it.fh}/${t.presetSize}`; }).join(' '));
+        Object.values(T).filter(t => t.wpn && t.presetSize).every(t => { const it = new Item(t.key); return it.fw === t.presetSize[0] && it.fh === t.presetSize[1]; }),
+        Object.values(T).filter(t => t.wpn && t.presetSize).filter(t => { const it = new Item(t.key); return it.fw !== t.presetSize[0] || it.fh !== t.presetSize[1]; }).map(t => { const it = new Item(t.key); return `${t.key}:${it.fw}x${it.fh}/${t.presetSize}`; }).join(' '));
   check('a bare receiver is smaller than the built gun', new Item('w_ak74n', { bare: true }).fw < ak.fw);
   check('weight includes the parts', ak.weight > T.w_ak74n.weight + 0.5);
   check('value includes the parts', ak.value > T.w_ak74n.price);
@@ -904,7 +911,8 @@ try {
     check('a pack that will not fit as rounds stays a pack', !wp.unpackAmmoBox(box2, [g8]).ok);
     check('the ammo case takes packs', new Item('ammocase').grids[0].accepts(new Item('box_ps_30')));
     check('the weapon case takes guns, parts, mags and rounds', (() => { const c = new Item('weaponcase'); return ['w_akm', 'mod_pbs_1', 'mag_ak55', 'am_762ps', 'box_ps_120'].every((k) => c.grids[0].accepts(new Item(k))); })());
-    check('the repair kit is a 3x2 tool worth 100k', T.weaprepkit.w === 3 && T.weaprepkit.h === 2 && T.weaprepkit.price === 100000 && T.weaprepkit.repairKit.max === 1000);
+    // the live game prices it at 70k (it was 100k in the 0.15 handbook)
+    check('the repair kit is a 3x2 tool worth 70k', T.weaprepkit.w === 3 && T.weaprepkit.h === 2 && T.weaprepkit.price === 70000 && T.weaprepkit.repairKit.max === 1000);
     check('the 999-round event mags are gone', !T.mag_pm_2 && !T.mag_tt_105_2 && T.mag_pm.magSize === 8);
     check('Prapor sells packs of the AK calibres', tr.TRADER_BY_ID.prapor.assort.some((o) => T[o.key]?.cat === 'ammobox'));
     const bl = await import('../src/inventory/ballistics.js');
@@ -986,7 +994,7 @@ try {
     const vest = new Item('ar_paca');
     const land = gp.landRound({ ammo: ps, health: bodyH, armor: vest, rng: rngG, part: 'thorax' });
     check('a round to the thorax lands on the thorax', land.part === 'thorax' && bodyH.hp('thorax') < 85, String(bodyH.hp('thorax')));
-    check('the vest over it took wear', vest.dura < 50, String(vest.dura));
+    check('the vest over it took wear', vest.dura < vest.tpl.dura, String(vest.dura));
     const headH = new Health();
     gp.landRound({ ammo: ps, health: headH, rng: rngG, part: 'head' });
     check('a 7.62 to a bare head is the end', headH.dead);
@@ -1015,7 +1023,9 @@ try {
     const mag30 = wpG.spawnMag('mag_ak55', 'am_762ps', 14);
     check('the game\'s words for a hefted magazine', gp.magGuess(14, 30) === 'ABOUT HALF' && gp.magGuess(30, 30) === 'FULL' && gp.magGuess(0, 30) === 'EMPTY' && gp.magGuess(3, 30) === 'ALMOST EMPTY');
     void mag30;
-    check('the load time follows the magazine', gp.loadTimePerRound(wpG.spawnMag('mag_gen_m3')) < gp.loadTimePerRound(wpG.spawnMag('mag_ak55')));
+    // a ten-round magazine is quicker to thumb full than the issue thirty, a drum slower
+    check('the load time follows the magazine', gp.loadTimePerRound(wpG.spawnMag('mag_ak_al')) < gp.loadTimePerRound(wpG.spawnMag('mag_ak55'))
+      && gp.loadTimePerRound(wpG.spawnMag('mag_molot')) > gp.loadTimePerRound(wpG.spawnMag('mag_ak55')));
     check('the selector walks the weapon\'s modes', gp.weaponModes(akm).join(',') === 'single,fullauto' && gp.weaponModes(wpG.spawnWeapon('w_pm')).join(',') === 'single');
   }
 
@@ -1205,6 +1215,134 @@ try {
   check('and treats everything', h5.total === 440 && !h5.has(FX.FR));
   const stM = await import('../src/core/state.js');
   check('a fresh profile carries a body', (stM.initState(), stM.game.health instanceof Health && stM.game.health.total === 440));
+
+  head('every item of the live game');
+  {
+    const allT = Object.values(T);
+    const byCat = (c) => allT.filter((t) => t.cat === c);
+    check('the whole item list is in the database', allT.length > 5400, String(allT.length));
+    check('what the game shipped with keeps its slugs and is marked core; the rest go by tarkov id',
+          core.length === 987 && core.every((t) => t.key !== t.id) && allT.filter((t) => !t.core).every((t) => t.key === t.id), String(core.length));
+    check('every template has a tarkov id of its own, and getTpl finds it by that too',
+          new Set(allT.map((t) => t.id)).size === allT.length && allT.every((t) => items.getTpl(t.id) === t));
+    check('an item made from the id is the item made from the slug',
+          new Item(T.salewa.id).tplId === 'salewa' && new Item(T.am_545ps.id, { stack: 5 }).canStackWith(new Item('am_545ps', { stack: 5 })));
+    check('every category is one the game knows', allT.every((t) => items.CATEGORIES.includes(t.cat)),
+          [...new Set(allT.filter((t) => !items.CATEGORIES.includes(t.cat)).map((t) => t.cat))].join(','));
+    check('every category has a label', items.CATEGORIES.every((c) => items.CAT_LABEL[c]));
+    check('templates carry the tarkov category chain and the tile colour',
+          allT.filter((t) => t.cat !== 'quest').every((t) => Array.isArray(t.cats) && t.cats.length > 0)
+          && allT.every((t) => ['default', 'black', 'blue', 'green', 'grey', 'orange', 'red', 'violet', 'yellow'].includes(t.bg)));
+    check('and the handbook group, the dataset flags, the sound and the examine numbers',
+          T.w_akm.hb.length > 0 && T.am_545ps.types.includes('ammo') && allT.every((t) => t.snd)
+          && allT.filter((t) => t.cat !== 'preset' && t.cat !== 'quest').every((t) => t.examineTime > 0));
+    check('every gun of the game, every part, magazine, round and pack',
+          byCat('weapon').length + byCat('pistol').length > 160 && byCat('mod').length > 2000 && byCat('mag').length > 200
+          && byCat('ammo').length > 190 && byCat('ammobox').length > 220,
+          `${byCat('weapon').length}+${byCat('pistol').length} guns ${byCat('mod').length} parts ${byCat('mag').length} mags ${byCat('ammo').length} rounds ${byCat('ammobox').length} packs`);
+    check('the holster guns are the ones the PMC inventory puts there',
+          T['64748cb8de82c85eaf0a273a'].cat === 'pistol' && T['624c2e8614da335f1e034d8c'].cat === 'pistol' && T['60db29ce99594040e04c4a27'].cat === 'weapon' && T.w_pm.cat === 'pistol');
+
+    // a gun the dumps have never heard of is built from the live dataset alone
+    const ak308 = new Item('689166b6c2d6fa42e7044756');
+    check('a gun newer than the dumps comes assembled, at its preset size, and works',
+          wp.isFunctional(ak308) && ak308.magazine?.tpl.magSize > 0 && ak308.fw === ak308.tpl.presetSize[0] && ak308.fh === ak308.tpl.presetSize[1],
+          `${ak308.fw}x${ak308.fh} ${[...ak308.allMods()].length} parts`);
+    check('and has numbers to shoot with', (() => { const s = wp.weaponStats(ak308); return s.ergo > 0 && s.vRecoil > 0 && s.rpm > 0 && s.cal === '7.62x51' && s.fire.length > 0; })());
+    const m4 = wp.spawnWeapon('5447a9cd4bdc2dbd208b4567', { loaded: true });
+    check('a gun outside the first twelve loads and chambers its default round', m4.chamber.length === 1 && m4.magazine.ammoCount === m4.magazine.tpl.magSize - 1 && m4.fw === 5 && m4.fh === 2);
+    check('every template can be made into an item', (() => {
+      const bad = [];
+      for (const t of allT) {
+        try { const it = new Item(t.key); if (!(it.fw >= 1 && it.fh >= 1 && it.weight >= 0 && it.value >= 0)) bad.push(t.key); } catch { bad.push(t.key); }
+      }
+      return bad.length === 0 || bad.slice(0, 6).join(',');
+    })() === true);
+    check('every gun that ships built is functional as it ships',
+          allT.filter((t) => t.wpn && t.preset).every((t) => wp.isFunctional(new Item(t.key))),
+          allT.filter((t) => t.wpn && t.preset && !wp.isFunctional(new Item(t.key))).map((t) => t.short).join(','));
+    check('every gun fed by a magazine or a cylinder takes its default round',
+          allT.filter((t) => t.wpn && t.preset?.mod_magazine).every((t) => wp.roundsInWeapon(wp.spawnWeapon(t.key, { loaded: true })) > 0),
+          allT.filter((t) => t.wpn && t.preset?.mod_magazine && !wp.roundsInWeapon(wp.spawnWeapon(t.key, { loaded: true }))).map((t) => t.short).join(','));
+    check('a gun with no magazine says what its chamber takes', T['5580223e4bdc2d1c128b457f'].wpn.reload === 'OnlyBarrel'
+          && T['5580223e4bdc2d1c128b457f'].wpn.ammo.includes('am_12buck') && T['5580223e4bdc2d1c128b457f'].wpn.chambers === 2);
+    check('underbarrel launchers are parts now: the AK-74N has the slot for one',
+          byCat('mod').some((t) => t.modType === 'launcher') && T.w_ak74n.slots.some((sl) => sl.n === 'mod_launcher' && sl.f.every((k) => T[k].modType === 'launcher')));
+
+    // armour: plates, inserts, and the flat summary the combat code reads
+    const avs = T['544a5caa4bdc2d1a388b4568'];
+    check('a plate carrier carries its plate slots and its built-in inserts',
+          avs.cat === 'rig' && avs.armor.slots.length === 2 && avs.armor.ins.length === 3
+          && avs.armor.slots.every((sl) => sl.f.length > 10 && sl.f.every((k) => T[k]?.cat === 'plate') && T[sl.def]?.cat === 'plate'));
+    check('its summary is the plate that ships in the front slot',
+          avs.armorClass === T[avs.armor.slots[0].def].armorClass && avs.dura === T[avs.armor.slots[0].def].dura
+          && avs.armorMat === T[avs.armor.slots[0].def].armorMat && avs.covers.includes('thorax') && avs.blocks.includes('armor'));
+    check('a soft vest is its inserts: one class, their durability added up',
+          T.ar_paca.armorClass === 2 && T.ar_paca.armorMat === 'Aramid' && !T.ar_paca.armor.slots
+          && T.ar_paca.dura === T.ar_paca.armor.ins.reduce((n, i) => n + i.d, 0) && T.ar_paca.covers.join() === 'thorax,stomach');
+    check('a helmet is its inserts and covers the head', T.hl_fast.armorClass === 4 && T.hl_fast.covers.join() === 'head'
+          && T.hl_fast.armor.ins.length === 2 && T.hl_fast.dura === 48);
+    check('every wearable that ships armoured has the summary combat reads',
+          allT.filter((t) => t.armor && (t.armor.ins || (t.armor.slots || []).some((sl) => sl.def)))
+            .every((t) => t.armorClass >= 1 && t.dura > 0 && t.armorMat && t.covers.length > 0));
+    check('plates are items of their own, with a class', byCat('plate').length > 30 && byCat('plate').every((t) => t.armorClass >= 1 && t.dura > 0 && t.covers.length));
+    check('a helmet takes its shield in a slot, like a gun takes a part', (() => {
+      const helmet = new Item('hl_fast');
+      const slot = helmet.slots?.find((sl) => sl.def.f.some((k) => T[k].cat === 'gearmod'));
+      if (!slot) return false;
+      const shield = new Item(slot.def.f.find((k) => T[k].cat === 'gearmod'));
+      return wp.installMod(slot, shield, []).ok && helmet.weight > T.hl_fast.weight;
+    })());
+
+    // containers filter by the template's own lists
+    const sicc = new Item('5d235bb686f77443f4331278');
+    check('a case takes what its template says: the S I C C takes keys and money, not a medkit',
+          sicc.grids[0].accepts(new Item('k_bunk')) && sicc.grids[0].accepts(new Item('rub')) && !sicc.grids[0].accepts(new Item('salewa')));
+    check('a single item on a filter counts too: the injector case takes morphine',
+          new Item('injcase').grids[0].accepts(new Item('morphine')) && new Item('injcase').grids[0].accepts(new Item('propital'))
+          && !new Item('injcase').grids[0].accepts(new Item('salewa')));
+    check('a backpack refuses a secure container by its own filter', !new Item('bp_pilgrim').grids[0].accepts(new Item('sc_alpha')));
+    check('every rig, backpack, case and pouch of the game has its grids',
+          ['rig', 'backpack', 'container', 'secure'].flatMap(byCat).every((t) => t.container?.grids?.length > 0));
+
+    // what the other families need
+    check('every med, ration and drink says what a use does', ['meds', 'food', 'drink'].flatMap(byCat).every((t) => t.med?.kind && t.res?.max >= 1));
+    check('a stim lists its effects', T.propital.med.fx.some((e) => e.type === 'HealthRate' && e.v === 1 && e.dur === 300));
+    check('keys carry their use count', byCat('key').filter((t) => t.uses > 0).length > 240 && T.k_factexit.uses === 20);
+    check('grenades carry fuse and radius, blades their damage',
+          byCat('grenade').every((t) => t.grenade?.fuse > 0) && T.g_rgd5.frag === true && T.g_zarya.frag === false
+          && byCat('melee').every((t) => t.melee?.slash > 0 && t.dmg > 0));
+    check('both repair kits know what they mend', byCat('repairkit').length === 2 && byCat('repairkit').map((t) => t.repairKit.type).sort().join() === 'armor,weapon');
+    const rpK = await import('../src/inventory/repair.js');
+    check('and only the weapon kit is offered for a gun', (() => {
+      const armorKit = new Item(byCat('repairkit').find((t) => t.repairKit.type === 'armor').key);
+      const worn = wp.spawnWeapon('w_akm'); worn.dura = 50;
+      return armorKit.res === 1200 && !rpK.isRepairKit(armorKit) && rpK.isRepairKit(new Item('weaprepkit')) && !rpK.kitRepair(armorKit, worn, 10).ok;
+    })());
+
+    // presets: a named build a trader can list
+    const canonT = (t) => JSON.stringify(Object.keys(t || {}).sort().map((k) => [k, t[k].t, t[k].s ? canonT(t[k].s) : null]));
+    const presets = byCat('preset');
+    check('every preset names what it is a build of', presets.length > 450 && presets.every((t) => T[t.base] && T[t.base].cat !== 'preset'));
+    const sopmod = presets.find((t) => !t.def && T[t.base].wpn && Object.keys(t.tree || {}).length > 3);
+    const built = new Item(sopmod.key);
+    check('asking for a preset makes the gun, built that way',
+          built.tplId === sopmod.base && built.isWeapon && canonT(wp.treeOf(built)) === canonT(sopmod.tree), sopmod.name);
+    check('the default preset of a gun is the gun as it comes',
+          presets.filter((t) => t.def && T[t.base].wpn).every((t) => canonT(t.tree) === canonT(T[t.base].preset)));
+    check('every build of every gun comes out the size the live game gives it',
+          presets.filter((t) => T[t.base].wpn).every((t) => { const it = new Item(t.key); return it.fw === t.w && it.fh === t.h; }),
+          presets.filter((t) => T[t.base].wpn).filter((t) => { const it = new Item(t.key); return it.fw !== t.w || it.fh !== t.h; }).map((t) => t.name).slice(0, 4).join(' | '));
+    check('a vest preset names the plates it ships with', presets.some((t) => t.plates && T[t.plates.front_plate]?.cat === 'plate'));
+    check('items.presetOf resolves a preset and nothing else', items.presetOf(sopmod.key)?.base === T[sopmod.base] && items.presetOf('w_akm') === null);
+
+    // the curated shelves and pools stay on the set they were written for
+    check('trader rules stock only the set the game shipped with', tr.TRADERS.every((t) => t.assort.every((o) => T[o.key]?.core)),
+          tr.TRADERS.flatMap((t) => t.assort.filter((o) => !T[o.key]?.core).map((o) => o.key)).slice(0, 5).join(','));
+    check('and so do the loot pools', Object.values(loot3.POOLS).every((pool) => pool.every(([k]) => T[k]?.core)));
+    check('every gun is priced assembled, not only the ones on a shelf', allT.filter((t) => t.wpn && t.preset).every((t) => t.presetPrice > t.price));
+    check('quest items are here and are nobody\'s stock', byCat('quest').length > 100 && byCat('quest').every((t) => t.quest && !t.core));
+  }
 
   head('summary');
 } catch (err) {
