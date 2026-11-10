@@ -76,6 +76,44 @@ const CUE_MIX = {
   trade_click: { bus: 'ui', gain: 0.45 },
   trade_buy: { bus: 'ui', gain: 0.5 },
   trade_deal: { bus: 'ui', gain: 0.6 },
+  trade_card_hover: { bus: 'ui', gain: 0.25, limit: 60 },
+  trade_card_click: { bus: 'ui', gain: 0.5 },
+  trade_dialog_hover: { bus: 'ui', gain: 0.25, limit: 60 },
+  trade_dialog_click: { bus: 'ui', gain: 0.45 },
+  // the rest of the menu: the bottom strip, tick boxes, drop lists, windows
+  ui_bottombar: { bus: 'ui', gain: 0.5 },
+  ui_mainmenu: { bus: 'ui', gain: 0.55 },
+  ui_checkbox: { bus: 'ui', gain: 0.45 },
+  ui_dropdown: { bus: 'ui', gain: 0.45 },
+  ui_dropdown_select: { bus: 'ui', gain: 0.45 },
+  ui_popup_open: { bus: 'ui', gain: 0.45 },
+  ui_popup_close: { bus: 'ui', gain: 0.4 },
+  ui_info: { bus: 'ui', gain: 0.45 },
+  ui_map_tag: { bus: 'ui', gain: 0.45 },
+  ui_backpack_open: { bus: 'ui', gain: 0.5 },
+  ui_backpack_close: { bus: 'ui', gain: 0.5 },
+  ui_achievement: { bus: 'ui', gain: 0.6, limit: 1500 },
+  // tasks speak up over everything else on the interface bus
+  quest_started: { bus: 'ui', gain: 0.6, limit: 600 },
+  quest_subtask: { bus: 'ui', gain: 0.55, limit: 600 },
+  quest_completed: { bus: 'ui', gain: 0.6, limit: 600 },
+  quest_finished: { bus: 'ui', gain: 0.65, limit: 600 },
+  quest_failed: { bus: 'ui', gain: 0.6, limit: 600 },
+  chat_incoming: { bus: 'ui', gain: 0.5, limit: 800 },
+  chat_incoming_stuff: { bus: 'ui', gain: 0.5, limit: 800 },
+  chat_incoming_insurance: { bus: 'ui', gain: 0.5, limit: 800 },
+  chat_select: { bus: 'ui', gain: 0.4 },
+  mode_click: { bus: 'ui', gain: 0.55 },
+  mode_hover: { bus: 'ui', gain: 0.3, limit: 80 },
+  pmc_hover: { bus: 'ui', gain: 0.3, limit: 80 },
+  profile_click: { bus: 'ui', gain: 0.55 },
+  profile_hover: { bus: 'ui', gain: 0.3, limit: 80 },
+  insurance_item: { bus: 'ui', gain: 0.45 },
+  insurance_insured: { bus: 'ui', gain: 0.55 },
+  reward_window: { bus: 'ui', gain: 0.55 },
+  reward_confirm: { bus: 'ui', gain: 0.5 },
+  karma_up: { bus: 'ui', gain: 0.5 },
+  karma_down: { bus: 'ui', gain: 0.5 },
   hit_body: { bus: 'sfx', gain: 0.65 },
   hit_armor: { bus: 'sfx', gain: 0.6 },
   hit_helmet: { bus: 'sfx', gain: 0.6 },
@@ -218,6 +256,10 @@ let noiseBuf = null;
 let unlocked = false;
 let enabled = true;
 let volume = 0.7;
+/** how loud the interface is next to everything else (Settings > SOUND > Interface volume) */
+let uiVolume = 1;
+/** the interface bus at full: a little under the world, as it is mixed */
+const UI_BUS = 0.85;
 let ambientNodes = null;
 /** the looping rummage while a container is being searched */
 let searchNodes = null;
@@ -250,6 +292,7 @@ export function initAudio() {
       const o = JSON.parse(saved);
       enabled = o.enabled !== false;
       volume = typeof o.volume === 'number' ? clamp01(o.volume) : 0.7;
+      uiVolume = typeof o.ui === 'number' ? clamp01(o.ui) : 1;
     }
   } catch { /* defaults are fine */ }
 
@@ -379,7 +422,7 @@ function ensure() {
   master.connect(muffleNode);
   muffleNode.connect(ctx.destination);
 
-  for (const [name, level] of [['sfx', 1], ['ui', 0.85], ['ambient', 0]]) {
+  for (const [name, level] of [['sfx', 1], ['ui', UI_BUS * uiVolume], ['ambient', 0]]) {
     const g = ctx.createGain();
     g.gain.value = level;
     g.connect(master);
@@ -421,12 +464,17 @@ export function setVolume(v) {
   if (master && enabled) master.gain.setTargetAtTime(volume, ctx.currentTime, 0.02);
   persist();
 }
-export function audioState() { return { enabled, volume }; }
+export function setUiVolume(v) {
+  uiVolume = clamp01(v);
+  if (buses.ui) buses.ui.gain.setTargetAtTime(UI_BUS * uiVolume, ctx.currentTime, 0.02);
+  persist();
+}
+export function audioState() { return { enabled, volume, ui: uiVolume }; }
 export function audioPack() {
   return { dir: packDir, cues: Object.keys(manifest).length, sealed: packBlobs.size > 0 };
 }
 function persist() {
-  try { localStorage.setItem('escape2d.audio', JSON.stringify({ enabled, volume })); } catch { /* ignore */ }
+  try { localStorage.setItem('escape2d.audio', JSON.stringify({ enabled, volume, ui: uiVolume })); } catch { /* ignore */ }
 }
 
 /**
@@ -530,6 +578,15 @@ export const sfx = {
 
   /** trader cues */
   trade(name) { play(`trade_${name}`); },
+
+  /** task cues: started | subtask | completed | finished | failed */
+  quest(name) { play(`quest_${name}`); },
+
+  /** the messenger: incoming | incoming_stuff | incoming_insurance | select */
+  chat(name) { play(`chat_${name}`); },
+
+  /** any cue by its full name, for the one-off ones */
+  cue(name, opts) { play(name, opts); },
 
   /**
    * Item foley. Pass the template - `sfx.item(item.tpl, 'pickup')` - and it

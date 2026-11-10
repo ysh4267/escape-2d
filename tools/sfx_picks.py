@@ -150,12 +150,62 @@ PICKS = {
     "ui_inspect_close": {"clips": ["menu_inspector_window_close"], "trim": [0, 0.5]},
     "ui_equip": {"clips": ["clothes_equip"], "trim": [0, 1.5]},
     "ui_exp": {"clips": ["notification_exp"], "trim": [0, 2.0]},
+    # the rest of the menu's own voice, each on the control the game plays it
+    # for: the strip along the bottom has its own click, a tick box, a drop
+    # list and its rows, a window coming up and going away, the "i" button
+    "ui_bottombar": {"clips": ["button_bottombar_click"], "trim": [0, 0.6]},
+    "ui_mainmenu": {"clips": ["main_menu_button_click"], "trim": [0, 0.5]},
+    "ui_checkbox": {"clips": ["menu_checkbox"], "trim": [0, 0.5]},
+    "ui_dropdown": {"clips": ["menu_dropdown"], "trim": [0, 0.6]},
+    "ui_dropdown_select": {"clips": ["menu_dropdown_select"], "trim": [0, 0.6]},
+    "ui_popup_open": {"clips": ["generic_popup_open"], "trim": [0, 0.8]},
+    "ui_popup_close": {"clips": ["generic_popup_close"], "trim": [0, 0.8]},
+    "ui_info": {"clips": ["info_click_button"], "trim": [0, 0.6]},
+    "ui_map_tag": {"clips": ["menu_map_tag"], "trim": [0, 0.8]},
+    "ui_backpack_open": {"clips": ["backpack_open"], "trim": [0, 1.2]},
+    "ui_backpack_close": {"clips": ["backpack_close"], "trim": [0, 1.2]},
+    "ui_achievement": {"clips": ["Tarkov achivement sound"], "trim": [0, 4.0]},
+
+    # ---------------- tasks ----------------
+    # accepted, an objective ticked, every objective done, handed in, lost
+    "quest_started": {"clips": ["quest_started"], "trim": [0, 3.0]},
+    "quest_subtask": {"clips": ["quest_subtask_completed"], "trim": [0, 2.5]},
+    "quest_completed": {"clips": ["quest_completed"], "trim": [0, 3.5]},
+    "quest_finished": {"clips": ["quest_finished"], "trim": [0, 4.0]},
+    "quest_failed": {"clips": ["quest_failed"], "trim": [0, 3.5]},
+
+    # ---------------- the messenger ----------------
+    "chat_incoming": {"clips": ["chat_incomingmessage"], "trim": [0, 1.5]},
+    "chat_incoming_stuff": {"clips": ["chat_incomingmessage_w_stuff"], "trim": [0, 2.0]},
+    "chat_incoming_insurance": {"clips": ["chat_incomingmessage_w_insurance"], "trim": [0, 2.0]},
+    "chat_select": {"clips": ["chat_select"], "trim": [0, 0.6]},
+
+    # ---------------- before the raid ----------------
+    # the side cards, the location nodes, the insurer's tick and stamp
+    "mode_click": {"clips": ["choose_mode_click_button"], "trim": [0, 1.0]},
+    "mode_hover": {"clips": ["choose_mode_hover_button"], "trim": [0, 0.6], "gain": -4},
+    "pmc_hover": {"clips": ["pmc_choose_hover_button"], "trim": [0, 0.8], "gain": -4},
+    "profile_click": {"clips": ["profile_choose_click_button"], "trim": [0, 1.0]},
+    "profile_hover": {"clips": ["profile_choose_hover_button"], "trim": [0, 0.6], "gain": -4},
+    "insurance_item": {"clips": ["insurance_itemtoinsure"], "trim": [0, 0.8]},
+    "insurance_insured": {"clips": ["insurance_insured"], "trim": [0, 1.5]},
+
+    # ---------------- rewards and standing ----------------
+    "reward_window": {"clips": ["reward_window"], "trim": [0, 2.5]},
+    "reward_confirm": {"clips": ["reward_confirm_click_button"], "trim": [0, 1.2]},
+    "karma_up": {"clips": ["karma_positive_thrush3"], "trim": [0, 2.5]},
+    "karma_down": {"clips": ["karma_negative_thrush2"], "trim": [0, 2.5]},
 
     # ---------------- traders ----------------
     "trade_tab": {"clips": ["menu_trader_press"], "trim": [0, 1.0]},
     "trade_click": {"clips": ["trade_click_button"], "trim": [0, 0.8]},
     "trade_buy": {"clips": ["buy_button_click"], "trim": [0, 1.0]},
     "trade_deal": {"clips": ["trade_operation_complete"], "trim": [0, 2.5]},
+    # the list of traders: each card under the pointer, and the one picked
+    "trade_card_hover": {"clips": ["shop_entrance_hover"], "trim": [0, 0.6], "gain": -4},
+    "trade_card_click": {"clips": ["shop_entrance_click"], "trim": [0, 1.0]},
+    "trade_dialog_hover": {"clips": ["trader_dialog_hover"], "trim": [0, 0.6], "gain": -4},
+    "trade_dialog_click": {"clips": ["trader_dialog_click"], "trim": [0, 0.8]},
 
     # ---------------- raid outcomes ----------------
     "extract_done": {"clips": ["quest_completed"], "trim": [0, 3.5]},
