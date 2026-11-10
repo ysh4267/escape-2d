@@ -32,6 +32,7 @@ import { uiImg } from '../core/uiart.js';
 import { mountHudHealth, drawHudHealth, useInRaid, renderHealthBoard } from './health-ui.js';
 import { paintParams, paintQuick, KINDS, kindOf } from './stash.js';
 import { lendPane, returnPanes } from './character.js';
+import { toStage } from '../core/stage.js';
 
 import { openRaidEnd } from './raidend.js';
 
@@ -47,6 +48,8 @@ let wasMoving = false;
 let wasSprinting = false;
 let hoverDoor = null;
 let hoverStair = null;
+/** where the pointer is over the ground, in the screen's own pixels; null while it is off it */
+let pointerAt = null;
 let onFinishCb = () => {};
 
 // ---------------------------------------------------------
@@ -240,6 +243,35 @@ function drawHud() {
   }
 
   drawStairsPrompt();
+  drawActions();
+}
+
+// ---------------------------------------------------------
+// what can be done with the thing under the pointer, as the client says it:
+// a small black box of action words just over the hand, the one a click
+// carries out on a grey plate, one it cannot in grey letters
+// ---------------------------------------------------------
+function actionsUnder() {
+  if (raid.hover) return [{ text: t('Search'), on: true }];
+  const d = hoverDoor;
+  if (!d || d.open) return [];
+  if (d.state === 'breach') return [{ text: t('Breach'), on: true }];
+  if (d.state === 'key') return [{ text: t('Unlock'), on: raid.canOpen(d) }];
+  return [{ text: t('OPENDOOR'), on: true }];
+}
+
+function drawActions() {
+  const box = $('#actbox');
+  const rows = !pointerAt || overlayOpen || floorplanOpen() ? [] : actionsUnder();
+  if (!rows.length) { box.hidden = true; return; }
+  const sig = rows.map((r) => `${r.text}${r.on ? '*' : ''}`).join('|');
+  if (box.dataset.sig !== sig) {
+    box.dataset.sig = sig;
+    box.replaceChildren(...rows.map((r) => el('div', { class: `actbox__row${r.on ? ' is-on' : ''}` }, r.text)));
+  }
+  box.style.left = `${pointerAt[0]}px`;
+  box.style.top = `${pointerAt[1] - 30.5}px`;
+  box.hidden = false;
 }
 
 // ---------------------------------------------------------
@@ -535,6 +567,8 @@ function bindRaidInput(canvas) {
     if (!raid) return;
     const [wx, wy] = pointerWorld(e);
     aim = [wx, wy];
+    const frame = $('#screen-raid').getBoundingClientRect();
+    pointerAt = [toStage(e.clientX - frame.left), toStage(e.clientY - frame.top)];
     const enemy = raid.scavAt(wx, wy, 1.9);
     const c = enemy ? null : raid.containerAt(wx, wy, 1.6);
     raid.hover = c && raid.seen.has(c.id) ? c : null;
@@ -544,6 +578,8 @@ function bindRaidInput(canvas) {
     canvas.style.cursor = enemy ? 'crosshair'
       : (raid.hover || hoverDoor || hoverStair) ? 'pointer' : 'default';
   });
+
+  canvas.addEventListener('pointerleave', () => { pointerAt = null; });
 
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();

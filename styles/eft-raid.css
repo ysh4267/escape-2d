@@ -136,3 +136,14 @@
 .rloot__unsearched:disabled { cursor: default; }
 /* a thing not yet come upon: its place in the grid, hatched */
 .item.item--unfound { background: rgba(255,255,255,.03) var(--ui-search_pattern) 0 0 / 64px 64px repeat; box-shadow: none; pointer-events: none; }
+
+/* ---------------- what can be done with the thing under the pointer ----------------
+   The client's action list: an opaque black box, three pixels of it round
+   rows 13 tall and two apart, each as wide as the longest word and nine
+   more. The action a click carries out sits on a grey plate in black; one
+   it cannot is grey letters on the box. Its middle stands 30 px over the
+   hand, where the client keeps it over its own. */
+.actbox { position: absolute; z-index: 5; transform: translate(-50%, -50%); padding: 3px; display: flex; flex-direction: column; gap: 2px; background: #000; pointer-events: none; }
+.actbox[hidden] { display: none; }
+.actbox__row { height: 13px; padding: 0 5px 0 4px; font-size: 11px; line-height: 13px; letter-spacing: .2px; text-transform: uppercase; color: #838383; white-space: nowrap; }
+.actbox__row.is-on { background: #838383; color: #000; }
