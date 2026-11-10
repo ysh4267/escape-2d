@@ -142,7 +142,17 @@ export class Health {
     this.exhTimer = 0;
     this.dead = false;
     this.events = [];
+    this.tally = {};
     this.ts = Date.now();
+  }
+
+  /**
+   * A running figure for the career - blood lost, health put back, what each
+   * part has taken. Whoever keeps the career (the raid) collects these and
+   * clears them; nothing in here reads them.
+   */
+  note(key, n = 1) {
+    if (n > 0) this.tally[key] = (this.tally[key] || 0) + n;
   }
 
   // ---------------------------------------------------------
@@ -304,6 +314,7 @@ export class Health {
     const dealt = Math.min(p.hp, amount);
     p.hp = Math.max(0, p.hp - amount);
     res.applied = dealt;
+    this.note(`hurt_${part}`, dealt);
     if (p.hp <= 0) {
       res.destroyed = true;
       this.events.push({ kind: 'destroyed', part });
@@ -345,6 +356,7 @@ export class Health {
     for (const def of alive) {
       const p = this.parts[def.key];
       applied += Math.min(p.hp, each);
+      this.note(`hurt_${def.key}`, Math.min(p.hp, each));
       p.hp = Math.max(0, p.hp - each);
       if (p.hp <= 0) {
         this.events.push({ kind: 'destroyed', part: def.key });
@@ -416,7 +428,11 @@ export class Health {
       const n = this.count(type);
       if (!n) { clk[type] = 0; clk[`${type}e`] = 0; continue; }
       const ticks = every(type, cfg.loop);
-      if (ticks) this.tickDamage((dehy ? cfg.dmgDehydrated : cfg.dmg) * n * ticks);
+      if (ticks) {
+        const before = this.total;
+        this.tickDamage((dehy ? cfg.dmgDehydrated : cfg.dmg) * n * ticks);
+        this.note('bloodLost', before - this.total);
+      }
       const et = every(`${type}e`, cfg.energyLoop);
       if (et) this.energy = clamp(this.energy - cfg.energy * n * et, 0, 100);
     }
@@ -495,6 +511,7 @@ export class Health {
       p.hp += add;
       done += add;
     }
+    this.note('hpHealed', done);
     return done;
   }
 
@@ -667,6 +684,7 @@ export class Health {
     }
     if (pl.heal > 0) {
       const p = this.parts[part];
+      this.note('hpHealed', Math.min(p.max - p.hp, pl.heal));
       p.hp = Math.min(p.max, p.hp + pl.heal);
     }
     if (m.eh) {
@@ -724,6 +742,7 @@ export class Health {
     this.clock = {};
     this.dead = false;
     this.events = [];
+    this.tally = {};
     this.ts = Date.now();
   }
 
@@ -742,6 +761,7 @@ export class Health {
     this.clock = {};
     this.dead = false;
     this.events = [];
+    this.tally = {};
     this.energy = Math.max(this.energy, 30);
     this.hydration = Math.max(this.hydration, 30);
     this.ts = Date.now();

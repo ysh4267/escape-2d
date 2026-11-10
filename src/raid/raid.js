@@ -12,7 +12,7 @@ import { NavGrid } from './nav.js';
 import { Scav } from './ai.js';
 import { makeRng } from '../core/rng.js';
 import { clamp, dist, uid } from '../core/util.js';
-import { game, addExp } from '../core/state.js';
+import { game, addExp, addStat, countMoney } from '../core/state.js';
 import { sfx } from '../core/audio.js';
 import { emit, EV } from '../core/events.js';
 import { Health, PART, FX, FX_INFO } from './health.js';
@@ -26,6 +26,21 @@ export const RAID_STATUS = {
 };
 
 const EXTRACT_HOLD = 6.0;      // seconds to hold F
+
+// what the career counts when the body reports it
+const CAREER_FX = { fr: 'fractures', ct: 'contusions', dehy: 'dehydrations', exh: 'exhaustions' };
+// the career's row for a thing found, by the kind of thing
+const FOUND_ROW = {
+  weapon: 'weapFound', pistol: 'weapFound',
+  ammo: 'ammoFound',
+  mod: 'modsFound', mag: 'modsFound', gearmod: 'modsFound',
+  grenade: 'throwFound',
+  food: 'foodDrinksFound', drink: 'foodDrinksFound',
+  key: 'keysFound',
+  barter: 'bartitemsFound', valuables: 'bartitemsFound', electronics: 'bartitemsFound',
+  armor: 'eqipFound', rig: 'eqipFound', backpack: 'eqipFound', helmet: 'eqipFound', facecover: 'eqipFound',
+  glasses: 'eqipFound', headset: 'eqipFound', armband: 'eqipFound', nvg: 'eqipFound', plate: 'eqipFound',
+};
 const INTERACT_RANGE = 2.2;    // svg units
 const STAIR_RANGE = 2.6;       // how close counts as "on the stairs"
 const DOOR_REACH = 1.5;        // how far ahead a shut door is opened from
@@ -104,7 +119,10 @@ export class Raid {
     // reads it through the model, and p.hp is a mirror for the HUD
     this.health = game.health || (game.health = new Health());
     this.health.events = [];
+    this.health.tally = {};
     this.health.dead = false;
+    // what was carried in, so that what is found can be told from it
+    this.moneyIn = this.carriedMoney();
     this.using = null;         // {item, part, t, dur} while a med is being applied
     this.player = {
       x: p[0], y: p[1],
@@ -875,7 +893,7 @@ export class Raid {
           const uid = c.order[c.found.size];
           c.found.add(uid);
           this.stats.found++;
-          addExp(4);
+          addExp(4, 'loot');
           // no chime per item: the game has no search-success cue, the
           // rummage simply keeps going and the item appears in the panel
           emit(EV.LOOT_FOUND, c);
@@ -883,7 +901,9 @@ export class Raid {
         if (c.found.size >= c.order.length && this.searchProgress >= step * 0.5) {
           c.searched = true;
           this.stats.searched++;
-          addExp(6);
+          if (c.type === 'deadscav' || c.type === 'pmcbody') addStat('bodiesLooted');
+          else if (c.type === 'safe' || c.type === 'banksafe') addStat('unlockedSafes');
+          addExp(6, 'loot');
           this.searching = null;
           this.searchProgress = 0;
           sfx.searchStop();
@@ -1130,7 +1150,10 @@ export class Raid {
       hits++;
       const land = this.hitScav(target, ammoTpl);
       lastLand = land;
-      if (land.killed) { kills++; break; }
+      addStat('hitCount');
+      addStat('damAppliedBody', land.res.applied);
+      addStat('damAppliedArmor', land.absorbed);
+      if (land.killed) { addStat('fatalHits'); kills++; break; }
     }
     this.registerShot({ from: [p.x, p.y], to: [target.x, target.y], hostile: false, hit: hits > 0 });
     if (!hits) {
@@ -1222,7 +1245,7 @@ export class Raid {
     scav.state = 'dead';
     scav.hp = 0;
     this.stats.kills++;
-    addExp(120);
+    addExp(120, 'kill');
     emit(EV.RAID_TOAST, { kind: 'ok', text: bled ? 'Scav bled out' : 'Scav down' });
     const p = this.player;
     const metres = (range ?? dist(p.x, p.y, scav.x, scav.y)) * (this.map.unitsToMetres || 1);
@@ -1312,11 +1335,18 @@ export class Raid {
     return res;
   }
 
-  /** narrate what the body just did: a new bleed, a limb gone, a stim wearing off */
+  /**
+   * Narrate what the body just did - a new bleed, a limb gone, a stim wearing
+   * off - and put what it cost onto the career.
+   */
   drainHealthEvents() {
     const h = this.health;
+    for (const key in h.tally) addStat(key, h.tally[key]);
+    h.tally = {};
     if (!h.events.length) return;
     for (const ev of h.events) {
+      if (ev.kind === 'fx' && CAREER_FX[ev.type]) addStat(CAREER_FX[ev.type]);
+      else if (ev.kind === 'destroyed') addStat('bodypartsLost');
       if (ev.kind === 'fx') {
         const info = FX_INFO[ev.type];
         if (!info || !info.bad) continue;
@@ -1375,11 +1405,12 @@ export class Raid {
     this.using = null;
     const pl = this.health.apply(u.item, u.part, this.rng);
     if (!pl.ok) { emit(EV.RAID_TOAST, { kind: 'warn', text: pl.reason }); return; }
+    addStat(pl.kind === 'food' ? 'foodUsed' : pl.kind === 'drink' ? 'drinksUsed' : 'medicineUsed');
     const where = u.part ? ` — ${PART[u.part].name.toLowerCase()}` : '';
     emit(EV.RAID_TOAST, { kind: 'ok', text: `${u.item.tpl.short || u.item.tpl.name}${where}: ${pl.note}` });
     if ((u.item.res ?? 0) <= 0) detach(u.item);
-    if (pl.removes.includes(FX.HB) || pl.removes.includes(FX.LB)) addExp(pl.removes.includes(FX.HB) ? 40 : 25);
-    if (pl.removes.includes(FX.FR)) addExp(30);
+    if (pl.removes.includes(FX.HB) || pl.removes.includes(FX.LB)) addExp(pl.removes.includes(FX.HB) ? 40 : 25, 'heal');
+    if (pl.removes.includes(FX.FR)) addExp(30, 'heal');
     emit(EV.INVENTORY_CHANGED);
   }
 
@@ -1412,12 +1443,40 @@ export class Raid {
   releaseExtract() { this.extractHold = 0; }
 
   // ---------------------------------------------------------
+  /** the money on the character, by currency */
+  carriedMoney() {
+    const grids = game.equipment.allGrids();
+    return { RUB: countMoney('RUB', grids), USD: countMoney('USD', grids), EUR: countMoney('EUR', grids) };
+  }
+
+  /**
+   * The raid is over; the career gets what it amounted to: the ground
+   * covered, the money that was not there at the start, and everything of the
+   * raid's that is on the character, by the kind of thing it is. A thing
+   * counts once, and what is fitted to it or packed in it with it.
+   */
+  tallyCareer() {
+    addStat('metresTraveled', this.stats.distance * (this.map.unitsToMetres || 1));
+    const now = this.carriedMoney();
+    for (const cur of ['RUB', 'USD', 'EUR']) addStat(`found${cur}`, Math.max(0, now[cur] - this.moneyIn[cur]));
+    for (const it of game.equipment.everything()) {
+      if (!it.raidLoot) continue;
+      const hd = it.holder;
+      const inside = hd?.kind === 'grid' ? hd.grid.owner : hd?.kind === 'mod' ? hd.slot.owner : null;
+      if (inside?.raidLoot) continue;
+      const row = FOUND_ROW[it.cat];
+      if (row) addStat(row, row === 'ammoFound' ? it.stack || 1 : 1);
+    }
+  }
+
   finish(status, viaExtract = null) {
     if (this.status !== RAID_STATUS.RUNNING) return;
     this.status = status;
     this.cancelSearch();
     this.closeLoot();
 
+    this.drainHealthEvents();
+    this.tallyCareer();
     const survived = status === RAID_STATUS.SURVIVED;
     if (survived) sfx.extract();
     else if (status === RAID_STATUS.KIA) sfx.death();
@@ -1460,7 +1519,7 @@ export class Raid {
       for (const d of eq.slotList()) if (d.item) result.kept.push(d.item);
       for (const g of eq.pockets) result.kept.push(...g.items());
       result.value = result.kept.reduce((n, it) => n + it.value, 0);
-      addExp(180 + this.stats.searched * 12);
+      addExp(180 + this.stats.searched * 12, 'survive');
       game.profile.survived++;
       game.profile.extracted++;
       if (result.value > game.profile.bestHaul) game.profile.bestHaul = result.value;

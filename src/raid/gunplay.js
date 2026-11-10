@@ -336,18 +336,20 @@ export function strikeArmor(piece, ammo, dmg, rng) {
 /**
  * A projectile landing on a body. Picks the part (unless given), meets the
  * armour over it, fragments, and puts the damage into the health model.
- * Returns {part, dmg, penetrated, frag, struck, res}.
+ * Returns {part, dmg, penetrated, frag, struck, absorbed, res}; `absorbed`
+ * is what the armour took off the round.
  */
 export function landRound({ ammo, health, armor = null, helmet = null, rng, part = null, dmgMul = 1 }) {
   const a = ammo?.ammo || {};
   part = part || rng.weighted(HIT_WEIGHTS, (e) => e[1])[0];
   let dmg = (a.dmg ?? ammo?.dmg ?? 40) * dmgMul;
-  let penetrated = true, struck = 'body', frag = false, piece = null;
+  let penetrated = true, struck = 'body', frag = false, piece = null, absorbed = 0;
   if (covers(helmet, part) && helmet.dura > 0) piece = helmet;
   else if (covers(armor, part) && armor.dura > 0) piece = armor;
   if (piece) {
     const r = strikeArmor(piece, ammo, dmg, rng);
     penetrated = r.penetrated;
+    absorbed = Math.max(0, dmg - r.dmg);
     dmg = r.dmg;
     struck = penetrated ? 'body' : (piece === helmet ? 'helmet' : 'armor');
   }
@@ -358,7 +360,7 @@ export function landRound({ ammo, health, armor = null, helmet = null, rng, part
     frag = true;
   }
   const res = health.hit(part, dmg, { rng, bullet: true, blunt: !penetrated });
-  return { part, dmg, penetrated, frag, struck, res };
+  return { part, dmg, penetrated, frag, struck, absorbed, res };
 }
 
 // ---------------------------------------------------------

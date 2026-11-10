@@ -84,7 +84,7 @@ function finish() {
   if (!item.holder) { onChange(); return; }
   item.examined = true;
   markExamined(item.tpl.key);
-  addExp(item.tpl.examineXp || DEFAULT_XP);
+  addExp(item.tpl.examineXp || DEFAULT_XP, 'loot');
   emit(EV.TOAST, { kind: 'ok', text: `Item examined: ${item.tpl.name}` });
   onChange();
 }
