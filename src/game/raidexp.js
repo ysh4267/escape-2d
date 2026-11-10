@@ -12,6 +12,8 @@
 // =========================================================
 
 import { game, addExp } from '../core/state.js';
+import { emit, on, EV } from '../core/events.js';
+import { t } from '../core/i18n.js';
 
 /**
  * The headings and their lines, as the screen lists them. `why` is the
@@ -47,6 +49,24 @@ export const MULT = { survived: 1.5, mia: 0.75, kia: 0.75, runner: 0.5, left: 0 
 /** what a kill is worth by who it was */
 export const KILL_XP = { pmc: 120, scav: 55, raider: 135, rogue: 110, tagilla: 1225 };
 
+/**
+ * A thing found or mended is reported as it is done, the way the client
+ * reports it: Looting experience - Items (2). A kill is not: the client
+ * tells nobody what he has hit until the raid is over.
+ */
+function report(line, amount) {
+  const [sec, id] = line.split('/');
+  if (sec !== 'looting' && sec !== 'treatment') return;
+  const s = SECTIONS.find((x) => x.id === sec);
+  const l = s.lines.find((x) => x.id === id);
+  if (!l) return;
+  // what a search turns up is written as the client writes it: Searching experience - Items (5)
+  const text = line === 'looting/search' ? `${t('StatsSearching')} - ${t('StatsItems')}` : `${t(s.title)} - ${t(l.label)}`;
+  emit(EV.RAID_TOAST, { kind: 'ok', text: `${text} (${Math.round(amount)})` });
+}
+// experience that came by its kind alone (core/state.js addExp) is reported the same
+on(EV.RAID_EXP, ({ line, amount }) => report(line, amount));
+
 /** a raid begins: from here experience is kept, not given */
 export function openTally() {
   game.raidExp = {};
@@ -62,6 +82,7 @@ export function tally(line, amount, count = 1) {
   const row = kept[line] || (kept[line] = { xp: 0, n: 0 });
   row.xp += amount;
   row.n += count;
+  if (count > 0) report(line, amount);
   return true;
 }
 

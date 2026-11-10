@@ -40,3 +40,42 @@
 .xplate[hidden] { display: none; }
 .xplate::after { content: ""; position: absolute; left: 50%; top: 50%; width: 773px; height: 217px; transform: translate(-50%, -50%); background: var(--ui-status_green_glow) 0 0 / 100% 100% no-repeat; mix-blend-mode: plus-lighter; }
 .xplate i { width: 40px; height: 40px; background: var(--ui-exit_status_runner) center / contain no-repeat; }
+
+/* who is going in, where and when: four lines bottom left as a raid begins */
+.raidintro { position: absolute; left: 30px; top: 942px; font-size: 24px; line-height: 27px; letter-spacing: .5px; color: #b6c1c7; white-space: nowrap; pointer-events: none; }
+.raidintro[hidden] { display: none; }
+
+/* ---------------- this build's own controls ----------------
+   A raid played from above needs what the client has no use for: which
+   floor is underfoot, and buttons for whoever plays without the keys. They
+   keep to the middle of the foot of the screen, clear of the client's
+   corners; what the keys are is in the settings, not written on the ground. */
+#screen-raid .raid-hud { display: block; height: 0; padding: 0; background: none; }
+#screen-raid .hud-left { position: absolute; left: 18px; bottom: 14px; }
+#screen-raid .hud-center { position: absolute; left: 700px; bottom: 9px; width: 220px; display: flex; justify-content: flex-end; }
+#screen-raid .hud-floors { margin-top: 0; }
+#screen-raid .hud-right { position: absolute; left: 934px; bottom: 6px; }
+#screen-raid .hud-actions { margin: 0; gap: 4px; }
+#screen-raid .hudbtn { padding: 4px 9px; gap: 5px; font-size: 10px; }
+#screen-raid .hud-keys { display: none; }
+
+/* ---------------- what the gun has to say, bottom right ----------------
+   Its right edge at x 1840 and its foot at y 1000 for the large line, the
+   line of what is loaded under that: black at a quarter behind them, there
+   for two seconds and gone. Nothing of the gun is on the screen otherwise. */
+.gunsay { position: absolute; right: 80px; top: 963px; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; pointer-events: none; transition: opacity .35s; }
+.gunsay[hidden] { display: none; }
+.gunsay.is-out { opacity: 0; }
+.gunsay__big { height: 37px; padding: 0 15px; background: #0000003d; font-size: 34px; line-height: 37px; letter-spacing: .6px; color: #e3e3d6; white-space: nowrap; }
+.gunsay__more { height: 30px; padding: 0 15px; display: flex; align-items: center; gap: 8px; background: #0000003d; font-size: 20px; letter-spacing: .4px; color: #bdc7cd; white-space: nowrap; }
+.gunsay__more[hidden] { display: none; }
+.gunsay__more i { width: 19px; height: 20px; background: var(--ui-icon_itemtype_mags) center / contain no-repeat; opacity: .85; }
+#screen-raid .vital--ammo { display: none; }
+
+/* ---------------- what the arms and the legs have left, bottom left ---------------- */
+.stamina { position: absolute; left: 50px; top: 1025px; width: 148px; display: flex; flex-direction: column; gap: 2px; pointer-events: none; }
+.stamina__bar { height: 7px; box-sizing: border-box; padding: 2px 0; background: #0e1416; }
+.stamina__bar i { display: block; height: 3px; }
+.stamina__bar--arms i { background: #268194; }
+.stamina__bar--legs i { background: #2eaa91; }
+#screen-raid .hud-left { bottom: 62px; opacity: .8; }

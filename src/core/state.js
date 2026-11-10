@@ -192,6 +192,7 @@ export function addExp(n, why = '') {
     const row = game.raidExp[line] || (game.raidExp[line] = { xp: 0, n: 0 });
     row.xp += n;
     row.n += 1;
+    emit(EV.RAID_EXP, { line, amount: n });
     return;
   }
   game.profile.exp += n;

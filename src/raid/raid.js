@@ -1258,7 +1258,6 @@ export class Raid {
     tally('combat/elim', worth);
     if ((part || scav.lastPart) === 'head') tally('combat/head', worth * (scav.side === 'pmc' ? 0.2 : 0.1));
     if (this.stats.kills > 1) tally('combat/streak', 10 * this.stats.kills, 0);
-    emit(EV.RAID_TOAST, { kind: 'ok', text: bled ? 'Scav bled out' : 'Scav down' });
     const p = this.player;
     const metres = (range ?? dist(p.x, p.y, scav.x, scav.y)) * (this.map.unitsToMetres || 1);
     const kill = {

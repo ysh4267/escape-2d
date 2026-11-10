@@ -171,7 +171,11 @@ export function paintBar() {
  * tick-in-a-circle; something that went up or down, a small triangle in
  * green or red; a refusal, the warning sign.
  */
-const NOTE_SPRITE = { quest: 'notification_icon_quest', mail: 'notification_icon_mail', hideout: 'icon_notification_hideout', flea: 'notification_ragfair' };
+const NOTE_SPRITE = {
+  quest: 'notification_icon_quest', mail: 'notification_icon_mail', hideout: 'icon_notification_hideout', flea: 'notification_ragfair',
+  // what a raid reports: the small triangle with its mark, green for news and red for trouble
+  alert: 'notification_icon_alert_green', alarm: 'notification_icon_alert_red',
+};
 const NOTE_GLYPH = { up: 'up', ok: 'up', exp: 'up', level: 'up', down: 'down', bad: 'down' };
 
 /**
@@ -202,13 +206,9 @@ export function toast(text, kind = 'info', ttl = 2800) {
   return notify(text, kind, ttl);
 }
 
-export function raidToast(text, kind = 'info', ttl = 2400) {
-  const host = $('#raid-toast');
-  if (!host) return;
-  const node = el('div', { class: `raid-toast__row${kind !== 'info' ? ` is-${kind}` : ''}` }, text);
-  host.append(node);
-  setTimeout(() => node.remove(), ttl);
-  while (host.children.length > 4) host.firstElementChild.remove();
+/** what a raid has to say comes out of the same corner as everything else, as it does in the client */
+export function raidToast(text, kind = 'info', ttl = 3200) {
+  return notify(text, kind === 'bad' || kind === 'warn' ? 'alarm' : 'alert', ttl);
 }
 
 // ---------------------------------------------------------

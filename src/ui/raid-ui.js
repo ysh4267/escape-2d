@@ -26,6 +26,8 @@ import { paintExamine } from '../inventory/view.js';
 import { showScreen, raidToast, toast, refreshTopbar } from './shell.js';
 import { emit, on, EV } from '../core/events.js';
 import { t } from '../core/i18n.js';
+import { locationName } from '../game/db.js';
+import { BY_ID } from '../data/items.js';
 import { mountHudHealth, drawHudHealth, useInRaid, renderHealthPanel } from './health-ui.js';
 
 import { openRaidEnd } from './raidend.js';
@@ -76,8 +78,7 @@ export function startRaid({ mapDef, geo, onFinish, location = null, hour = 12 })
   $('#btn-hud-sprint').classList.remove('is-on');
   // the exits show themselves as a raid begins
   askExits('full', 7);
-  raidToast(`Inserted — ${raid.player.spawnName}`, 'ok', 3400);
-  raidToast(`${raid.containers.length} containers across ${raid.map.levels.length} floors`, 'info', 3400);
+  showIntro(raid);
 
   lastT = performance.now();
   cancelAnimationFrame(rafId);
@@ -203,6 +204,7 @@ function drawHud() {
   wtBar.classList.toggle('is-over', w > 65);
   $('#wt-text').textContent = `${fmtWeight(w)} kg`;
   $('#stam-fill').style.width = `${p.stamina}%`;
+  $('#stam-arms').style.width = `${p.stamina}%`;
 
   // the sprint toggle can flip from the keyboard or from running dry, so the
   // button mirrors the actual state every frame instead of tracking clicks
@@ -231,6 +233,36 @@ function drawHud() {
   }
 
   drawStairsPrompt();
+}
+
+// ---------------------------------------------------------
+// who is going in, where and when: four lines bottom left, a couple of
+// seconds after the ground comes up and gone a couple of seconds later
+// ---------------------------------------------------------
+function showIntro(mine) {
+  const p = game.profile;
+  const host = $('#raidintro');
+  const two = (n) => String(n).padStart(2, '0');
+  const day = Math.floor((Date.now() - (p.registered || Date.now())) / 86400000) + 1;
+  const began = performance.now();
+  const clock = el('span', {});
+  // the hour keeps running, seven times as fast as a real one
+  const paint = () => {
+    const s = (mine.hour * 3600 + ((performance.now() - began) / 1000) * 7) % 86400;
+    const h = Math.floor(s / 3600);
+    clock.textContent = `${t('Day')} ${day} ${two(h % 12 || 12)}:${two(Math.floor((s % 3600) / 60))}:${two(Math.floor(s % 60))} ${h < 12 ? 'AM' : 'PM'}`;
+  };
+  paint();
+  host.replaceChildren(
+    el('div', {}, t('Raid №{0}', (p.raids || 0) + 1)),
+    el('div', {}, clock),
+    el('div', {}, `${t('Lvl')} ${p.level} ${p.faction || 'USEC'} ${t('Operator')} ${p.name || 'PMC'}`),
+    el('div', {}, `${t('Tarkov')}, ${mine.location ? locationName(mine.location) : mine.map.name}`));
+  host.hidden = true;
+  const still = () => raid === mine;
+  const tick = setInterval(() => { if (still()) paint(); else clearInterval(tick); }, 250);
+  setTimeout(() => { if (still()) host.hidden = false; }, 1500);
+  setTimeout(() => { clearInterval(tick); host.hidden = true; }, 5200);
 }
 
 // ---------------------------------------------------------
@@ -301,8 +333,45 @@ function drawExits() {
  * dot after the count. A stoppage or a running action (a reload, a check,
  * a clearing) shows on the prompt above the vitals.
  */
+// the client's words for where a selector stands and for what a magazine weighs
+const MODE_WORD = { single: { key: 'single' }, burst: { key: 'burst' }, fullauto: { key: 'fullauto' }, semiauto: { key: 'semiauto' } };
+const MAG_WORD = {
+  FULL: { key: 'Full' }, 'NEARLY FULL': { key: 'Almost full' }, 'ABOUT HALF': { key: 'About half' },
+  'FEWER THAN HALF': { key: 'Less than half' }, 'ALMOST EMPTY': { key: 'Almost empty' }, EMPTY: { key: 'Empty' },
+};
+let gunSaid = 0;
+
+/** bottom right, for a couple of seconds: a word or a number large, and under it what is loaded */
+function gunSay(big, more = null) {
+  const host = $('#gunsay');
+  $('#gunsay-big').textContent = big;
+  const line = $('#gunsay-more');
+  line.hidden = !more;
+  if (more) line.lastChild.textContent = more;
+  host.hidden = false;
+  host.classList.remove('is-out');
+  const mine = ++gunSaid;
+  setTimeout(() => { if (gunSaid === mine) host.classList.add('is-out'); }, 2000);
+  setTimeout(() => { if (gunSaid === mine) host.hidden = true; }, 2400);
+}
+
+/** what a look at the magazine told: the count if it could be counted, else the client's word for its weight */
+function sayMagazine(weapon) {
+  const read = raid.gun.magReadout(weapon);
+  const word = MAG_WORD[read.text];
+  const top = weapon.magazine?.rounds?.[weapon.magazine.rounds.length - 1];
+  const ammo = top ? (BY_ID[top.t]?.name || '') : '';
+  gunSay(word ? t(word.key) : read.text.replace('~', ''), ammo || null);
+}
+
+let lastCheck = null;
+
 function drawGunHud() {
   const weapon = raid.activeWeapon();
+  // a look at the magazine that has just ended is told
+  const act = raid.gun.action;
+  if (lastCheck && act !== lastCheck && weapon && lastCheck.weapon === weapon && weapon.magazine) sayMagazine(weapon);
+  lastCheck = act && act.kind === 'check' ? act : null;
   const ammoRow = $('#ammo-count').parentElement;
   const modeEl = $('#ammo-mode');
   const gp = $('#gun-prompt');
@@ -567,7 +636,7 @@ function onKeyDown(e) {
     const w = raid.activeWeapon();
     if (!w) return;
     const r = raid.gun.cycleMode(w);
-    if (r.ok) raidToast(`${w.tpl.short || 'Weapon'}: ${MODE_LABEL[r.mode] || r.mode}`, 'info', 1200);
+    if (r.ok) gunSay(MODE_WORD[r.mode] ? t(MODE_WORD[r.mode].key) : (MODE_LABEL[r.mode] || r.mode));
   } else if (!e.repeat && (e.key === 't' || e.key === 'T' || e.key === 'ㅅ')) {
     const w = raid.activeWeapon();
     if (!w) return;

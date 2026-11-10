@@ -40,6 +40,8 @@ export const EV = {
   LOOT_FOUND: 'loot:found',
   LOOT_CLOSED: 'loot:closed',
   TOAST: 'ui:toast',
+  /** experience went onto a raid's count by its kind: { line, amount } */
+  RAID_EXP: 'raid:exp',
   RAID_TOAST: 'raid:toast',
   RAID_LEVEL: 'raid:level',
   LEVEL_UP: 'profile:levelup',

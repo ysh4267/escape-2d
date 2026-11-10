@@ -198,9 +198,6 @@
           <div class="vital"><svg class="ico"><use href="#i-weight"/></svg>
             <div class="bar bar--weight"><i id="wt-fill"></i></div><span id="wt-text">0.0 kg</span>
           </div>
-          <div class="vital vital--stam"><span class="vital__k">STAM</span>
-            <div class="bar bar--stam"><i id="stam-fill"></i></div>
-          </div>
           <div class="vital vital--ammo"><svg class="ico"><use href="#i-crosshair"/></svg>
             <span id="ammo-weapon">unarmed</span><span id="ammo-mode" class="ammo-mode" hidden>SEMI</span><span id="ammo-count" class="ammo-count">—</span>
           </div>
@@ -236,7 +233,15 @@
       <div class="hud-fx" id="hud-fx"></div>
     </div>
 
-    <div class="raid-toast" id="raid-toast"></div>
+    <!-- what the gun has to say, bottom right, for a couple of seconds at a time: the selector's
+         position when it is moved, what a look at the magazine tells -->
+    <div class="gunsay" id="gunsay" hidden><div class="gunsay__big" id="gunsay-big"></div><div class="gunsay__more" id="gunsay-more" hidden><i></i><span></span></div></div>
+
+    <!-- the two bars of what the arms and the legs have left, bottom left -->
+    <div class="stamina" id="stamina"><div class="stamina__bar stamina__bar--arms"><i id="stam-arms"></i></div><div class="stamina__bar stamina__bar--legs"><i id="stam-fill"></i></div></div>
+
+    <!-- who is going in, where and when: written bottom left as a raid begins -->
+    <div class="raidintro" id="raidintro" hidden></div>
 
     <div class="interact-prompt" id="interact-prompt" hidden>
       <div class="interact-prompt__label"><span id="interact-label">—</span></div>
