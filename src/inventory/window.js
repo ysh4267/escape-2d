@@ -6,6 +6,7 @@
 // and they re-render with the rest of the inventory.
 // =========================================================
 
+import { toStage, stageW, stageH } from '../core/stage.js';
 import { $, el, icon, fmtWeight } from '../core/util.js';
 import { renderGrid } from './view.js';
 import { sfx } from '../core/audio.js';
@@ -161,15 +162,15 @@ function makeDraggable(node, handle) {
     if (e.button !== 0) return;
     dragging = true;
     sx = e.clientX; sy = e.clientY;
-    const r = node.getBoundingClientRect();
-    ox = r.left; oy = r.top;
+    ox = node.offsetLeft; oy = node.offsetTop;
     handle.setPointerCapture(e.pointerId);
     e.preventDefault();
   });
   handle.addEventListener('pointermove', (e) => {
     if (!dragging) return;
-    const nx = Math.max(4, Math.min(window.innerWidth - 120, ox + e.clientX - sx));
-    const ny = Math.max(4, Math.min(window.innerHeight - 60, oy + e.clientY - sy));
+    // the pointer moves in window pixels; the window moves on the stage
+    const nx = Math.max(4, Math.min(stageW() - 120, ox + toStage(e.clientX - sx)));
+    const ny = Math.max(4, Math.min(stageH() - 60, oy + toStage(e.clientY - sy)));
     node.style.left = `${nx}px`;
     node.style.top = `${ny}px`;
   });

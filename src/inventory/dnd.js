@@ -7,6 +7,7 @@
 //  - Esc or a drop on nothing returns the item to where it came from
 // =========================================================
 
+import { toStage } from '../core/stage.js';
 import { $, el } from '../core/util.js';
 import { renderItem, gridCellAt } from './view.js';
 import { moveToGrid, moveToSlot, autoPlace, detach, splitStack } from './model.js';
@@ -156,9 +157,10 @@ function onKeyDown(e) {
 // ---------------------------------------------------------
 function beginDrag(e) {
   const { item, node } = pending;
+  // the tile is measured on screen; the ghost is laid out on the stage
   const rect = node.getBoundingClientRect();
-  const cw = rect.width / item.w;
-  const ch = rect.height / item.h;
+  const cw = toStage(rect.width) / item.w;
+  const ch = toStage(rect.height) / item.h;
 
   // Tarkov anchors the carried item by its TOP-LEFT cell to the cell under the
   // cursor; the sub-cell grab offset is deliberately discarded.
@@ -213,8 +215,8 @@ function rebuildGhost() {
 function updateDrag(x, y) {
   drag.lastX = x; drag.lastY = y;
   // top-left of the carried item sits on the cursor cell
-  drag.ghost.style.left = `${x - drag.cw / 2}px`;
-  drag.ghost.style.top = `${y - drag.ch / 2}px`;
+  drag.ghost.style.left = `${toStage(x) - drag.cw / 2}px`;
+  drag.ghost.style.top = `${toStage(y) - drag.ch / 2}px`;
 
   clearHighlights();
   drag.target = null;

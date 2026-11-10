@@ -274,7 +274,8 @@ const PIN_CLEAR = 34;    // from the gun's edge to the first lane
 function layoutStage(rec) {
   const { item, stage } = rec;
   stage.replaceChildren();
-  const rect = stage.getBoundingClientRect();
+  // laid out in the element's own pixels, not the ones it ends up covering on screen
+  const rect = { width: stage.clientWidth, height: stage.clientHeight };
   if (rect.width < 50 || rect.height < 50) { requestAnimationFrame(() => layoutStage(rec)); return; }
   const W = rect.width, H = rect.height;
 

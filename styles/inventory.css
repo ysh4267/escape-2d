@@ -334,8 +334,8 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
   position: absolute;
   pointer-events: auto;
   min-width: 160px;
-  max-width: min(80vw, 720px);
-  max-height: 78vh;
+  max-width: min(calc(var(--sw) * 0.8), 720px);
+  max-height: calc(var(--sh) * 0.78);
   display: flex; flex-direction: column;
   background: linear-gradient(180deg, rgba(23,33,38,.985) 0%, rgba(9,14,17,.985) 100%);
   border: 1px solid var(--line-2);
@@ -527,7 +527,7 @@ body.is-modpick .item.is-fit { outline: 1px solid var(--ok); outline-offset: -1p
   background: rgba(0,0,0,.4); border: 1px solid var(--line-1); color: var(--tx-0);
 }
 .mod__build-name:focus { outline: none; border-color: var(--line-2); }
-.mod__build-list { display: flex; flex-direction: column; max-height: 66vh; overflow: auto; }
+.mod__build-list { display: flex; flex-direction: column; max-height: calc(var(--sh) * 0.66); overflow: auto; }
 .mod__build {
   display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
   padding: 6px 8px; border-bottom: 1px solid var(--line-1);
@@ -538,8 +538,8 @@ body.is-modpick .item.is-fit { outline: 1px solid var(--ok); outline-offset: -1p
 .mod__cand-name small { color: var(--tx-3); font-size: 10px; letter-spacing: .06em; }
 
 /* ---- calibre chart ---- */
-.cwin--chart { min-width: 720px; max-width: min(1100px, 96vw); }
-.cwin--chart .cwin__body.chart { max-height: 72vh; overflow: auto; }
+.cwin--chart { min-width: 720px; max-width: min(1100px, calc(var(--sw) * 0.96)); }
+.cwin--chart .cwin__body.chart { max-height: calc(var(--sh) * 0.72); overflow: auto; }
 .chart__table { border-collapse: collapse; width: 100%; font-size: 11px; font-variant-numeric: tabular-nums; }
 .chart__table th { font-size: 9px; letter-spacing: .12em; color: var(--tx-3); text-align: right; padding: 4px 6px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
 .chart__table th:first-child { text-align: left; }

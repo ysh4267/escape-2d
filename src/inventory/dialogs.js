@@ -2,6 +2,7 @@
 // item context menu, split dialog, inspect window, confirm box
 // =========================================================
 
+import { toStage, stageW, stageH } from '../core/stage.js';
 import { $, el, icon, clamp, fmtNum, fmtWeight } from '../core/util.js';
 import { hide as hideTooltip } from './tooltip.js';
 import { catLabel } from './view.js';
@@ -73,9 +74,9 @@ export function openContext(item, x, y) {
   }
   ctxNode.hidden = false;
   sfx.ui('context');
-  const r = ctxNode.getBoundingClientRect();
-  ctxNode.style.left = `${Math.min(x, window.innerWidth - r.width - 8)}px`;
-  ctxNode.style.top = `${Math.min(y, window.innerHeight - r.height - 8)}px`;
+  // opened at the pointer, which is in window pixels; the menu lives on the stage
+  ctxNode.style.left = `${Math.max(4, Math.min(toStage(x), stageW() - ctxNode.offsetWidth - 8))}px`;
+  ctxNode.style.top = `${Math.max(4, Math.min(toStage(y), stageH() - ctxNode.offsetHeight - 8))}px`;
 }
 
 export function closeContext() {

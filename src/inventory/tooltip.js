@@ -2,6 +2,7 @@
 // hover tooltip for item tiles
 // =========================================================
 
+import { toStage, stageW, stageH } from '../core/stage.js';
 import { $, el, icon, fmtNum, fmtWeight } from '../core/util.js';
 import { catLabel } from './view.js';
 import { isKnown } from './examine.js';
@@ -52,11 +53,13 @@ function onMove(e) {
 
 function place() {
   raf = 0;
-  const r = node.getBoundingClientRect();
-  let x = lastX + 16;
-  let y = lastY + 16;
-  if (x + r.width > window.innerWidth - 8) x = lastX - r.width - 14;
-  if (y + r.height > window.innerHeight - 8) y = Math.max(8, window.innerHeight - r.height - 8);
+  // the pointer is in window pixels, the card is placed on the stage
+  const w = node.offsetWidth, h = node.offsetHeight;
+  const px = toStage(lastX), py = toStage(lastY);
+  let x = px + 16;
+  let y = py + 16;
+  if (x + w > stageW() - 8) x = px - w - 14;
+  if (y + h > stageH() - 8) y = Math.max(8, stageH() - h - 8);
   node.style.left = `${Math.max(8, x)}px`;
   node.style.top = `${y}px`;
 }

@@ -278,7 +278,7 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
 
 /* ---------- boot ---------- */
 #screen-boot { align-items: center; justify-content: center; }
-.boot-wrap { text-align: center; width: min(440px, 80vw); }
+.boot-wrap { text-align: center; width: min(440px, calc(var(--sw) * 0.8)); }
 .boot-mark { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 40px; font-weight: 700; letter-spacing: .2em; }
 .boot-mark__a { color: var(--white); }
 .boot-mark__b { color: var(--void); background: var(--pale); padding: 0 12px; border-radius: 3px; }

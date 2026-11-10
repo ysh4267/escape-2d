@@ -195,8 +195,3 @@
 .modpresets__save .mod__build-name { flex: 1; }
 .modpresets .mod__build-list { max-height: none; flex: 1; }
 
-@media (max-width: 1100px) {
-  .modstats { width: 300px; }
-  .modscreen__bar { padding-left: 320px; }
-  .modscreen__title h1 { font-size: 26px; }
-}

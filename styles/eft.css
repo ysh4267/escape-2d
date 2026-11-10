@@ -1,0 +1,386 @@
+/* =========================================================
+   The game's own look for everything outside a raid: the shared part.
+
+   The client draws its interface for a 1920 x 1080 screen and scales it
+   whole; so does this. #stage is that screen (src/core/stage.js sets --k),
+   every .screen is the 1920 x 1080 frame centred on it, and positions are the
+   client's own pixels, read off its layout (tools/extract_tarkov_ui.py dumps
+   every screen's hierarchy) and off captures of the 1.0 / 1.1 client.
+
+   The plates, icons and the typeface are the client's too: every
+   var(--ui-<name>) below is one of its sprites, published by
+   src/core/uiart.js out of the sealed pack. A rule keeps a flat colour under
+   each so the page still reads if the pack does not open.
+
+   Loaded after the older sheets, so it also re-dresses the panels they drew.
+   Screens have sheets of their own: eft-menu, eft-character, eft-traders,
+   eft-misc.
+   ========================================================= */
+
+:root {
+  --k: 1;
+  --sw: calc(100vw / var(--k));
+  --sh: calc(100vh / var(--k));
+  --cell: 63px;
+
+  /* the client's own text colours */
+  --e-text: #c5c3b2;          /* body copy: warm light grey */
+  --e-text-hi: #e7e5d4;       /* button labels, titles */
+  --e-text-cold: #b6c1c7;     /* numbers, captions */
+  --e-text-blue: #c7d3d9;     /* tab labels */
+  --e-dim: #a6b0b5;
+  --e-faint: #6f7679;
+  --e-line: #52595a;          /* panel frames */
+  --e-line-dim: #404444;
+  --e-khaki: #bcb79a;
+  --e-cream: #d1c9a5;
+  --e-gold: #cdaf41;
+  --e-green: #8de736;
+  --e-orange: #e78d19;
+  --e-met: #5d9ac4;
+  --e-unmet: #c00000;
+  --e-red: #e00000;
+  --bar-h: 32px;
+  --font-ui: "Bender", "Bahnschrift SemiCondensed", "Bahnschrift Condensed", "Bahnschrift",
+             "Oswald", "Roboto Condensed", "Barlow Condensed", "Arial Narrow", "Noto Sans KR", sans-serif;
+}
+
+html, body { background: #000; color: var(--e-text); font-family: var(--font-ui); }
+body { background-image: none; font-variant-numeric: tabular-nums slashed-zero; cursor: var(--ui-cursor_idle) 0 0, default; }
+button, a, [role="button"] { cursor: var(--ui-cursor_idle) 0 0, pointer; }
+button { font-family: inherit; }
+
+/* ---------------- the stage and the frame ---------------- */
+#stage {
+  position: fixed; left: 0; top: 0; width: var(--sw); height: var(--sh);
+  transform: scale(var(--k)); transform-origin: 0 0;
+  background: #050707;
+  overflow: hidden;
+}
+/* the scene behind the menus: the client shows its environment here */
+#stage::before {
+  content: ""; position: absolute; inset: 0;
+  background: #0b0d0e var(--menu-bg, none) center / cover no-repeat;
+}
+body[data-screen="raid"] #stage::before, body[data-screen="boot"] #stage::before { display: none; }
+/* every screen but the main menu looks at it through frosted glass */
+body:not([data-screen="menu"]) #stage::before { filter: blur(14px) brightness(.62) saturate(1.1); transform: scale(1.04); }
+#app { position: absolute; inset: 0; }
+.screen {
+  inset: auto; left: calc(50% - 960px); top: calc(50% - 540px);
+  width: 1920px; height: 1080px;
+}
+/* the raid and the boot card use everything there is */
+#screen-raid, #screen-boot { left: 0; top: 0; width: 100%; height: 100%; }
+
+/* ---------------- glyphs out of the client's sprites ---------------- */
+.uii {
+  display: inline-block; flex: none; background-color: currentColor;
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+}
+img { -webkit-user-drag: none; user-select: none; }
+
+/* ---------------- the client's text button ----------------
+   A label and nothing else until the pointer is on it; then a cream plate
+   comes up behind it, torn at the edges like a brush stroke, and the label
+   turns black. BACK, NEXT, the main menu entries, ACCEPT and TURN IN are all
+   this one control at different sizes. */
+.dbtn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 8px 20px; min-height: 1em; border: 0; background: none;
+  color: var(--e-text-hi); font-family: var(--font-ui); font-size: 36px; font-weight: 400; line-height: 1.1;
+  text-transform: uppercase; white-space: nowrap; isolation: isolate;
+}
+.dbtn::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0;
+  background: #d9d5bb var(--ui-button) center / 100% 100% no-repeat;
+  -webkit-mask: var(--ui-eft_ui_buttons_mask) center / 100% 100% no-repeat;
+  mask: var(--ui-eft_ui_buttons_mask) center / 100% 100% no-repeat;
+  transition: opacity .12s;
+}
+.dbtn:hover:not(:disabled), .dbtn.is-hover { color: #000; }
+.dbtn:hover:not(:disabled)::before, .dbtn.is-hover::before { opacity: 1; }
+.dbtn:active:not(:disabled)::before { opacity: .8; }
+.dbtn:disabled { color: #5a5a5a; cursor: default; }
+.dbtn--25 { font-size: 25px; }
+.dbtn--24 { font-size: 24px; }
+.dbtn--22 { font-size: 22px; }
+.dbtn--20 { font-size: 20.3px; }
+.dbtn--42 { font-size: 42px; }
+
+/* older buttons keep working; they just stop being teal */
+.ebtn, .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-width: 100px; height: 30px; padding: 0 16px; border-radius: 0;
+  background: #1a1c1d; border: 1px solid var(--e-line);
+  color: var(--e-text-hi); font-family: var(--font-ui); font-size: 15px; font-weight: 700; letter-spacing: 0;
+  text-transform: uppercase;
+}
+.ebtn:hover:not(:disabled), .btn:hover:not(:disabled) { background: #d9d5bb; border-color: #f3eac0; color: #000; }
+.ebtn:disabled, .btn:disabled { color: #5a5a5a; cursor: default; }
+.ebtn--go, .btn--primary { background: linear-gradient(180deg, #ced0d2, #8a8c8c); border-color: #e6e9e8; color: #101214; }
+.ebtn--go:hover:not(:disabled), .btn--primary:hover:not(:disabled) { background: #fff; color: #000; }
+.ebtn--go:disabled { background: #1a1c1d; border-color: #3a3d3c; }
+.ebtn--sm, .btn--sm { min-width: 0; height: 24px; padding: 0 10px; font-size: 12px; }
+.ebtn--back { min-width: 110px; }
+
+/* ---------------- the cut-corner tab ----------------
+   tab_mask is the plate's shape, tab_*_fill its hatched body, tab_*_outline
+   its edge; 150 x 32, each overlapping the next by the width of the slant. */
+.ptab {
+  position: relative; width: 150px; height: 32px; margin-right: -11.4px; flex: none;
+  display: flex; align-items: center; padding: 0 0 0 51px; border: 0; background: none;
+  color: var(--e-text-blue); font-size: 16px; text-transform: uppercase; white-space: nowrap; text-align: left;
+  isolation: isolate;
+}
+.ptab::before {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: #141617 var(--ui-tab_idle_fill) 0 0 repeat;
+  clip-path: polygon(0 0, calc(100% - 34px) 0, 100% 100%, 0 100%);
+}
+.ptab::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  border-style: solid; border-width: 0 33px 0 9px;
+  border-image: var(--ui-tab_idle_outline) 0 33 0 9 fill stretch;
+}
+.ptab:hover:not(:disabled):not(.is-active)::before { background-image: var(--ui-tab_hover_fill); }
+.ptab:hover:not(:disabled):not(.is-active)::after { border-image-source: var(--ui-tab_hover_outline); }
+.ptab.is-active { color: #000; font-weight: 700; z-index: 2; }
+.ptab.is-active::before { background: #b9bcbd var(--ui-tab_selected_fill) 0 0 repeat; }
+.ptab.is-active::after { border-image-source: var(--ui-tab_selected_outline); }
+.ptab:disabled { color: #4a4d4c; cursor: default; }
+.ptab__ico { position: absolute; left: 24px; top: 4px; width: 24px; height: 24px; }
+.ptab__ico img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ptab:disabled .ptab__ico { opacity: .3; }
+.ptab__badge {
+  position: absolute; right: 30px; top: -9px; min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--e-green); color: #000; font-size: 13px; font-weight: 700; line-height: 16px; text-align: center;
+}
+
+/* ---------------- small shared parts ---------------- */
+/* a loyalty level, a player level: the light label with the folded corner */
+.rank {
+  position: relative; display: inline-grid; place-items: center; width: 25px; height: 25px; flex: none;
+  background: #c9ced1 var(--ui-bind_label) 0 0 / 100% 100% no-repeat;
+  color: #000; font-size: 14px; font-style: normal; line-height: 1; font-family: var(--font-ui);
+}
+.rank img { width: 18px; height: 18px; display: block; }
+/* the key a control answers to */
+.kcap {
+  display: inline-grid; place-items: center; width: 53px; height: 20px;
+  background: #c5cecf var(--ui-hotkey_background) 0 0 / 100% 100% no-repeat;
+  color: #000; font-size: 13.9px; line-height: 1;
+}
+.money { font-size: 16px; color: var(--e-text); white-space: nowrap; }
+.money em { font-style: normal; margin-right: 5px; }
+.xpbar { width: 220px; height: 5px; background: #000; border: 1px solid #343738; margin-top: 5px; }
+.xpbar i { display: block; height: 100%; background: linear-gradient(180deg, #d8dfe6, #8f9aa4); }
+.xpbar--big { width: 520px; height: 10px; }
+/* the header plate over a block: dark, slanted off at the right */
+.hplate {
+  display: inline-flex; align-items: center; height: 21px; min-width: 133px; box-sizing: border-box;
+  border-style: solid; border-width: 0 22px 0 8px; border-image: var(--ui-header_panel) 0 22 0 8 fill stretch;
+  color: var(--e-text-blue); font-size: 14px; font-weight: 700; text-transform: uppercase; white-space: nowrap;
+}
+.eplate {
+  display: inline-block; padding: 3px 26px 3px 8px;
+  background: linear-gradient(180deg, #1e2022, #131617); color: #aeb9c1; font-size: 14px; font-weight: 700; text-transform: uppercase;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%);
+}
+/* a tick box */
+.chk { display: inline-flex; align-items: center; gap: 11.6px; color: #c8c9b9; font-size: 18px; background: none; border: 0; padding: 0; }
+.chk i { width: 20px; height: 21px; flex: none; display: grid; place-items: center; background: #000 var(--ui-checkbox) 0 0 / 100% 100% no-repeat; }
+.chk i img { width: 14px; height: 12px; display: none; }
+.chk.is-on i img { display: block; }
+.chk:hover { color: #fff; }
+
+/* ---------------- form controls (src/ui/kit.js) ----------------
+   The drop-down box: 250 x 35, a 1 px frame, the value in the middle and a
+   small square button at the right end; its list opens flush under it, rows
+   of 28 px two apart, the one under the pointer on a flat light plate. */
+.ddb {
+  position: relative; width: 250px; height: 35px; flex: none; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.8); border: 1px solid #5c6061; box-shadow: 0 0 4px rgba(0,0,0,.34);
+  color: #bdbaad; font-size: 15px; outline: none;
+}
+.ddb:hover, .ddb.is-open { border-color: #8a9092; }
+.ddb__value { max-width: 200px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
+.ddb__btn {
+  position: absolute; right: 6.4px; top: 7.5px; width: 18px; height: 18px; display: grid; place-items: center; pointer-events: none;
+  background: #1d2021 var(--ui-dropdown_button_background_new) center / 100% 100% no-repeat;
+}
+.ddb__arrow { display: block; }
+.ddb__arrow--up, .ddb.is-open .ddb__arrow--down { display: none; }
+.ddb.is-open .ddb__arrow--up { display: block; }
+.ddb__list {
+  position: absolute; left: -1px; top: 33px; width: 250px; max-height: 244px; box-sizing: border-box; z-index: 40;
+  display: flex; flex-direction: column; gap: 2px; padding: 1px 2px; overflow-y: auto;
+  background: #000; border: 1px solid #5c6061; box-shadow: 0 0 6px rgba(0,0,0,.55);
+}
+.ddb__list[hidden] { display: none; }
+.ddb__opt {
+  flex: none; min-height: 28px; padding: 0 8px; border: 0; background: rgba(84,88,91,.15);
+  color: #7b7d73; font-family: var(--font-ui); font-size: 14px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ddb__opt.is-current { color: #bdbaad; }
+.ddb__opt:hover { background: #c3c1b0; color: #000; }
+/* The number slider: a dotted line 196 px long, a notch at each end, a small
+   handle hanging under it that points up at the value, and the number in a
+   box of its own to the right. */
+.nsl { position: relative; width: 250px; height: 35px; flex: none; }
+.nsl__track { position: absolute; left: 0; top: 2px; width: 196px; height: 31px; touch-action: none; }
+.nsl__line {
+  position: absolute; left: 0; right: 0; top: 13px; height: 3px;
+  background: radial-gradient(circle, rgba(217,217,217,.55) 0 1px, transparent 1.3px) 0 0 / 19.4px 3px repeat-x, rgba(36,38,41,.5);
+}
+.nsl__notch { position: absolute; left: 0; top: 13px; width: 2px; height: 3px; background: rgba(217,217,217,.5); }
+.nsl__notch--end { left: auto; right: 0; }
+.nsl__handle {
+  position: absolute; top: 18px; width: 12px; height: 11px; margin-left: -6px; display: grid; place-items: center; pointer-events: none;
+  background: #1d2021 var(--ui-dropdown_button_background_new) center / 100% 100% no-repeat;
+}
+.nsl__arrow { display: block; width: 8px; height: 6px; }
+.nsl__value {
+  position: absolute; left: 210px; top: 0; width: 40px; height: 35px; box-sizing: border-box; padding: 0; border: 0; outline: none;
+  background: rgba(27,30,31,.5); color: #c3c5b2; font-family: var(--font-ui); font-size: 15px; text-align: center;
+}
+.nsl__value:focus { background: #000; box-shadow: inset 0 0 0 1px #5c6061; }
+
+/* scrollbars as the client draws them: a light handle on a black track */
+.screen *::-webkit-scrollbar, .modal *::-webkit-scrollbar, .win *::-webkit-scrollbar { width: 10px; height: 10px; }
+.screen *::-webkit-scrollbar-track, .modal *::-webkit-scrollbar-track, .win *::-webkit-scrollbar-track { background: #000; }
+.screen *::-webkit-scrollbar-thumb, .modal *::-webkit-scrollbar-thumb, .win *::-webkit-scrollbar-thumb {
+  background: #b6c1c7; border: 2px solid #000; border-radius: 0;
+}
+.screen *::-webkit-scrollbar-corner { background: #000; }
+#screen-raid *::-webkit-scrollbar { width: 8px; height: 8px; }
+
+/* the dark sheet most screens lay over the scene: darker along its top edge */
+.esheet { background: linear-gradient(180deg, rgba(0,0,0,.8) 0, rgba(0,0,0,.6) 64px, rgba(0,0,0,.6) 100%); border-top: 1px solid rgba(255,255,255,.07); }
+
+/* ---------------- the strip along the bottom ----------------
+   task_bar is the strip itself: a faint glow rising off a light line and,
+   under the line, the black bar the entries sit on. */
+.bottombar {
+  position: absolute; left: 0; right: 0; top: calc(50% + 540px - 102px); height: 102px; z-index: 40;
+  background: var(--ui-task_bar) 0 0 / 100% 100% repeat-x; pointer-events: none;
+}
+/* a window taller than 16:9 leaves room under the frame; the bar's black runs down into it */
+.bottombar::after { content: ""; position: absolute; left: 0; right: 0; top: 102px; height: 4000px; background: #020304; }
+.bottombar[hidden] { display: none; }
+.bottombar__in {
+  position: absolute; left: calc(50% - 960px); width: 1920px; box-sizing: border-box; bottom: 1px; height: 28px; pointer-events: auto;
+  display: flex; align-items: stretch; gap: 9px; padding: 0 10px;
+}
+.bottombar__gap { flex: 1; }
+.bbtn {
+  position: relative; display: flex; align-items: center; gap: 5px; height: 28px; margin-top: 0;
+  padding: 0 12px 0 5px; border: 0; background: #0f1011;
+  color: #b1b0a1; font-size: 16px; text-transform: uppercase; white-space: nowrap;
+}
+.bbtn .uii { color: #d6d7c6; }
+.bbtn.is-active .uii, .bbtn:hover .uii { color: inherit; }
+.bbtn .uii { width: 28px; height: 28px; }
+.bbtn:hover { color: #fff; }
+.bbtn.is-active { background: #9f9d90; color: #000; }
+.bbtn--icon { padding: 0 5px; }
+.bbtn.is-off { color: var(--e-red); }
+.bbtn--amber .uii { color: #ffa800; }
+.bbtn--amber.is-active .uii { color: #000; }
+.bbtn__badges { position: absolute; right: 0; top: -21px; display: flex; gap: 3px; pointer-events: none; }
+.bbtn__badge { min-width: 10px; height: 19.8px; padding: 0 5px; background: var(--e-green); color: #000; font-size: 18px; line-height: 19.8px; text-align: center; display: flex; align-items: center; }
+.bbtn__badge--att { background: var(--e-text); }
+.bbtn__badge .uii { width: 20px; height: 20px; color: #000; }
+.bbtn__badge[hidden] { display: none; }
+.squad { display: flex; align-items: center; gap: 5px; margin-left: 12px; }
+.squad__slot { width: 28px; height: 28px; display: grid; place-items: center; background: var(--ui-allscreens_squad_player_background_1_5) 0 0 / 100% 100%; color: #adb5b8; }
+.squad__slot .uii { width: 20px; height: 20px; opacity: .8; }
+.squad__slot--add .uii { width: 24px; height: 24px; opacity: .55; }
+.bottombar__version { position: absolute; left: calc(50% - 949px); bottom: 34px; color: #51575a; font-size: 19px; line-height: 1; white-space: nowrap; pointer-events: none; }
+
+/* ---------------- notifications ----------------
+   A strip docked to the right edge of the frame, olive-black, as wide as
+   what it says: just over the bottom bar outside a raid (y 1016-1040), in
+   the bar's own place in one (y 1049-1075). */
+.notify {
+  position: absolute; right: calc(50% - 960px); top: auto; bottom: calc(50% - 540px + 40px); z-index: 900;
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-end; pointer-events: none;
+}
+body[data-screen="raid"] .notify { right: 0; bottom: 5px; }
+.note {
+  display: flex; align-items: center; gap: 7px; height: 25px; max-width: 900px; box-sizing: border-box;
+  padding: 0 14px 0 11px;
+  background: rgba(30,28,16,.94);
+  color: #fffff8; font-size: 16px; line-height: 1; white-space: nowrap;
+  animation: note-in .18s ease-out;
+}
+.note__ico { width: 15px; height: 15px; color: #cfc76b; flex: none; object-fit: contain; }
+.note__tri { width: 0; height: 0; flex: none; border-left: 6px solid transparent; border-right: 6px solid transparent; }
+.note__tri--up { border-bottom: 10px solid #8de736; }
+.note__tri--down { border-top: 10px solid #e00000; }
+.note--warn .note__ico { color: #edb638; }
+.note.is-out { animation: note-out .24s ease-in forwards; }
+@keyframes note-in { from { opacity: 0; transform: translateX(18px); } }
+@keyframes note-out { to { opacity: 0; } }
+.toasts { display: none; }
+
+/* ---------------- the grid and what lies in it ----------------
+   grid_cell is the client's 63 px cell. An item's tile is the colour its
+   template names, laid thinly over the cell, the way the client tints it. */
+.grid {
+  background-color: #0c0d0d; background-image: var(--ui-grid_cell); background-size: var(--cell) var(--cell);
+  background-position: 0 0; border: 1px solid #2a2c2c; box-shadow: none;
+}
+.grid::after { display: none; }
+.item {
+  background: rgba(127,127,127,.3); border: 0; border-radius: 0;
+  box-shadow: inset 0 0 0 1px #495154;
+  cursor: var(--ui-cursor_idle) 0 0, grab;
+}
+.item[data-bg="default"] { background: rgba(127,127,127,.3); }
+.item[data-bg="black"] { background: rgba(0,0,0,.3); }
+.item[data-bg="grey"] { background: rgba(29,29,29,.3); }
+.item[data-bg="blue"] { background: rgba(28,65,86,.3); }
+.item[data-bg="green"], .item[data-bg="tracerGreen"] { background: rgba(21,45,0,.3); }
+.item[data-bg="yellow"], .item[data-bg="tracerYellow"] { background: rgba(104,102,40,.3); }
+.item[data-bg="orange"] { background: rgba(60,25,0,.3); }
+.item[data-bg="red"], .item[data-bg="tracerRed"] { background: rgba(109,36,24,.3); }
+.item[data-bg="violet"] { background: rgba(76,42,85,.3); }
+.item:hover { filter: none; box-shadow: inset 0 0 0 1px #7b8588; z-index: 3; }
+.item:hover::before { content: ""; position: absolute; inset: 0; background: rgba(255,255,255,.1); pointer-events: none; }
+.item__name {
+  left: auto; right: 2px; top: 1px; bottom: auto; padding: 0; background: none; text-align: right;
+  font-size: 11px; line-height: 1.1; letter-spacing: 0; color: #a4aeb4; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 1px #000;
+  max-width: calc(100% - 4px);
+}
+.item__stack { right: 2px; bottom: 1px; padding: 0; font-size: 12px; font-weight: 400; color: #c5c3b2; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 1px #000; }
+
+/* ---------------- windows and dialogs ---------------- */
+.modal { border-radius: 0; background: #000; border: 1px solid var(--e-line); box-shadow: 0 0 0 1px #000, 0 20px 60px rgba(0,0,0,.8); }
+.modal__head { color: #fff; font-size: 14px; font-weight: 400; background: rgba(84,88,91,.3); border-bottom: 0; letter-spacing: 0; padding: 2px 6px; min-height: 17px; }
+.modal__body { color: var(--e-text); font-size: 15px; }
+.modal__foot { border-top: 0; justify-content: center; }
+.modal-root { background: rgba(0,0,0,.32); backdrop-filter: none; }
+.modal--wide { max-width: 760px; }
+.wclose { width: 27px; height: 17px; display: grid; place-items: center; border: 0; background: #48100f var(--ui-close_button) 0 0 / 100% 100%; }
+.wclose img { width: 9px; height: 11px; }
+.wclose:hover { filter: brightness(1.5); }
+.panel { background: rgba(0,0,0,.5); border: 1px solid var(--e-line); border-radius: 0; box-shadow: none; }
+.panel__head { background: none; border-bottom: 1px solid #2a2c2c; padding: 6px 10px; }
+.panel__head h2 { color: var(--e-text); letter-spacing: .08em; }
+.field { border-radius: 0; border-color: #2a2c2c; background: #1a1c1c; }
+.tl-empty { padding: 30px 16px; text-align: center; color: #4a4d4c; font-size: 16px; }
+.td__sec { display: inline-block; margin: 12px 0 6px; padding: 3px 26px 3px 8px; background: linear-gradient(180deg, #1e2022, #131617); color: #aeb9c1; font-size: 14px; font-weight: 700; text-transform: uppercase; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 100%, 0 100%); }
+.td__reqs { list-style: none; margin: 0 0 14px; padding: 0; }
+.td__reqs li { padding: 4px 4px 4px 22px; position: relative; font-size: 15px; }
+.td__reqs li::before { content: "×"; position: absolute; left: 5px; color: var(--e-unmet); font-weight: 700; }
+.td__reqs li.is-ok::before { content: "✓"; color: var(--e-met); }
+.td__reqs em { font-style: normal; color: var(--e-dim); }
+
+/* a window that brings its whole frame with it */
+.modal.modal--bare { border: 0; padding: 0; max-width: none; width: auto; background: none; box-shadow: none; }
+.ptab.is-active .ptab__ico img { filter: brightness(0); }
+.ptab__ico--wide { left: 17px; top: -1px; width: 34.5px; height: 34.8px; }
