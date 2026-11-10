@@ -108,7 +108,13 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
 .ico--sm { width: 13px; height: 13px; }
 
 /* ---------- scrollbars ---------- */
-* { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+/* A browser that draws ::-webkit-scrollbar must not be handed the standard
+   properties as well: where both are set the standard pair wins, and the bar
+   comes out as the system's thin one with arrows instead of the one styled
+   below. They are for the browsers that have nothing else. */
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: #b6c1c7 #000; }
+}
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: rgba(0,0,0,.35); }
 *::-webkit-scrollbar-thumb { background: var(--line-2); border: 2px solid transparent; background-clip: padding-box; }

@@ -58,7 +58,8 @@ def main() -> int:
     url = f"http://localhost:{args.port}/?t={int(time.time())}" + (f"&dev={args.dev}" if args.dev else "")
     errors: list[str] = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
+        browser = p.chromium.launch(headless=True, ignore_default_args=["--hide-scrollbars"],
+                                    args=["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"])
         page = browser.new_page(viewport={"width": w, "height": h})
         if args.lang:
             page.add_init_script(f"try {{ localStorage.setItem('escape2d.lang', '{args.lang}'); }} catch (e) {{}}")
