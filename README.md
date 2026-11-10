@@ -91,6 +91,14 @@ shipped with before keep their slugs (`salewa`, `w_akm`) and are marked `core`,
 and until real trader stock and loot tables arrive, those are still what the
 shelves and the crates are filled from.
 
+The database is rebuilt whenever the live numbers move, and a save outlives
+that. Durability, a med's resource and a key's uses are saved as points along
+with the maximum they were out of, and when a rebuild moves that maximum they
+come back as the share they were: the PACA that was fresh at 50 is fresh at
+100, a vest half worn is half worn, and nothing comes back holding more than
+it can. A profile saved before items said so is read in the numbers of the
+database of its day.
+
 **Grid inventory.** Items occupy `w × h` cells, never overlap, and rotate 90°.
 Grid-to-grid drops onto occupied cells are rejected outright — Tarkov has no
 grid swap; only equipment slots swap. Stacks merge up to the template's real

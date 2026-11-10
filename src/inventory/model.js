@@ -35,6 +35,33 @@ const NEST_DENY = {
   container: ['backpack', 'secure'],
 };
 
+/**
+ * The maximum a saved number is counted against: an armour's durability, a
+ * med's resource, a key's uses. They are saved as points, and the database is
+ * rebuilt from the live game's data - when a template's maximum moves, points
+ * saved against the old one would read as wear the item never took (a fresh
+ * PACA at 50 of 100) or as more than the item can hold (five uses in a
+ * three-use kit). So a saved item says what its numbers were out of (`u`),
+ * and coming back they are carried over as the share they were. A gun's
+ * durability is out of 100 in every database and is left alone.
+ */
+function unitsOf(tpl) {
+  return tpl.dura ?? tpl.res?.max ?? tpl.uses ?? null;
+}
+
+/**
+ * A save from before items said so is in the units of the database of that
+ * time. These are the maxima that have moved since: the armour that is now
+ * its inserts or its default plate, and the meds and keys the live game
+ * counts differently.
+ */
+const UNITS_BEFORE = {
+  ar_paca: 50, ar_module: 40, ar_zhuk: 60, ar_6b23: 55, ar_iotv: 80, rig_ana: 50,
+  hl_ssh68: 30, hl_kolpak: 30, hl_lshz: 35, hl_6b47: 40, hl_fast: 45,
+  alusplint: 5, cms: 5, goldstar: 10, ibuprofen: 15, splint: 5, surv12: 15, vaseline: 6,
+  k_bunk: 10, k_factexit: 10, k_gasoffice: 10, k_gassafe: 10, k_gasstore: 10, k_machine: 10, k_pump: 10,
+};
+
 // ---------------------------------------------------------
 // Item
 // ---------------------------------------------------------
@@ -249,6 +276,9 @@ export class Item {
     if (this.res != null) o.res = this.res;
     if (this.dura != null) o.d = this.dura;
     if (this.maxDura != null && this.maxDura !== (this.tpl.wpn?.maxDura ?? this.tpl.dura ?? null)) o.md = this.maxDura;
+    // what those points are out of, for the day the template's maximum moves
+    const units = unitsOf(this.tpl);
+    if (units != null && (o.d != null || o.res != null)) o.u = units;
     if (this.folded) o.fd = 1;
     if (this.rounds && this.rounds.length) o.rd = this.rounds.map((r) => [r.t, r.n]);
     if (this.chamber && this.chamber.length) o.ch = this.chamber.slice();
@@ -268,9 +298,25 @@ export class Item {
     // assembled to its preset rather than as a bare receiver, which is what
     // the player had. Anything saved since carries `m`, even when empty.
     const legacy = o.m === undefined;
+    // points saved against another maximum come over as the share they were
+    // (see unitsOf), and never as more than the item can hold
+    const tpl = getTpl(o.t);
+    const now = tpl ? unitsOf(tpl) : null;
+    const then = o.u ?? UNITS_BEFORE[tpl?.key] ?? now;
+    const k = now && then && then !== now ? now / then : 1;
+    const points = (v) => (v == null || k === 1 ? v : Math.round(v * k * 100) / 100);
+    // uses are whole: a kit with any left keeps at least one
+    const count = (v) => (v == null || k === 1 || !Number.isInteger(v) ? points(v)
+      : (v > 0 ? Math.max(1, Math.round(v * k)) : v));
+    let dura = points(o.d), maxDura = points(o.md), res = count(o.res);
+    if (now != null) {
+      if (maxDura != null) maxDura = Math.min(maxDura, now);
+      if (dura != null) dura = Math.min(dura, maxDura ?? now);
+      if (res != null) res = Math.min(res, now);
+    }
     const it = new Item(o.t, {
       uid: o.uid, rot: o.r, stack: o.s, fir: o.f, examined: o.e,
-      res: o.res, dura: o.d, maxDura: o.md, folded: o.fd, bare: !legacy,
+      res, dura, maxDura, folded: o.fd, bare: !legacy,
     });
     if (o.g && it.grids) {
       o.g.forEach((gj, i) => { if (it.grids[i]) it.grids[i].loadJSON(gj); });
