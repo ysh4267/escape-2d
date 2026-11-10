@@ -409,6 +409,20 @@ export class ModSlot {
   toJSON() { return this.item ? this.item.toJSON() : null; }
 }
 
+/**
+ * Does this gun chamber that round? A magazine can take more than the gun it
+ * is on - an AK magazine holds .366 TKM for the VPO-209, a STANAG one .300
+ * Blackout, an SR-25 one 6.8x51 - so the magazine's list is not the whole
+ * answer: the round has to be of the gun's calibre as well. No chamber list
+ * in the data names a round of another calibre, so nothing a gun fires in the
+ * live game is turned away; the few that leave out one of their own (the
+ * Kedr's has no hot PMM load) stay decided by the magazine, as they were.
+ */
+export function chambersRound(gun, ammoTpl) {
+  const cal = gun?.tpl.cal;
+  return !cal || !ammoTpl?.cal || ammoTpl.cal === cal;
+}
+
 /** why a part will not go on: {ok, reason} */
 export function canInstall(slot, item) {
   if (!item) return { ok: false, reason: 'nothing to install' };
@@ -417,8 +431,8 @@ export function canInstall(slot, item) {
   if (item === root || item.contains?.(root) || [...item.allMods()].includes(root)) {
     return { ok: false, reason: 'cannot attach a gun to its own part' };
   }
-  if (item.rounds && item.ammoCount && item.tpl.ammoFilter && slot.owner.tpl.cal
-      && item.tpl.cal && item.tpl.cal !== slot.owner.tpl.cal) {
+  // a loaded magazine goes on where the gun chambers what is in it
+  if (item.rounds && item.ammoCount && item.rounds.some((r) => !chambersRound(slot.owner, getTpl(r.t)))) {
     return { ok: false, reason: 'wrong calibre' };
   }
   // conflicts run both ways: the new part lists what it excludes, and every

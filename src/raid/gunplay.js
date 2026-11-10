@@ -36,7 +36,8 @@ import { clamp } from '../core/util.js';
 import { sfx } from '../core/audio.js';
 import { penChance } from '../inventory/ballistics.js';
 import { weaponStats, takeRound, roundsInWeapon, installMod, loadAmmo, canLoad } from '../inventory/weapon.js';
-import { detach } from '../inventory/model.js';
+import { detach, chambersRound } from '../inventory/model.js';
+import { getTpl } from '../data/items.js';
 import { HIT_WEIGHTS } from './health.js';
 
 // ---------------------------------------------------------
@@ -453,6 +454,8 @@ export function spareMags(weapon, grids) {
     if (seen.has(it.uid) || !it.isMag) return;
     seen.add(it.uid);
     if (!slot.fits(it)) return;
+    // a magazine that fits but holds another gun's rounds is not a spare
+    if (it.rounds.some((r) => !chambersRound(weapon, getTpl(r.t)))) return;
     out.push(it);
   };
   for (const g of grids) {

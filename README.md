@@ -176,7 +176,12 @@ magazine (or onto a gun) to load it, right-click → LOAD AMMO to pick the round
 and the count, UNLOAD AMMO to get them back as stacks; a shotgun's tube is a
 magazine like any other. Guns with a chamber keep one round in it, and firing
 takes the chambered round first and cycles the next one in. Loaded magazines
-weigh what their rounds weigh and sell for what they are worth.
+weigh what their rounds weigh and sell for what they are worth. A magazine can
+take more than the gun it is on — an AK magazine holds .366 TKM for the
+VPO-209, a STANAG one .300 Blackout, an SR-25 one 6.8x51 — so what goes into a
+gun is settled by the gun's calibre: a loaded magazine goes on where the gun
+chambers what is in it, and a round is loaded through a gun only if that gun
+fires it.
 
 Cartridges carry the full ballistic card — damage, penetration, armour damage,
 fragmentation (and how many fragments), velocity and whether it is subsonic,

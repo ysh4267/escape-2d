@@ -19,7 +19,9 @@ export function ammoStacksFor(mag, grids) {
   const consider = (it) => {
     if (seen.has(it.uid) || it.cat !== 'ammo') return;
     seen.add(it.uid);
-    if (canLoad(mag, it).ok || (mag.tpl.ammoFilter || []).includes(it.tplId)) out.push(it);
+    // a full magazine still lists its rounds; one on a gun lists what the gun chambers
+    const r = canLoad(mag, it);
+    if (r.ok || r.reason === 'magazine is full') out.push(it);
   };
   for (const g of grids) {
     for (const it of g.items()) {
@@ -38,7 +40,9 @@ export function magazinesFor(ammo, grids) {
     if (seen.has(it.uid)) return;
     seen.add(it.uid);
     const mag = magazineOf(it);
-    if (mag && (mag.tpl.ammoFilter || []).includes(ammo.tplId)) out.push({ host: it, mag });
+    if (!mag) return;
+    const r = canLoad(it, ammo);
+    if (r.ok || r.reason === 'magazine is full') out.push({ host: it, mag });
   };
   for (const g of grids) {
     for (const it of g.items()) {

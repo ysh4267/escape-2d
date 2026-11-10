@@ -12,7 +12,7 @@
 //  - presets: the parts a gun comes with from a trader or a crate
 // =========================================================
 
-import { Item, detach, autoPlace, canInstall, fitsAfter, footprintChanged } from './model.js';
+import { Item, detach, autoPlace, canInstall, chambersRound, fitsAfter, footprintChanged } from './model.js';
 import { getTpl } from '../data/items.js';
 import { sfx } from '../core/audio.js';
 
@@ -327,6 +327,10 @@ export function canLoad(target, ammo) {
   const mag = magazineOf(target);
   if (!mag || !ammo || ammo.cat !== 'ammo') return { ok: false, reason: 'not a magazine' };
   if (!(mag.tpl.ammoFilter || []).includes(ammo.tplId)) return { ok: false, reason: 'wrong calibre' };
+  // into a gun, or into the magazine on one: the gun has to chamber it too
+  const on = mag.holder?.kind === 'mod' ? mag.holder.slot.owner : null;
+  const gun = target.isWeapon ? target : (on?.isWeapon ? on : null);
+  if (gun && !chambersRound(gun, ammo.tpl)) return { ok: false, reason: 'wrong calibre' };
   if (mag.ammoFree <= 0) return { ok: false, reason: 'magazine is full' };
   return { ok: true, mag };
 }
