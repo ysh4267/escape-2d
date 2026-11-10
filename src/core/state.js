@@ -8,6 +8,7 @@ import { TPL, getTpl, CURRENCY_KEY, FX } from '../data/items.js';
 import { seedUidCounter } from './util.js';
 import { Health } from '../raid/health.js';
 import { emit, EV } from './events.js';
+import { levelForExp } from '../game/db.js';
 
 export let SAVE_KEY = 'escape2d.save.v1';
 /** tests point this at a scratch key so they never clobber a real profile */
@@ -15,12 +16,16 @@ export function setSaveKey(k) { SAVE_KEY = k; }
 export const STASH_W = 10;
 export const STASH_H = 32;
 
-export const XP_PER_LEVEL = 1500;
-
 export const game = {
   version: 1,
   profile: {
     name: 'PMC',
+    /** 'USEC' | 'BEAR' - some tasks are for one side only */
+    faction: 'USEC',
+    /** the edition the character was started on: it decides the starting kit and the stash */
+    edition: 'standard',
+    /** when the character was made (ms) */
+    registered: 0,
     level: 1,
     exp: 0,
     raids: 0,
@@ -28,10 +33,28 @@ export const game = {
     died: 0,
     extracted: 0,
     bestHaul: 0,
+    /** kills by kind, raid outcomes by kind, and the other numbers the OVERALL tab reads */
+    stats: {},
     /** template keys the player has examined */
     examined: new Set(),
-    /** traderId -> { rep, spent } */
+    /** trader key -> { rep, sales, bought, restockAt, unlocked } */
     traders: {},
+    /** task id -> { s: a|d|f, t, fin, c: { objective id: count } } */
+    quests: {},
+    /** task item id -> 'raid' | 'stash' */
+    qitems: {},
+    /** the messenger: [{ id, from, kind, text, ts, items?, exp?, read? }] */
+    mail: [],
+    /** skill id -> points */
+    skills: {},
+    /** template id -> wishlist heading (src/game/wishlist.js) */
+    wishlist: {},
+    /** template ids whose handbook entry has been opened; the rest wear the "new" mark */
+    handbookSeen: [],
+    /** the flea market: { rating, growing, offers, sellSum, bought } (src/game/flea.js) */
+    flea: null,
+    /** the hideout: zones, constructions, productions, the generator (src/game/hideout.js) */
+    hideout: {},
   },
   stash: null,
   equipment: null,
@@ -153,14 +176,26 @@ export function netWorthRub() {
 // ---------------------------------------------------------
 // progression
 // ---------------------------------------------------------
-export function addExp(n) {
+/**
+ * Experience goes onto the running total and the level is read off the game's
+ * own table (1,000 for level 2, 3,017 for level 3 ... 27 million for 79).
+ */
+export function addExp(n, why = '') {
+  n = Math.round(n);
+  if (!(n > 0)) return;
   game.profile.exp += n;
-  const lvl = Math.max(1, Math.floor(game.profile.exp / XP_PER_LEVEL) + 1);
+  emit(EV.EXP, { amount: n, why });
+  const lvl = levelForExp(game.profile.exp);
   if (lvl !== game.profile.level) {
     game.profile.level = lvl;
     emit(EV.LEVEL_UP, lvl);
-    emit(EV.TOAST, { kind: 'ok', text: `Level ${lvl}` });
   }
+}
+
+/** bump one of the profile's running counters (kills, raids by outcome ...) */
+export function addStat(key, n = 1) {
+  const st = game.profile.stats || (game.profile.stats = {});
+  st[key] = (st[key] || 0) + n;
 }
 
 export function markExamined(tplKey) {
@@ -234,6 +269,17 @@ export function load() {
     Object.assign(game.profile, data.p || {});
     game.profile.examined = new Set(data.p?.examined || []);
     game.profile.traders = data.p?.traders || {};
+    // sections that profiles saved before tasks, mail and skills do not have
+    for (const [k, empty] of [['quests', {}], ['qitems', {}], ['skills', {}], ['stats', {}]]) {
+      if (!game.profile[k] || typeof game.profile[k] !== 'object') game.profile[k] = empty;
+    }
+    if (!Array.isArray(game.profile.mail)) game.profile.mail = [];
+    if (!game.profile.registered) game.profile.registered = Date.now();
+    // the level table changed under old profiles: the experience is what was earned
+    game.profile.level = levelForExp(game.profile.exp || 0);
+    // the stash is as tall as the edition (and the hideout) made it
+    const rows = game.profile.stashRows || data.stash?.h || STASH_H;
+    if (rows !== game.stash.h) game.stash = new Grid(STASH_W, rows, { tag: 'stash', label: 'STASH' });
     game.stash.loadJSON(data.stash);
     game.equipment.loadJSON(data.eq);
     if (data.h) {

@@ -1,0 +1,3458 @@
+{
+ "schema": "eft-task-unlock-rules/1",
+ "generated": "2026-11-10",
+ "game": "Escape from Tarkov 1.3.0.1.48558 raw data (rule introduced by patch 1.1.0.0, 2026-08-03)",
+ "counterRule": "value(group) = number of distinct member flags set in the profile. Completing (status Success) a task listed in sources sets its flag (+1, once, never cleared). Tasks in the same twins[] entry share one flag. A task with unlock.type=counter is available when value(group) >= unlock.min.",
+ "tierStandingMarker": {
+  "0.1": 1,
+  "0.25": 2,
+  "0.75": 3,
+  "1.5": 4
+ },
+ "loyaltyLevels": {
+  "5c0647fdd443bc2504c2d371": {
+   "trader": "Jaeger",
+   "levels": [
+    {
+     "level": 1,
+     "playerLevel": 1,
+     "reputation": 0
+    },
+    {
+     "level": 2,
+     "playerLevel": 9,
+     "reputation": 0.6
+    },
+    {
+     "level": 3,
+     "playerLevel": 17,
+     "reputation": 2.1
+    },
+    {
+     "level": 4,
+     "playerLevel": 33,
+     "reputation": 7.3
+    }
+   ]
+  },
+  "5a7c2eca46aef81a7ca2145d": {
+   "trader": "Mechanic",
+   "levels": [
+    {
+     "level": 1,
+     "playerLevel": 1,
+     "reputation": 0
+    },
+    {
+     "level": 2,
+     "playerLevel": 12,
+     "reputation": 0.6
+    },
+    {
+     "level": 3,
+     "playerLevel": 26,
+     "reputation": 2.3
+    },
+    {
+     "level": 4,
+     "playerLevel": 40,
+     "reputation": 7.6
+    }
+   ]
+  },
+  "5935c25fb3acc3127c3d8cd9": {
+   "trader": "Peacekeeper",
+   "levels": [
+    {
+     "level": 1,
+     "playerLevel": 1,
+     "reputation": 0
+    },
+    {
+     "level": 2,
+     "playerLevel": 8,
+     "reputation": 0.5
+    },
+    {
+     "level": 3,
+     "playerLevel": 19,
+     "reputation": 2.2
+    },
+    {
+     "level": 4,
+     "playerLevel": 37,
+     "reputation": 6
+    }
+   ]
+  },
+  "54cb50c76803fa8b248b4571": {
+   "trader": "Prapor",
+   "levels": [
+    {
+     "level": 1,
+     "playerLevel": 0,
+     "reputation": 0
+    },
+    {
+     "level": 2,
+     "playerLevel": 6,
+     "reputation": 0.7
+    },
+    {
+     "level": 3,
+     "playerLevel": 21,
+     "reputation": 2.7
+    },
+    {
+     "level": 4,
+     "playerLevel": 36,
+     "reputation": 7.9
+    }
+   ]
+  },
+  "5ac3b934156ae10c4430e83c": {
+   "trader": "Ragman",
+   "levels": [
+    {
+     "level": 1,
+     "playerLevel": 1,
+     "reputation": 0
+    },
+    {
+     "level": 2,
+     "playerLevel": 12,
+     "reputation": 0.5
+    },
+    {
+     "level": 3,
+     "playerLevel": 27,
+     "reputation": 2
+    },
+    {
+     "level": 4,
+     "playerLevel": 42,
+     "reputation": 6.5
+    }
+   ]
+  },
+  "58330581ace78e27b8b10cee": {
+   "trader": "Skier",
+   "levels": [
+    {
+     "level": 1,
+     "playerLevel": 1,
+     "reputation": 0
+    },
+    {
+     "level": 2,
+     "playerLevel": 7,
+     "reputation": 0.6
+    },
+    {
+     "level": 3,
+     "playerLevel": 22,
+     "reputation": 2.1
+    },
+    {
+     "level": 4,
+     "playerLevel": 38,
+     "reputation": 5.8
+    }
+   ]
+  },
+  "54cb57776803fa99248b456e": {
+   "trader": "Therapist",
+   "levels": [
+    {
+     "level": 1,
+     "playerLevel": 0,
+     "reputation": 0
+    },
+    {
+     "level": 2,
+     "playerLevel": 5,
+     "reputation": 0.6
+    },
+    {
+     "level": 3,
+     "playerLevel": 18,
+     "reputation": 2.1
+    },
+    {
+     "level": 4,
+     "playerLevel": 37,
+     "reputation": 5.8
+    }
+   ]
+  }
+ },
+ "introVariables": [
+  {
+   "variableId": "68c81cf8d242d0b184959530",
+   "traderId": "54cb57776803fa99248b456e",
+   "trader": "Therapist",
+   "setBy": "Tour story task 6895bed8e7dac53c7c08797d objective \"Talk to Therapist\" (trader intro dialogue, saveScope Profile)",
+   "gatedTaskIds": [
+    "657315ddab5a49b71f098853",
+    "59689fbd86f7740d137ebfc4",
+    "596a0e1686f7741ddf17dbee"
+   ],
+   "gatedTaskNames": [
+    "First in Line",
+    "Operation Aquarius",
+    "Supply Plans"
+   ]
+  },
+  {
+   "variableId": "68c15c231582be58295e06b6",
+   "traderId": "5ac3b934156ae10c4430e83c",
+   "trader": "Ragman",
+   "setBy": "Tour story task 6895bf0872e2151e9e0a59fa objective \"Talk to Ragman\" (trader intro dialogue, saveScope Profile)",
+   "gatedTaskIds": [
+    "5ae448bf86f7744d733e55ee",
+    "5ae449c386f7744bde357697",
+    "5ae448f286f77448d73c0131"
+   ],
+   "gatedTaskNames": [
+    "Make ULTRA Great Again",
+    "Pathfinder",
+    "Fuel Crisis"
+   ]
+  },
+  {
+   "variableId": "68c2bf4f8c7b5c191d5ec0df",
+   "traderId": "58330581ace78e27b8b10cee",
+   "trader": "Skier",
+   "setBy": "Tour story task 6895bf1ecfb48128340d5a89 objective \"Talk to Skier\" (trader intro dialogue, saveScope Profile)",
+   "gatedTaskIds": [
+    "596b36c586f77450d6045ad2",
+    "657315e270bb0b8dba00cc48"
+   ],
+   "gatedTaskNames": [
+    "Supplier",
+    "Burning Rubber"
+   ]
+  },
+  {
+   "variableId": "68c41b22c5e8a18a3692d395",
+   "traderId": "5a7c2eca46aef81a7ca2145d",
+   "trader": "Mechanic",
+   "setBy": "Tour story task 6895bf42a3de8e8f1d0426a8 objective \"Talk to Mechanic\" (trader intro dialogue, saveScope Profile)",
+   "gatedTaskIds": [
+    "675c1570526ff496850895d9",
+    "657315e4a6af4ab4b50f3459",
+    "5d2495a886f77425cd51e403",
+    "5ac23c6186f7741247042bad"
+   ],
+   "gatedTaskNames": [
+    "Passion for Ergonomics",
+    "Saving the Mole",
+    "Introduction",
+    "Gunsmith - MP-133"
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "variableId": "6a43a01ccc83aceedd35f09c",
+   "traderId": "5c0647fdd443bc2504c2d371",
+   "trader": "Jaeger",
+   "loyaltyLevel": 1,
+   "memberFlags": 10,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5d24b81486f77439c92d6ba8",
+     "name": "Acquaintance",
+     "faction": "Any",
+     "unlock": {
+      "type": "none"
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "600302d73b897b11364cd161",
+     "name": "All This Filth...",
+     "faction": "Any",
+     "unlock": {
+      "type": "none"
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e46e86f77409453bce7c",
+     "name": "First Aid",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "66b38c7bf85b8bf7250f9cb6",
+     "name": "Rough Tarkov",
+     "faction": "Any",
+     "unlock": {
+      "type": "none"
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e729cf5698ee7b05057439",
+     "name": "Swift",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e44386f77409453bce7b",
+     "name": "The Huntsman Path - Angry Watchman",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e43786f7740a212217fa",
+     "name": "The Huntsman Path - Justice",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e2c386f77443e7549029",
+     "name": "The Huntsman Path - Trophy",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e2ee86f77443e35162ea",
+     "name": "The Huntsman Path - Woods Keeper",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "675c1cf4a757ddd00404f0a3",
+     "name": "Work Smarter",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": [
+    {
+     "id": "5bc4776586f774512d07cf05",
+     "name": "The Tarkov Shooter - Part 1",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "note": "chain entry (Essential Tasks); completion sets no flag of this group"
+    }
+   ]
+  },
+  {
+   "variableId": "6a43a095bfef0cd74c298963",
+   "traderId": "5c0647fdd443bc2504c2d371",
+   "trader": "Jaeger",
+   "loyaltyLevel": 2,
+   "memberFlags": 11,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "639136e84ed9512be67647db",
+     "name": "Cease Fire!",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "669fa3979b0ce3feae01a130",
+     "name": "Claustrophobia",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e48186f77443e625e386",
+     "name": "Courtesy Visit",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "669fa3a08b4a64b332041ff7",
+     "name": "Dragnet",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "66b38e144f2ab7cc530c3fe7",
+     "name": "Every Hunter Knows This",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e4ad86f77443e625e387",
+     "name": "Nostalgia",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "63a88045abf76d719f42d715",
+     "name": "The Delicious Sausage",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "64e7b971f9d6fa49d6769b44",
+     "name": "The Huntsman Path - Big Game",
+     "faction": "Any",
+     "unlock": {
+      "type": "hidden",
+      "recommended": {
+       "type": "loyalty",
+       "min": 2
+      },
+      "sptGuess": {
+       "target": "6a43a01ccc83aceedd35f09c",
+       "value": 4
+      }
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6578eb36e5020875d64645cd",
+     "name": "The Huntsman Path - Crooked Cop",
+     "faction": "Any",
+     "unlock": {
+      "type": "hidden",
+      "recommended": {
+       "type": "loyalty",
+       "min": 2
+      },
+      "sptGuess": {
+       "quests": [
+        "5d25e2d886f77442734d335e"
+       ]
+      }
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60c0c018f7afb4354815096a",
+     "name": "The Huntsman Path - Factory Chief",
+     "faction": "Any",
+     "unlock": {
+      "type": "hidden",
+      "recommended": {
+       "type": "loyalty",
+       "min": 2
+      },
+      "sptGuess": {
+       "quests": [
+        "5d25e2cc86f77443e47ae019",
+        "5ac3477486f7741d651d6885"
+       ]
+      }
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e2e286f77444001e2e48",
+     "name": "The Huntsman Path - Sellout",
+     "faction": "Any",
+     "unlock": {
+      "type": "hidden",
+      "recommended": {
+       "type": "loyalty",
+       "min": 2
+      },
+      "sptGuess": {
+       "quests": [
+        "5d25e2cc86f77443e47ae019",
+        "5ae449c386f7744bde357697"
+       ]
+      }
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a43a13633c97d216dfc85de",
+   "traderId": "5c0647fdd443bc2504c2d371",
+   "trader": "Jaeger",
+   "loyaltyLevel": 3,
+   "memberFlags": 12,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5d25e4b786f77408251c4bfc",
+     "name": "Fishing Place",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "66ab9da7eb102b9bcd08591c",
+     "name": "Forester's Duty",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "608a768d82e40b3c727fd17d",
+     "name": "Pest Control",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e4d586f77443e625e388",
+     "name": "Reserve",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "61904daa7d0d857927447b9c",
+     "name": "The Hermit",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639136df4b15ca31f76bc31f",
+     "name": "The Huntsman Path - Administrator",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6a45208043b8d7604d00b8d5",
+     "name": "The Huntsman Path - Administrator",
+     "faction": "USEC",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e44f86f77443e625e385",
+     "name": "The Huntsman Path - Eraser",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e2cc86f77443e47ae019",
+     "name": "The Huntsman Path - Forest Cleaning",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d25e45e86f77408251c4bfa",
+     "name": "The Huntsman Path - Liberation",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6179ad0a6e9dd54ac275e3f2",
+     "name": "The Huntsman Path - Outcasts",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "5d25e2b486f77409de05bba0",
+     "name": "The Huntsman Path - Secured Perimeter",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a43a16dde81644a7951f31b",
+   "traderId": "5c0647fdd443bc2504c2d371",
+   "trader": "Jaeger",
+   "loyaltyLevel": 4,
+   "memberFlags": 6,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5d25e4ca86f77409dd5cdf2c",
+     "name": "Hunting Trip",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "63a9b36cc31b00242d28a99f",
+     "name": "Slaughterhouse",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "626bdcc3a371ee3a7a3514c5",
+     "name": "Stray Dogs",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "6a4532e48e82d8ffea0c3eae",
+     "name": "The Huntsman Path - Control",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71e8ed54b755a3b53eb67",
+     "name": "The Huntsman Path - Relentless",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5edab4b1218d181e29451435",
+     "name": "The Huntsman Path - Sadist",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a3171c927ca9591bf4db1c4",
+   "traderId": "5a7c2eca46aef81a7ca2145d",
+   "trader": "Mechanic",
+   "loyaltyLevel": 1,
+   "memberFlags": 9,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5ac3475486f7741d6224abd3",
+     "name": "Bad Habit",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac3462b86f7741d6118b983",
+     "name": "Farming",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac2426c86f774138762edfe",
+     "name": "Gunsmith - AKS-74U",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac2428686f77412450b42bf",
+     "name": "Gunsmith - HK MP5",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac23c6186f7741247042bad",
+     "name": "Gunsmith - MP-133",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c41b22c5e8a18a3692d395",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "675c1570526ff496850895d9",
+     "name": "Passion for Ergonomics",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c41b22c5e8a18a3692d395",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "657315e4a6af4ab4b50f3459",
+     "name": "Saving the Mole",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c41b22c5e8a18a3692d395",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6578ec473dbd035d04531a8d",
+     "name": "Steady Signal",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71d6d7fcf9c556f325055",
+     "name": "The Courier",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a3c0fefbea2d2ad581c090b",
+   "traderId": "5a7c2eca46aef81a7ca2145d",
+   "trader": "Mechanic",
+   "loyaltyLevel": 2,
+   "memberFlags": 12,
+   "rule": "count of completed sources (twins once)",
+   "twins": [
+    [
+     "65733403eefc2c312a759ddb",
+     "6573382e557ff128bf3da536"
+    ]
+   ],
+   "sources": [
+    {
+     "id": "669fa39b91b0a8c9680fc467",
+     "name": "Black Swan",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5f04886a3937dc337a6b8238",
+     "name": "Chemistry Closet",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "65733403eefc2c312a759ddb",
+     "name": "Corporate Perks",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae3267986f7742a413592fe",
+     "name": "Gunsmith - Model 870",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639872f9decada40426d3447",
+     "name": "Gunsmith - OP-SKS",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac3467986f7741d6224abc2",
+     "name": "Ill-Wisher",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac345dc86f774288030817f",
+     "name": "Playing the Market",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac346a886f7744e1b083d67",
+     "name": "Rat Hunting",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac3477486f7741d651d6885",
+     "name": "Scout",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "66aa74571e5e199ecd094f18",
+     "name": "Secrets of Polikhim",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639135e8c115f907b14700aa",
+     "name": "Surveillance",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6573382e557ff128bf3da536",
+     "name": "The Secret to Productivity",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639136fa9444fb141f4e6eee",
+     "name": "Watching You",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": [
+    {
+     "id": "67a09636b8725511260bc421",
+     "name": "Shady Contractor",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "note": "chain entry (Essential Tasks); completion sets no flag of this group"
+    }
+   ]
+  },
+  {
+   "variableId": "6a3cf95c6b35530c4a4f532e",
+   "traderId": "5a7c2eca46aef81a7ca2145d",
+   "trader": "Mechanic",
+   "loyaltyLevel": 3,
+   "memberFlags": 12,
+   "rule": "count of completed sources (twins once)",
+   "twins": [
+    [
+     "5ae327c886f7745c7b3f2f3f",
+     "639872fc93ae507d5858c3a6"
+    ],
+    [
+     "5ae3270f86f77445ba41d4dd",
+     "5ac244eb86f7741356335af1"
+    ],
+    [
+     "5ae3277186f7745973054106",
+     "639872fa9b4fb827b200d8e5"
+    ],
+    [
+     "5ae3280386f7742a41359364",
+     "5b47799d86f7746c5d6a5fd8"
+    ]
+   ],
+   "sources": [
+    {
+     "id": "6089736efa70fc097863b8f6",
+     "name": "Back Door",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6179b3bdc7560e13d23eeb8d",
+     "name": "Corporate Secrets",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6179b3a12153c15e937d52bc",
+     "name": "Energy Crisis",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c1128e386f7746565181106",
+     "name": "Fertilizers",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae327c886f7745c7b3f2f3f",
+     "name": "Gunsmith - AK-105",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae3270f86f77445ba41d4dd",
+     "name": "Gunsmith - AKM",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae3277186f7745973054106",
+     "name": "Gunsmith - AKS-74N",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae3280386f7742a41359364",
+     "name": "Gunsmith - AS VAL",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac244eb86f7741356335af1",
+     "name": "Gunsmith - M4A1",
+     "faction": "USEC",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5b47799d86f7746c5d6a5fd8",
+     "name": "Gunsmith - MPX",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639872fa9b4fb827b200d8e5",
+     "name": "Gunsmith - P226R",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639872fc93ae507d5858c3a6",
+     "name": "Gunsmith - Vector 9x19",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c139eb686f7747878361a6f",
+     "name": "Import",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ac3464c86f7741d651d6877",
+     "name": "Semiconductor Crisis",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6089732b59b92115597ad789",
+     "name": "Surplus Goods",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "64ee9df4496db64f9b7a4432",
+     "name": "The Door",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a3d1c0990e9ffe15463e961",
+   "traderId": "5a7c2eca46aef81a7ca2145d",
+   "trader": "Mechanic",
+   "loyaltyLevel": 4,
+   "memberFlags": 6,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "60e71d23c1bfa3050473b8e6",
+     "name": "Calibration",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "68db9c7557bc51a8c804c14b",
+     "name": "Goals and Means",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c0be13186f7746f016734aa",
+     "name": "Psycho Sniper",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6942b44f891369fc790e385a",
+     "name": "Setting Priorities",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "5c0bde0986f77479cf22c2f8",
+     "name": "Shooter Born in Heaven",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "notObserved"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a5ba40fe5c4eaef5610f232",
+   "traderId": "5935c25fb3acc3127c3d8cd9",
+   "trader": "Peacekeeper",
+   "loyaltyLevel": 1,
+   "memberFlags": 9,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5a27bafb86f7741c73584017",
+     "name": "Chemical Experiments",
+     "faction": "Any",
+     "unlock": {
+      "type": "none"
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a0327ba86f77456b9154236",
+     "name": "Fuel Shortage",
+     "faction": "Any",
+     "unlock": {
+      "type": "none"
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6a5c1578f2689567c30eb0f3",
+     "name": "Hiking",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a0449d586f77474e66227b7",
+     "name": "Master Key",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5b4794cb86f774598100d5d4",
+     "name": "Metal Birds",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "66aa58245ab22944110db6e9",
+     "name": "New Paths",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "669fa38fad7f1eac2607ed46",
+     "name": "One Less Loose End",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "675c1d6d59b0575973008fc7",
+     "name": "Seizing the Initiative",
+     "faction": "Any",
+     "unlock": {
+      "type": "none"
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a27b7a786f774579c3eb376",
+     "name": "Tigr Safari",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a5ba450a7851e16ce0bde44",
+   "traderId": "5935c25fb3acc3127c3d8cd9",
+   "trader": "Peacekeeper",
+   "loyaltyLevel": 2,
+   "memberFlags": 12,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5a27b80086f774429a5d7e20",
+     "name": "Eagle Eye",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a27b75b86f7742e97191958",
+     "name": "Fishing Gear",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a27b87686f77460de0252a8",
+     "name": "Humanitarian Supplies",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a03296886f774569778596a",
+     "name": "I Need More Power",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a03153686f77442d90e2171",
+     "name": "One-Way Ticket",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639135f286e646067c176a87",
+     "name": "Revision - Streets of Tarkov",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639282134ed9512be67647ed",
+     "name": "Road Closed",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a27b7d686f77460d847e6a6",
+     "name": "Scrap Metal",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6a5ccda873f06065630d61b0",
+     "name": "Secret Message",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a27b9de86f77464e5044585",
+     "name": "The Cult",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a27ba1c86f77461ea5a3c56",
+     "name": "Weapons Circulation",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639135534b15ca31f76bc317",
+     "name": "Your Car Needs a Service",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a5ba48b8cfd0bddb3d4d2e1",
+   "traderId": "5935c25fb3acc3127c3d8cd9",
+   "trader": "Peacekeeper",
+   "loyaltyLevel": 3,
+   "memberFlags": 8,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5a27bb1e86f7741f27621b7e",
+     "name": "Cargo X",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6a5cd2178fd7c2b201032f3f",
+     "name": "Demonstration Model",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "61958c366726521dd96828ec",
+     "name": "Gifts from Tarkov",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6179aff8f57fb279792c60a1",
+     "name": "Overpopulation",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6179b4d1bca27a099552e04e",
+     "name": "Revision - Lighthouse",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6086c852c945025d41566124",
+     "name": "Revision - Reserve",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71c9ad54b755a3b53eb66",
+     "name": "The Cleaner",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a27bb3d86f77411ea361a21",
+     "name": "Tracker",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "inferred"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a5ba4c57cbb93b629051591",
+   "traderId": "5935c25fb3acc3127c3d8cd9",
+   "trader": "Peacekeeper",
+   "loyaltyLevel": 4,
+   "memberFlags": 9,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "6179b5eabca27a099552e052",
+     "name": "Counteraction",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c0bd01e86f7747cdd799e56",
+     "name": "Insomnia",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c0d4c12d09282029f539173",
+     "name": "Peacekeeping Mission",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5edac020218d181e29451446",
+     "name": "Samples",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "60e71ce009d7c801eb0c0ec6",
+     "name": "Special Equipment",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5edac63b930f5454f51e128b",
+     "name": "TerraGroup Employee",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c0d4e61d09282029f53920e",
+     "name": "The Guide",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71ccb5688f6424c7bfec4",
+     "name": "Trophies",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "63a9b229813bba58a50c9ee5",
+     "name": "Worst Job in the World",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a20540cf1b67a977cc5a088",
+   "traderId": "54cb50c76803fa8b248b4571",
+   "trader": "Prapor",
+   "loyaltyLevel": 1,
+   "memberFlags": 11,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5936da9e86f7742d65037edf",
+     "name": "Background Check",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5967530a86f77462ba22226b",
+     "name": "Bad Rep Evidence",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "675c3507a06634b5110e3c18",
+     "name": "Belka and Strelka",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5936d90786f7742b1420ba5b",
+     "name": "Debut",
+     "faction": "Any",
+     "unlock": {
+      "type": "none"
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "657315e1dccd301f1301416a",
+     "name": "Luxurious Life",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "59c124d686f774189b3c843f",
+     "name": "Oil Run",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "63a5cf262964a7488f5243ce",
+     "name": "Power of Persuasion",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5fd9fad9c1ce6b1a3b486d00",
+     "name": "Search Mission",
+     "faction": "Any",
+     "unlock": {
+      "type": "none"
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5967725e86f774601a446662",
+     "name": "Shaking Up the Teller",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "657315df034d76585f032e01",
+     "name": "Shooting Cans",
+     "faction": "Any",
+     "unlock": {
+      "type": "none"
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "59674cd986f7744ab26e32f2",
+     "name": "Shootout Picnic",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a2688488bba18e0b0187a04",
+   "traderId": "54cb50c76803fa8b248b4571",
+   "trader": "Prapor",
+   "loyaltyLevel": 2,
+   "memberFlags": 18,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5eda19f0edce541157209cee",
+     "name": "Anesthesia",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71b9bbd90872cb85440f3",
+     "name": "Capturing Outposts",
+     "faction": "Any",
+     "unlock": {
+      "type": "hidden",
+      "recommended": {
+       "type": "loyalty",
+       "min": 2
+      },
+      "sptGuess": {
+       "trader": "54cb50c76803fa8b248b4571",
+       "standing": 1.0
+      }
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "59674eb386f774539f14813a",
+     "name": "Delivery From the Past",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "64e7b9bffd30422ed03dad38",
+     "name": "District Patrol",
+     "faction": "Any",
+     "unlock": {
+      "type": "hidden",
+      "recommended": {
+       "type": "loyalty",
+       "min": 2
+      },
+      "sptGuess": {
+       "trader": "54cb50c76803fa8b248b4571",
+       "standing": 1.0
+      }
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "64f5aac4b63b74469b6c14c2",
+     "name": "Glory to CPSU",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639136d68ba6894d155e77cf",
+     "name": "Green Corridor",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "hidden",
+      "recommended": {
+       "type": "loyalty",
+       "min": 2
+      },
+      "sptGuess": {
+       "trader": "54cb50c76803fa8b248b4571",
+       "loyalty": 2
+      }
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "5c0d190cd09282029f5390d8",
+     "name": "Grenadier",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "59675d6c86f7740a842fc482",
+     "name": "Ice Cream Cones",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "64f5deac39e45b527a7c4232",
+     "name": "Job for a Patriot",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639136f086e646067c176a8b",
+     "name": "Kings of the Rooftops",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 5
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "669fa399033a3ce9870338a8",
+     "name": "Possessor",
+     "faction": "Any",
+     "unlock": {
+      "type": "hidden",
+      "recommended": {
+       "type": "loyalty",
+       "min": 2
+      },
+      "sptGuess": {
+       "trader": "54cb50c76803fa8b248b4571",
+       "standing": 1.0
+      }
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "59675ea386f77414b32bded2",
+     "name": "Postman Pat - Part 1",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6573397ef3f8344c4575cd87",
+     "name": "Properties All Around",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6391359b9444fb141f4e6ee6",
+     "name": "You've Got Mail",
+     "faction": "Any",
+     "unlock": {
+      "type": "hidden",
+      "recommended": {
+       "type": "loyalty",
+       "min": 2
+      },
+      "sptGuess": {
+       "target": "6a26888b44afbba17490c390",
+       "value": 1
+      }
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a32651a811905ed0cac0973",
+   "traderId": "54cb50c76803fa8b248b4571",
+   "trader": "Prapor",
+   "loyaltyLevel": 3,
+   "memberFlags": 13,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "60896b7bfa70fc097863b8f5",
+     "name": "Documents",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6179ac7511973d018217d0b9",
+     "name": "Easy Job",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "669fa3a40c828825de06d6a1",
+     "name": "Easy-Breezy",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "59ca1a6286f774509a270942",
+     "name": "Ironclad Proof",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60896bca6ee58f38c417d4f2",
+     "name": "No Place for Renegades",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "6179b5b06e9dd54ac275e409",
+     "name": "Our Own Land",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "626bd75c71bd851e971b82a5",
+     "name": "Reconnaissance",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "66ab970848ddbe9d4a0c49a8",
+     "name": "Special Comms",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ede55112c95834b583f052a",
+     "name": "The Bunker",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c0bd94186f7747a727f09b2",
+     "name": "The Tarkov Import",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "inferred"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a326525789ae12ecb0b2807",
+   "traderId": "54cb50c76803fa8b248b4571",
+   "trader": "Prapor",
+   "loyaltyLevel": 4,
+   "memberFlags": 8,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "63a9ae24009ffc6a551631a5",
+     "name": "Best Job in the World",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71b62a0beca400d69efc4",
+     "name": "Escort",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "notObserved"
+    },
+    {
+     "id": "6574e0dedc0d635f633a5805",
+     "name": "Getting Some Air",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71bb4e456d449cd47ca75",
+     "name": "Intimidator",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5d4bec3486f7743cac246665",
+     "name": "Regulated Materials",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "68ee1c18b4e5bc9a68018cd7",
+     "name": "Special Order",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "notObserved"
+    },
+    {
+     "id": "67b45467814ab0ffa000c7e7",
+     "name": "The Art of Explosion",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "675c1ff1a757ddd00404f0aa",
+     "name": "Unique Experience",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a4b339f18db62e03b4f7ded",
+   "traderId": "5ac3b934156ae10c4430e83c",
+   "trader": "Ragman",
+   "loyaltyLevel": 1,
+   "memberFlags": 8,
+   "rule": "count of completed sources (twins once)",
+   "twins": [
+    [
+     "5ae4493d86f7744b8e15aa8f",
+     "5ae4493486f7744efa289417"
+    ]
+   ],
+   "sources": [
+    {
+     "id": "5ae4493d86f7744b8e15aa8f",
+     "name": "A Big Loss",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae4490786f7744ca822adcc",
+     "name": "Dressed to Kill",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae448f286f77448d73c0131",
+     "name": "Fuel Crisis",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c15c231582be58295e06b6",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae449b386f77446d8741719",
+     "name": "Gratitude",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae4493486f7744efa289417",
+     "name": "Inventory Files",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71dc0a94be721b065bbfc",
+     "name": "Long Line",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae448bf86f7744d733e55ee",
+     "name": "Make ULTRA Great Again",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c15c231582be58295e06b6",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae449c386f7744bde357697",
+     "name": "Pathfinder",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c15c231582be58295e06b6",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c10f94386f774227172c572",
+     "name": "Small Things, Big Help",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a4b4e6a30dac4b01af220aa",
+   "traderId": "5ac3b934156ae10c4430e83c",
+   "trader": "Ragman",
+   "loyaltyLevel": 2,
+   "memberFlags": 10,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "638fcd23dc65553116701d33",
+     "name": "Audit",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639135a7e705511c8a4a1b78",
+     "name": "Ballet Lover",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae448e586f7744dcf0c2a67",
+     "name": "Big Sale",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "675c085d59b0575973005f52",
+     "name": "Break the Deal",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "65734c186dc1e402c80dc19e",
+     "name": "Dandies",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5b478b1886f7744d1b23c57d",
+     "name": "Hot Delivery",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5b478d0f86f7744d190d91b5",
+     "name": "Minibus",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "65802b627b44fa5e14638899",
+     "name": "Nothing Fishy About This",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae449d986f774453a54a7e1",
+     "name": "Supervisor",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5ae4498786f7744bde357695",
+     "name": "The Key to Success",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": [
+    {
+     "id": "5ae4495086f77443c122bc40",
+     "name": "Sew it Good - Part 1",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "note": "chain entry (Essential Tasks); completion sets no flag of this group"
+    }
+   ]
+  },
+  {
+   "variableId": "6a4b9c9a60b56d421cceea18",
+   "traderId": "5ac3b934156ae10c4430e83c",
+   "trader": "Ragman",
+   "loyaltyLevel": 3,
+   "memberFlags": 10,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "608974d01a66564e74191fc0",
+     "name": "A Fuel Matter",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6a7af2e48fddc3979d0510b8",
+     "name": "Akimbo",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "notObserved"
+    },
+    {
+     "id": "639135bbc115f907b14700a6",
+     "name": "Audiophile",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71dc67fcf9c556f325056",
+     "name": "Booze",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "66aa61663aa37705c5024277",
+     "name": "Know Your Place!",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5b47891f86f7744d1b23c571",
+     "name": "Living High is Not a Crime",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "608974af4b05530f55550c21",
+     "name": "Reserve Expert",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c112d7e86f7740d6f647486",
+     "name": "Scavenger",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6a7b0df31ea00c9a980e2742",
+     "name": "Sisyphus",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a59f3ba06c8949abad30871",
+   "traderId": "58330581ace78e27b8b10cee",
+   "trader": "Skier",
+   "loyaltyLevel": 1,
+   "memberFlags": 9,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "657315e270bb0b8dba00cc48",
+     "name": "Burning Rubber",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c2bf4f8c7b5c191d5ec0df",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5979eee086f774311955e614",
+     "name": "Golden Swag",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5b47926a86f7747ccc057c15",
+     "name": "Informed Means Armed",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "658027799634223183395339",
+     "name": "No Swiping",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5979f8bb86f7743ec214c7a6",
+     "name": "Polikhim Hobo",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "675c3582f6ddc329a90f9c6d",
+     "name": "Private Club",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "596b36c586f77450d6045ad2",
+     "name": "Supplier",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c2bf4f8c7b5c191d5ec0df",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "596b43fb86f77457ca186186",
+     "name": "The Extortionist",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5979ed3886f77431307dc512",
+     "name": "What’s on the Flash Drive?",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": [
+    {
+     "id": "5979f9ba86f7740f6c3fe9f2",
+     "name": "Chemical - Part 1",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "note": "chain entry (Essential Tasks); completion sets no flag of this group"
+    }
+   ]
+  },
+  {
+   "variableId": "6a5a111de1f417ac80a163e5",
+   "traderId": "58330581ace78e27b8b10cee",
+   "trader": "Skier",
+   "loyaltyLevel": 2,
+   "memberFlags": 12,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "64f5e20652fc01298e2c61e3",
+     "name": "Beyond the Red Meat",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5b4795fb86f7745876267770",
+     "name": "Chumming",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639dbaf17c898a131e1cffff",
+     "name": "Debtor",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "669fa395c4c5c04798002497",
+     "name": "Exit Here",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5a27c99a86f7747d2c6bdd8e",
+     "name": "Friend From the West",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639135c3744e452011470807",
+     "name": "House Arrest",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c1234c286f77406fa13baeb",
+     "name": "Setup",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "596b455186f77457cb50eccb",
+     "name": "Stirrup",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5b478ff486f7744d184ecbbf",
+     "name": "Supplements",
+     "faction": "USEC",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "64f6aafd67e11a7c6206e0d0",
+     "name": "The Secret Recipe",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "669fa39c64ea11e84c0642a6",
+     "name": "The Walls Have Eyes",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5b478eca86f7744642012254",
+     "name": "Vitamins",
+     "faction": "BEAR",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a5a115181116e807b55f258",
+   "traderId": "58330581ace78e27b8b10cee",
+   "trader": "Skier",
+   "loyaltyLevel": 3,
+   "memberFlags": 9,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "60896888e4a85c72ef3fa300",
+     "name": "Classified Technologies",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c0d0f1886f77457b8210226",
+     "name": "From Hand to Hand",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6193850f60b34236ee0483de",
+     "name": "Long Road",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6179b4f16e9dd54ac275e407",
+     "name": "Missing Cargo",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6572e876dc0d635f633a5714",
+     "name": "Pyramid Scheme",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5edabd13218d181e29451442",
+     "name": "Rigged Game",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6089743983426423753cd58a",
+     "name": "Safe Corridor",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6a7aef2360157cb5e3029a5f",
+     "name": "Stimulating Demand",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "626bd75d5bef5d7d590bd415",
+     "name": "Top Secret",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a5a1192efde11cc7105b18f",
+   "traderId": "58330581ace78e27b8b10cee",
+   "trader": "Skier",
+   "loyaltyLevel": 4,
+   "memberFlags": 5,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "5c0bbaa886f7746941031d82",
+     "name": "Bullshit",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "6764174c86addd02bc033d68",
+     "name": "Connections Up North",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71c11d54b755a3b53eb65",
+     "name": "Night Sweep",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "5c0bc91486f7746ab41857a2",
+     "name": "Silent Caliber",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a4e4ab3ecd1145894d00990",
+   "traderId": "54cb57776803fa99248b456e",
+   "trader": "Therapist",
+   "loyaltyLevel": 1,
+   "memberFlags": 9,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "675c03d1f7da9792a405549a",
+     "name": "Abandoned Cargo",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5968eb3186f7741dde183a4d",
+     "name": "Blood in the Water",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6a5424ae135497b9df0c68be",
+     "name": "Fall Ailment",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "657315ddab5a49b71f098853",
+     "name": "First in Line",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c81cf8d242d0b184959530",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "59689fbd86f7740d137ebfc4",
+     "name": "Operation Aquarius",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c81cf8d242d0b184959530",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5969f9e986f7741dde183a50",
+     "name": "Pharmacist",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "675c047fa46173572a0bd878",
+     "name": "Shipment Tracking",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5967733e86f774602332fc84",
+     "name": "Shortage",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "596a0e1686f7741ddf17dbee",
+     "name": "Supply Plans",
+     "faction": "Any",
+     "unlock": {
+      "type": "introDialogue",
+      "variableId": "68c81cf8d242d0b184959530",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a4e4aed3ded7a18126603f6",
+   "traderId": "54cb57776803fa99248b456e",
+   "trader": "Therapist",
+   "loyaltyLevel": 2,
+   "memberFlags": 9,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "59c9392986f7742f6923add2",
+     "name": "Aid Stations",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "669fa39ee749756c920d02c8",
+     "name": "All Is Revealed",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "596a1e6c86f7741ddc2d3206",
+     "name": "General Wares",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "64f3176921045e77405d63b5",
+     "name": "Paramedic",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "64f731ab83cfca080a361e42",
+     "name": "Pets Won't Need It",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639135d89444fb141f4e6eea",
+     "name": "Population Census",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "59689ee586f7740d1570bbd5",
+     "name": "Sanitary Standards",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 2
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "67a09673972c11a3f507731d",
+     "name": "The Tarkov Butcher",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "639135e0fa894f0a866afde6",
+     "name": "Urban Medicine",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a4e4b28629dc64c4001967c",
+   "traderId": "54cb57776803fa99248b456e",
+   "trader": "Therapist",
+   "loyaltyLevel": 3,
+   "memberFlags": 9,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "596a218586f77420d232807c",
+     "name": "Car Repair",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5969f90786f77420d2328015",
+     "name": "Charity",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5edab736cc183c769d778bc2",
+     "name": "Colleagues",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "inferred"
+    },
+    {
+     "id": "60896e28e4a85c72ef3fa301",
+     "name": "Disease History",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "626bd75b05f287031503c7f6",
+     "name": "Drug Trafficking",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6a7ae35b2dbf91eb050af95a",
+     "name": "Invasive Therapy",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6179afd0bca27a099552e040",
+     "name": "Lost Contact",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 3
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "6179ad56c760af5ad2053587",
+     "name": "Seaside Vacation",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5edaba7c0c502106f869bc02",
+     "name": "Tarkov-Style Diplomacy",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    }
+   ],
+   "gatedNonSources": []
+  },
+  {
+   "variableId": "6a56925b1c30ba5a77c7c518",
+   "traderId": "54cb57776803fa99248b456e",
+   "trader": "Therapist",
+   "loyaltyLevel": 4,
+   "memberFlags": 3,
+   "rule": "count of completed sources (twins once)",
+   "twins": [],
+   "sources": [
+    {
+     "id": "66aba85403e0ee3101042877",
+     "name": "Beneath The Streets",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "60e71c48c1bfa3050473b8e5",
+     "name": "Crisis",
+     "faction": "Any",
+     "unlock": {
+      "type": "counter",
+      "min": 1
+     },
+     "flagEvidence": "observed"
+    },
+    {
+     "id": "5c0d1c4cd0928202a02a6f5c",
+     "name": "Decontamination Service",
+     "faction": "Any",
+     "unlock": {
+      "type": "loyalty",
+      "min": 4
+     },
+     "flagEvidence": "inferred"
+    }
+   ],
+   "gatedNonSources": []
+  }
+ ],
+ "emptyStartOutsidePools": [
+  {
+   "id": "6744ab1def61d56e020b5c56",
+   "name": "Protect the Sky",
+   "traderId": "656f0f98d80a697f855d34b1",
+   "trader": "BTR Driver",
+   "uiGroup": "Essential Tasks (chain)",
+   "clientStartBlock": "empty",
+   "sptGuess": {
+    "quests": [
+     "6744a728352b4da8e003eda9"
+    ]
+   },
+   "recommended": {
+    "type": "taskComplete",
+    "id": "6744a728352b4da8e003eda9"
+   },
+   "basis": "tasks.json taskRequirements (Battery Change); SPT and wiki agree"
+  },
+  {
+   "id": "63966faeea19ac7ed845db2c",
+   "name": "Information Source",
+   "traderId": "638f541a29ffd1183d187f57",
+   "trader": "Lightkeeper",
+   "uiGroup": "other",
+   "clientStartBlock": "empty",
+   "sptGuess": {
+    "anyQuests": [
+     "6a88255e8636c03a2d09ba37",
+     "625d7005a4eb80027c4f2e09"
+    ]
+   },
+   "recommended": {
+    "type": "unknown"
+   },
+   "basis": "wiki \"previous\": To the Light - Getting Acquainted; SPT reconstruction: after To the Light - The Other Side or Knock-Knock; none of these tasks is in tasks.json"
+  },
+  {
+   "id": "67a09761e720611a6a01f288",
+   "name": "Keeper's Word",
+   "traderId": "638f541a29ffd1183d187f57",
+   "trader": "Lightkeeper",
+   "uiGroup": "Essential Tasks (chain)",
+   "clientStartBlock": "empty",
+   "sptGuess": "withheld",
+   "recommended": {
+    "type": "useTasksJsonTaskRequirements"
+   },
+   "basis": "tasks.json lists six prerequisite tasks, same as the wiki; SPT withholds the task"
+  },
+  {
+   "id": "6752f6d83038f7df520c83e8",
+   "name": "A Helping Hand",
+   "traderId": "5a7c2eca46aef81a7ca2145d",
+   "trader": "Mechanic",
+   "uiGroup": "Essential Tasks (chain)",
+   "clientStartBlock": "empty",
+   "sptGuess": {
+    "quests": [
+     "657315e4a6af4ab4b50f3459"
+    ],
+    "level": 20
+   },
+   "recommended": {
+    "type": "all",
+    "of": [
+     {
+      "type": "playerLevel",
+      "min": 20
+     },
+     {
+      "type": "taskComplete",
+      "id": "657315e4a6af4ab4b50f3459"
+     }
+    ]
+   },
+   "basis": "SPT reconstruction = pre-1.1 condition (LOW); wiki: level 20 and Mechanic Loyalty level 2"
+  },
+  {
+   "id": "59c512ad86f7741f0d09de9b",
+   "name": "The Punisher - Part 1",
+   "traderId": "54cb50c76803fa8b248b4571",
+   "trader": "Prapor",
+   "uiGroup": "Essential Tasks (chain)",
+   "clientStartBlock": "empty",
+   "sptGuess": {
+    "trader": "54cb50c76803fa8b248b4571",
+    "standing": 1.0
+   },
+   "recommended": {
+    "type": "reputation",
+    "traderId": "54cb50c76803fa8b248b4571",
+    "min": 1.0
+   },
+   "basis": "SPT reconstruction (LOW); wiki states no requirement"
+  },
+  {
+   "id": "675c15fbf7da9792a4059871",
+   "name": "Provide Viewership",
+   "traderId": "6617beeaa9cfa777ca915b7c",
+   "trader": "Ref",
+   "uiGroup": "other",
+   "clientStartBlock": "empty",
+   "sptGuess": null,
+   "recommended": {
+    "type": "useTasksJsonTaskRequirements"
+   },
+   "basis": "tasks.json: Easy Money - Part 2; wiki: on accepting Easy Money - Part 2"
+  },
+  {
+   "id": "67af4c1d8c9482eca103e477",
+   "name": "Consolation Prize",
+   "traderId": "58330581ace78e27b8b10cee",
+   "trader": "Skier",
+   "uiGroup": "Essential Tasks (chain)",
+   "clientStartBlock": "empty",
+   "sptGuess": {
+    "quests": [
+     "67af4c1cc0e59d55e2010b97"
+    ]
+   },
+   "recommended": {
+    "type": "anyTaskComplete",
+    "ids": [
+     "67af4c1a6c3ebfd8e6034916",
+     "67af4c1991ee75c6d7060a16"
+    ]
+   },
+   "basis": "wiki \"previous\" field (LOW); SPT reconstruction: after A Life Lesson"
+  },
+  {
+   "id": "5a68661a86f774500f48afb0",
+   "name": "Health Care Privacy - Part 1",
+   "traderId": "54cb57776803fa99248b456e",
+   "trader": "Therapist",
+   "uiGroup": "Essential Tasks (chain)",
+   "clientStartBlock": "empty",
+   "sptGuess": {
+    "trader": "54cb57776803fa99248b456e",
+    "standing": 0.5
+   },
+   "recommended": {
+    "type": "reputation",
+    "traderId": "54cb57776803fa99248b456e",
+    "min": 0.5
+   },
+   "basis": "SPT reconstruction (LOW); wiki infobox says Loyalty level 1"
+  }
+ ],
+ "retired": {
+  "note": "Legacy templates still listed by tarkov.dev that the current game no longer hands out (marked historical content on the wiki). Matched by name.",
+  "names": [
+   "An Apple a Day Keeps the Doctor Away",
+   "Athlete",
+   "Cargo X - Part 3",
+   "Charisma Brings Success",
+   "Closer to the People",
+   "Dangerous Road",
+   "Easy Job - Part 2",
+   "Farming - Part 2",
+   "Flint",
+   "Friend From the West - Part 2",
+   "Glory to CPSU - Part 1",
+   "House Arrest - Part 2",
+   "Insider",
+   "Kind of Sabotage",
+   "Loyalty Buyout",
+   "Mall Cop",
+   "Mentor",
+   "No Fuss Needed",
+   "Only Business",
+   "Perfect Mediator",
+   "Pets Won't Need It - Part 2",
+   "Private Clinic",
+   "Rite of Passage",
+   "Sanitary Standards - Part 2",
+   "Shady Business",
+   "Signal - Part 3",
+   "Signal - Part 4",
+   "Spa Tour - Part 2",
+   "Spa Tour - Part 6",
+   "The Blood of War - Part 2",
+   "The Bunker - Part 2",
+   "The Survivalist Path - Combat Medic"
+  ]
+ }
+}

@@ -14,8 +14,17 @@ export const lerp = (a, b, t) => a + (b - a) * t;
 export const dist2 = (ax, ay, bx, by) => (ax - bx) ** 2 + (ay - by) ** 2;
 export const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 
+/** a whole number the way the game writes one: thousands set apart by a space */
 export function fmtNum(n) {
-  return Math.round(n).toLocaleString('en-US');
+  return Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
+}
+/** 2 400 000 -> 2.4M, 42 300 -> 42.3k: the short form the trader screens use */
+export function fmtShort(n) {
+  const v = Math.abs(n);
+  const cut = (x) => String(Math.round(x * 10) / 10);
+  if (v >= 1e6) return `${cut(n / 1e6)}M`;
+  if (v >= 1e3) return `${cut(n / 1e3)}k`;
+  return String(Math.round(n));
 }
 export function fmtMoney(n, cur = 'RUB') {
   const sym = { RUB: '₽', USD: '$', EUR: '€' }[cur] || '';

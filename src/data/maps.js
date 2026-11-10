@@ -24,6 +24,16 @@ export const MAPS = {
     geometry: 'map-factory.json',
     unitsToMetres: 1.15,
     startLevel: 'ground',
+    /** the game's id for Factory by day; the night raid has its own */
+    locationId: '55f2d3fd4bdc2d5f408b4567',
+    /**
+     * How the plan sits on the game's own world, as tools/build_map.py fitted
+     * it: mapX = -worldZ * scale + ox, mapY = -worldX * scale + oy. Task zones
+     * and task-item spots are recorded in world metres; this is how a point
+     * on the plan is asked whether it is inside one. `heights` is a height in
+     * the middle of each storey's band.
+     */
+    world: { scale: 0.97942, ox: 67.79, oy: 75.69, heights: { basement: -3, ground: 0.6, second: 4.4, third: 7.6 } },
 
     /**
      * The storeys, bottom to top. `key` matches a group in the geometry file;

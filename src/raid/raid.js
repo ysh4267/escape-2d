@@ -59,9 +59,15 @@ const SCAV_LOADOUTS = [
 ];
 
 export class Raid {
-  constructor({ mapDef, geo, seed }) {
+  constructor({ mapDef, geo, seed, location = null, hour = 12 }) {
     this.map = mapDef;
     this.geo = geo;
+    /** the game's own id for where this is (a task can ask for one variant of a place and not another) */
+    this.location = location || mapDef.locationId || null;
+    /** time of day the raid was entered at, 0-24 */
+    this.hour = hour;
+    /** every kill the player made, for the tasks and for the list after the raid */
+    this.killLog = [];
     this.rng = makeRng(seed ?? (Math.random() * 0xffffffff) >>> 0);
     this.status = RAID_STATUS.RUNNING;
     this.time = 0;
@@ -1132,7 +1138,7 @@ export class Raid {
       return 'miss';
     }
     sfx.hit(lastLand.struck);
-    if (kills) { this.killScav(target); return 'kill'; }
+    if (kills) { this.killScav(target, { weapon, part: lastLand.part, range: d }); return 'kill'; }
     return 'hit';
   }
 
@@ -1201,13 +1207,39 @@ export class Raid {
     return hits ? 'hit' : 'miss';
   }
 
-  killScav(scav, { bled = false } = {}) {
+  /**
+   * Where a point of this map is in the game's own world coordinates
+   * [x, height, z] - what task zones and item spots are recorded in.
+   */
+  worldOf(x, y, level = this.level) {
+    const w = this.map.world;
+    if (!w) return null;
+    return [(w.oy - y) / w.scale, w.heights?.[level] ?? 0, (w.ox - x) / w.scale];
+  }
+
+  killScav(scav, { bled = false, weapon = null, part = null, range = null } = {}) {
     if (scav.state === 'dead') return;
     scav.state = 'dead';
     scav.hp = 0;
     this.stats.kills++;
     addExp(120);
     emit(EV.RAID_TOAST, { kind: 'ok', text: bled ? 'Scav bled out' : 'Scav down' });
+    const p = this.player;
+    const metres = (range ?? dist(p.x, p.y, scav.x, scav.y)) * (this.map.unitsToMetres || 1);
+    const kill = {
+      location: this.location, role: scav.role || 'assault', side: scav.side || 'scav',
+      name: scav.name || 'Scav', level: scav.lvl || 1, time: this.time, bled,
+      part: part || scav.lastPart || null, dist: Math.round(metres * 10) / 10,
+      weapon: weapon ? weapon.tpl.id : null,
+      weaponName: weapon ? (weapon.tpl.short || weapon.tpl.name) : null,
+      mods: weapon ? [...weapon.allMods()].map((m) => m.tpl.id) : [],
+      caliber: weapon?.tpl.cal || null,
+      hour: this.hour,
+      world: this.worldOf(scav.x, scav.y, scav.level || this.level),
+      gear: game.equipment.slotList().map((sl) => sl.item?.tpl.id).filter(Boolean),
+    };
+    this.killLog.push(kill);
+    emit(EV.RAID_KILL, kill);
     const def = CONTAINERS.deadscav;
     const body = {
       id: uid('c'), type: 'deadscav', def,
@@ -1397,6 +1429,9 @@ export class Raid {
     const result = {
       status,
       extract: viaExtract,
+      location: this.location,
+      hour: this.hour,
+      killLog: this.killLog,
       map: this.map.name,
       duration: this.map.duration - this.timeLeft,
       searched: this.stats.searched,
