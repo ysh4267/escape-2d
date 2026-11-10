@@ -374,9 +374,6 @@
 .vital__k { font-size: 9px; letter-spacing: .18em; color: var(--tx-dim); width: 34px; }
 .bar { width: 168px; height: 5px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); }
 .bar > i { display: block; height: 100%; background: var(--pale); transition: width .18s; }
-.bar--weight > i { background: var(--slate); }
-.bar--weight.is-heavy > i { background: var(--warn); }
-.bar--weight.is-over > i { background: var(--danger); }
 .bar--stam { width: 120px; }
 .bar--stam > i { background: var(--ok); }
 

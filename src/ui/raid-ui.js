@@ -2,7 +2,7 @@
 // in-raid controller: loop, input, HUD, loot overlay, results
 // =========================================================
 
-import { $, el, icon, clamp, fmtClock, fmtNum, fmtWeight, keepScroll } from '../core/util.js';
+import { $, el, icon, clamp, keepScroll } from '../core/util.js';
 import { Raid, RAID_STATUS } from '../raid/raid.js';
 import { Renderer } from '../raid/renderer.js';
 import {
@@ -207,12 +207,6 @@ function drawHud() {
   const p = raid.player;
   drawHudHealth(raid);
 
-  const w = game.equipment.weight();
-  const wtBar = $('#wt-fill').parentElement;
-  $('#wt-fill').style.width = `${clamp((w / 70) * 100, 0, 100)}%`;
-  wtBar.classList.toggle('is-heavy', w > 35 && w <= 65);
-  wtBar.classList.toggle('is-over', w > 65);
-  $('#wt-text').textContent = `${fmtWeight(w)} kg`;
   $('#stam-fill').style.width = `${p.stamina}%`;
   $('#stam-arms').style.width = `${p.stamina}%`;
 
