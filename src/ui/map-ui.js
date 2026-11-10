@@ -52,12 +52,16 @@ let picking = false;
 const hidden = new Set();   // kinds of marker the legend has switched off
 let dom = null;             // the nodes laid out again on every drag and zoom
 
+let carriedOnly = false;
+/** in a raid the stash is out of reach: only the plans brought along count */
+export function mapScope(carried) { carriedOnly = !!carried; }
+
 /** every plan map the character has: what is worn and carried first, then the stash */
 function mapItems() {
   const out = [];
   const take = (it) => { if (it.tpl.map) out.push(it); };
   for (const it of game.equipment.everything()) take(it);
-  for (const it of game.stash.items()) { take(it); for (const d of it.descendants()) take(d); }
+  if (!carriedOnly) for (const it of game.stash.items()) { take(it); for (const d of it.descendants()) take(d); }
   return out;
 }
 

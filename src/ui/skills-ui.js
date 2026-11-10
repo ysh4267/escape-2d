@@ -136,9 +136,11 @@ function openTip(id, x, y) {
     el('div', { class: 'sktip__buffs' }, skillBuffs(id).map((b) => el('div', { class: 'sktip__buff' },
       buffIcon(b),
       el('span', {}, b.elite ? el('em', {}, 'ELITE ') : null, b.parts.map((p) => (p.lit ? el('b', {}, p.text) : p.text)))))));
-  $('#screen-character').append(tip);
+  // on whichever frame the tab is drawn in: the character screen, or a raid's inventory
+  const frame = $('#skills-host').closest('.rinv__frame, .screen') || $('#screen-character');
+  frame.append(tip);
   // at the pointer, and back inside the screen where it would run off it
-  const box = $('#screen-character').getBoundingClientRect();
+  const box = frame.getBoundingClientRect();
   let left = toStage(x - box.left) + 2;
   let top = toStage(y - box.top) + 2;
   left = Math.max(4, Math.min(left, 1920 - tip.offsetWidth - 4));

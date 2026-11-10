@@ -31,6 +31,7 @@ import { BY_ID, getTpl } from '../data/items.js';
 import { uiImg } from '../core/uiart.js';
 import { mountHudHealth, drawHudHealth, useInRaid, renderHealthBoard } from './health-ui.js';
 import { paintParams, paintQuick, KINDS, kindOf } from './stash.js';
+import { lendPane, returnPanes } from './character.js';
 
 import { openRaidEnd } from './raidend.js';
 
@@ -573,6 +574,8 @@ function bindRaidInput(canvas) {
 
   on(EV.LOOT_OPENED, () => { closeFloorplan(); openOverlay('gear'); });
   on(EV.LOOT_FOUND, () => { if (overlayOpen) renderOverlay(); });
+  // a task that moves while TASKS is up is written again
+  on(EV.QUEST, () => { if (overlayOpen && lentTab === 'tasks') { lentTab = null; renderOverlay(); } });
   on(EV.LOOT_CLOSED, () => { if (overlayOpen) renderOverlay(); });
   on(EV.RAID_LEVEL, ({ level, name }) => {
     renderer.setLevel(level);
@@ -660,7 +663,7 @@ function onKeyUp(e) {
 }
 
 // ---------------------------------------------------------
-/** @param {'gear'|'health'|null} [tab] the tab to open on; the one last up when none is named */
+/** @param {string|null} [tab] the tab to open on; the one last up when none is named */
 export function openOverlay(tab = null) {
   if (!overlayOpen) sfx.ui('window_open');
   if (tab) overlayTab = tab;
@@ -676,6 +679,7 @@ export function closeOverlay() {
   overlayOpen = false;
   $('#raid-inventory').hidden = true;
   $('#screen-raid').classList.remove('has-inv');
+  if (lentTab) { returnPanes(); lentTab = null; }
   // the floating panels belong to the overlay; they must not hang over the canvas
   closeAllContainerWindows();
   closeAllModdingWindows();
@@ -693,15 +697,18 @@ let overlayTab = 'gear';
 /** the container the loot panel was last drawn for, and the kind of thing its grid is narrowed to */
 let lootOf = null;
 let lootKind = 'all';
-// the character screen's tabs as a raid has them; the ones this build does not open in a raid yet stand switched off
+/** the tab whose pane the character screen has lent, while one is up */
+let lentTab = null;
+// the character screen's tabs as a raid has them: all but the two that dress the character at home.
+// GEAR and HEALTH are drawn here; the rest are the character screen's own panes, lent while they are up.
 const RAID_TABS = [
-  { key: 'overall', label: 'OVERALL', ico: 'tab_icon_overall', off: true },
+  { key: 'overall', label: 'OVERALL', ico: 'tab_icon_overall' },
   { key: 'gear', label: 'GEAR', ico: 'tab_icon_gear' },
   { key: 'health', label: 'HEALTH_TAB', ico: 'tab_icon_health' },
-  { key: 'skills', label: 'SKILLS', ico: 'tab_icon_skills', off: true },
-  { key: 'map', label: 'MAP', ico: 'tab_icon_map', off: true },
-  { key: 'tasks', label: 'TASKS', ico: 'tab_icon_tasks', off: true },
-  { key: 'achievements', label: 'ACHIEVEMENTS', ico: 'tab_icon_achivement_icon', icoOn: 'tab_icon_achivement_icon_pressed', off: true },
+  { key: 'skills', label: 'SKILLS', ico: 'tab_icon_skills' },
+  { key: 'map', label: 'MAP', ico: 'tab_icon_map' },
+  { key: 'tasks', label: 'TASKS', ico: 'tab_icon_tasks' },
+  { key: 'achievements', label: 'ACHIEVEMENTS', ico: 'tab_icon_achivement_icon', icoOn: 'tab_icon_achivement_icon_pressed' },
 ];
 
 function paintOverlayTabs() {
@@ -808,6 +815,13 @@ function paintLoot() {
 function renderOverlay() {
   if (!raid) return;
   paintOverlayTabs();
+  const own = overlayTab === 'gear' || overlayTab === 'health';
+  $('#rinv-pane').classList.toggle('is-active', own);
+  if (!own) {
+    if (lentTab !== overlayTab) lentTab = lendPane(overlayTab, $('#rinv-body')) ? overlayTab : null;
+    return;
+  }
+  if (lentTab) { returnPanes(); lentTab = null; }
   $('#rinv-gear').dataset.mode = overlayTab === 'health' ? 'health' : 'gear';
   // every one of these is a scroll box; replacing its children would otherwise scroll it back to the top
   keepScroll([$('#raid-carry-host'), $('#loot-host')], () => {

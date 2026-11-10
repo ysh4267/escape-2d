@@ -14,7 +14,7 @@ import { uiImg } from '../core/uiart.js';
 import { showScreen, currentScreen } from './shell.js';
 import { renderOverall } from './overall.js';
 import { renderSkills, initSkills } from './skills-ui.js';
-import { renderMap } from './map-ui.js';
+import { renderMap, mapScope } from './map-ui.js';
 import { renderJournal } from './journal.js';
 import { renderAchievements } from './achievements.js';
 
@@ -66,6 +66,37 @@ function paint() {
   else if (tab === 'map') renderMap();
   else if (tab === 'tasks') renderJournal();
   else if (tab === 'achievements') renderAchievements();
+}
+
+/** the tabs a raid's inventory opens through this screen's own panes, and what draws each */
+const LENT = { overall: renderOverall, skills: renderSkills, map: renderMap, tasks: renderJournal, achievements: renderAchievements };
+
+/**
+ * A raid's inventory has these same tabs. The pane of one is moved under
+ * `host` and drawn there - one screen, not a second copy of it - and goes
+ * home when the raid has done with it.
+ * @param {string} key
+ * @param {HTMLElement} host
+ */
+export function lendPane(key, host) {
+  returnPanes();
+  const pane = LENT[key] && $(`#pane-${key}`);
+  if (!pane) return false;
+  host.append(pane);
+  pane.classList.add('is-active');
+  // out there only the plans that were brought along can be unfolded
+  mapScope(true);
+  LENT[key]();
+  return true;
+}
+
+export function returnPanes() {
+  const home = $('#screen-character .char-body');
+  mapScope(false);
+  for (const key of Object.keys(LENT)) {
+    const pane = $(`#pane-${key}`);
+    if (pane && pane.parentElement !== home) { pane.classList.remove('is-active'); home.append(pane); }
+  }
 }
 
 export function initCharacter() {
