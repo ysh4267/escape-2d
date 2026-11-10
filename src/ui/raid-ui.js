@@ -27,6 +27,8 @@ import { showScreen, raidToast, toast, refreshTopbar } from './shell.js';
 import { emit, on, EV } from '../core/events.js';
 import { mountHudHealth, drawHudHealth, useInRaid, renderHealthPanel } from './health-ui.js';
 
+import { openRaidEnd } from './raidend.js';
+
 let raid = null;
 let renderer = null;
 let overlayHealth = null;
@@ -43,12 +45,12 @@ let hoverStair = null;
 let onFinishCb = () => {};
 
 // ---------------------------------------------------------
-export function startRaid({ mapDef, geo, onFinish }) {
+export function startRaid({ mapDef, geo, onFinish, location = null, hour = 12 }) {
   onFinishCb = onFinish || (() => {});
   // gait carried over from the last raid would scuff on the first frame of this one
   wasMoving = false;
   wasSprinting = false;
-  raid = new Raid({ mapDef, geo });
+  raid = new Raid({ mapDef, geo, location, hour });
   const canvas = $('#raid-canvas');
   if (!renderer || renderer.geo !== geo) {
     renderer = new Renderer(canvas, geo, raid.level);
@@ -815,75 +817,26 @@ export function consumePendingMIA() {
 }
 
 function showResult(result) {
-  // the result screen is a summary, not an inventory: the raid context menu
-  // staying live here meant one right-click DROP could delete extracted loot
+  // the screens after a raid are a summary, not an inventory: the raid context
+  // menu staying live here meant one right-click DROP could delete extracted loot
   setContextProvider(() => []);
   dndContext.canMove = () => false;
   dndContext.onActivate = null;
 
-  const verdict = $('#result-verdict');
-  const map = {
-    [RAID_STATUS.SURVIVED]: ['SURVIVED', ''],
-    [RAID_STATUS.MIA]: ['MISSING IN ACTION', 'is-warn'],
-    [RAID_STATUS.KIA]: ['KILLED IN ACTION', 'is-bad'],
-    [RAID_STATUS.LEFT]: ['LEFT THE ACTION', 'is-warn'],
-  }[result.status] || ['RAID OVER', ''];
-  verdict.textContent = map[0];
-  verdict.className = `result-verdict ${map[1]}`;
-  $('#result-sub').textContent = `${result.map} · ${result.extract ? result.extract.name : 'no extraction'}`;
+  result.statusKey = {
+    [RAID_STATUS.SURVIVED]: 'survived', [RAID_STATUS.MIA]: 'mia',
+    [RAID_STATUS.KIA]: 'kia', [RAID_STATUS.LEFT]: 'left',
+  }[result.status] || result.status;
 
-  const stats = $('#result-stats');
-  stats.replaceChildren();
-  const stat = (k, v) => el('div', { class: 'result-stat' },
-    el('div', { class: 'result-stat__k' }, k), el('div', { class: 'result-stat__v' }, v));
-  stats.append(
-    stat('TIME', fmtClock(result.duration)),
-    stat('FLOORS', String(result.floors ?? 1)),
-    stat('CONTAINERS', String(result.searched)),
-    stat('KILLS', String(result.kills ?? 0)),
-    stat('ITEMS OUT', String(result.kept.length)),
-    stat('HAUL VALUE', `${fmtNum(result.value)} ₽`),
-    stat('HEALTH', game.health ? `${Math.ceil(game.health.total)} / ${game.health.max}` : '—'));
-
-  const lootHost = $('#result-loot');
-  lootHost.parentElement.querySelector('h3').textContent =
-    result.status === RAID_STATUS.SURVIVED ? 'EXTRACTED' : 'SECURED';
-  lootHost.replaceChildren();
-  if (!result.kept.length) lootHost.append(el('div', { class: 'empty-note' }, 'NOTHING CAME BACK'));
-  for (const it of result.kept.slice(0, 60)) {
-    const tile = renderItem(it, { static: true, noName: false });
-    tile.style.position = 'relative';
-    lootHost.append(tile);
-  }
-
-  // a lost raid also shows what went down with you
-  const lostWrap = $('#result-lost');
-  if (lostWrap) lostWrap.remove();
-  if (result.lost.length) {
-    const wrap = el('div', { class: 'result-loot result-loot--lost', id: 'result-lost' },
-      el('h3', {}, `LOST IN ACTION — ${result.lost.length} ITEM${result.lost.length > 1 ? 'S' : ''}`));
-    const list = el('div', { class: 'result-loot__list' });
-    for (const it of result.lost.slice(0, 60)) {
-      const tile = renderItem(it, { static: true, noName: false });
-      tile.style.position = 'relative';
-      list.append(tile);
-    }
-    wrap.append(list);
-    lootHost.parentElement.after(wrap);
-  }
-
-  showScreen('result');
-
-  const btn = $('#btn-result-continue');
-  btn.onclick = () => {
+  openRaidEnd(result, () => {
     // what you carried out stays exactly where you packed it — the rig, the
     // backpack and the pouch come home loaded, and unloading is the player's
-    // call in the stash rather than something the result screen does for them
+    // call in the stash rather than something these screens do for them
     raid = null;
     saveSoon();
     refreshTopbar();
     onFinishCb(result);
-  };
+  });
 }
 
 // ---------------------------------------------------------
