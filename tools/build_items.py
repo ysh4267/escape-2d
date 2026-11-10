@@ -22,8 +22,14 @@
 #
 # The items the game shipped with before keep their slugs (selection.py,
 # part_keys.json) and are marked `core`; everything else is keyed by its
-# tarkov id. Artwork is tarkov.dev's grid image, whose size is exactly
-# 63 * cells + 1 px a side - which cross-checks every footprint.
+# tarkov id. A slug whose item the live list has dropped stays, from the dump,
+# and stays in every slot and conflict list the dump has it in - the dataset
+# cannot name what it does not list. Artwork is tarkov.dev's grid image, whose
+# size is exactly 63 * cells + 1 px a side - which cross-checks every footprint.
+#
+# Two orders the game reads something off: a magazine lists the rounds of its
+# own calibre first (the first is what a magazine found loaded holds), and a
+# gun's builds come in the order globals.json has them.
 #
 # output
 #   ../src/data/items-db.json          : the template table the game loads
@@ -388,7 +394,8 @@ def main():
 
     live_ids = [i for i, it in live.items.items() if not live.is_preset(it)]
     preset_ids = [i for i, it in live.items.items() if live.is_preset(it)]
-    # a slug whose item the live game no longer lists: kept, from the dumps
+    # a slug whose item the live game no longer lists: kept, from the dumps,
+    # and kept in the slots that took it (items_live.spt_slots)
     legacy_ids = [i for i in aliases if i not in live.items]
     quest = {i: q for i, q in (tasks.get('questItems') or {}).items()
              if i not in live.items and i not in aliases}
@@ -410,6 +417,7 @@ def main():
 
     recs = {}
     src_count = Counter()
+    legacy = set(legacy_ids)
     for iid in live_ids:
         it = live.items[iid]
         node, src = spt_node(iid)
@@ -417,7 +425,7 @@ def main():
                'chain': list(it.get('categories') or []), 'hb': list(it.get('handbookCategories') or []),
                'types': list(it.get('types') or [])}
         if node:
-            rec['props'] = lv.live_props(it, node['_props'])
+            rec['props'] = lv.live_props(it, node['_props'], keep=legacy)
             rec['src'] = src
         else:
             did, score = donors.pick(it)
@@ -889,12 +897,18 @@ def main():
             # AKM mag also lists .366 TKM for the VPO-209, and that must not
             # relabel it
             votes = Counter()
+            cal_of = {}
             for a in wx._filters((props.get('Cartridges') or [{}])[0]):
                 if a in recs and recs[a]['cat'] == 'ammo':
-                    votes[wx.caliber(recs[a]['props'])] += 1
+                    cal_of[keys[a]] = wx.caliber(recs[a]['props'])
+                    votes[cal_of[keys[a]]] += 1
             if votes:
                 top = max(votes.values())
                 tpl['cal'] = next(c for c in votes if votes[c] == top)
+                # the game takes the first round of the list for the magazine's
+                # own - what a magazine found loaded has in it - so the rounds
+                # of its calibre lead, each group in the dataset's order
+                tpl['ammoFilter'].sort(key=lambda k: cal_of.get(k) != tpl['cal'])
         elif cat in ('mod', 'nvg', 'gearmod'):
             mf = wx.mod_fields(props)
             if cat == 'mod':

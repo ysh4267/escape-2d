@@ -236,16 +236,25 @@ def _set(p, key, v, mul=None):
     p[key] = _r(v * mul) if mul else v
 
 
-def spt_slots(td_slots, base_slots):
-    """tarkov.dev slots in the template's shape; the merge flag is the template's"""
-    merge = {s['_name']: bool(s.get('_mergeSlotWithChildren')) for s in (base_slots or [])}
+def spt_slots(td_slots, base_slots, keep=()):
+    """
+    tarkov.dev slots in the template's shape; the merge flag is the template's.
+    `keep` are the items the dataset does not list at all but the database
+    still carries: the dataset cannot name them in a filter, so a slot that
+    takes one in the template goes on taking it.
+    """
+    base = {s['_name']: s for s in (base_slots or [])}
     out = []
     for sl in td_slots:
-        f = sl.get('filters') or {}
+        name = sl['nameId']
+        allowed = list((sl.get('filters') or {}).get('allowedItems') or [])
+        if keep and name in base:
+            own = (base[name].get('_props', {}).get('filters') or [{}])[0].get('Filter') or []
+            allowed += [i for i in own if i in keep and i not in allowed]
         out.append({
-            '_name': sl['nameId'], '_required': bool(sl.get('required')),
-            '_mergeSlotWithChildren': merge.get(sl['nameId'], False),
-            '_props': {'filters': [{'Filter': list(f.get('allowedItems') or [])}]},
+            '_name': name, '_required': bool(sl.get('required')),
+            '_mergeSlotWithChildren': bool(base.get(name, {}).get('_mergeSlotWithChildren')),
+            '_props': {'filters': [{'Filter': allowed}]},
         })
     return out
 
@@ -270,13 +279,14 @@ _CURE = {'LightBleeding': 'LightBleeding', 'HeavyBleeding': 'HeavyBleeding', 'Fr
 _THROW_TYPE = {'Grenade': 'frag_grenade', 'Flashbang': 'flash_grenade', 'Smoke': 'smoke_grenade'}
 
 
-def live_props(it, base, fresh=False):
+def live_props(it, base, fresh=False, keep=()):
     """
     The template's _props with the live dataset's numbers laid over them.
     `base` is the SPT template's own _props, or a donor's when the item is
     newer than the dumps (`fresh`): then the structures that belong to the
     donor alone - its slots, grids, cartridges - are dropped first and only
-    what the dataset says about this item goes in their place.
+    what the dataset says about this item goes in their place. `keep`: the
+    items the dataset has no record of (see spt_slots).
     """
     p = dict(base)
     pr = it.get('properties') or {}
@@ -293,11 +303,14 @@ def live_props(it, base, fresh=False):
     _set(p, 'StackMaxSize', it.get('stackMaxSize'))
     _set(p, 'BackgroundColor', it.get('backgroundColor'))
     p['ConflictingItems'] = list(it.get('conflictingItems') or [])
+    if keep and not fresh:
+        p['ConflictingItems'] += [i for i in (base.get('ConflictingItems') or [])
+                                  if i in keep and i not in p['ConflictingItems']]
     _set(p, 'DiscardLimit', it.get('discardLimit'))
 
     # --- part slots: the live filters name the parts added since the dump ---
     if 'slots' in pr:
-        p['Slots'] = spt_slots(pr['slots'] or [], base.get('Slots'))
+        p['Slots'] = spt_slots(pr['slots'] or [], base.get('Slots'), () if fresh else keep)
     else:
         p['Slots'] = [] if fresh else [s for s in (base.get('Slots') or []) if not is_armor_slot(s)]
 
