@@ -46,16 +46,6 @@
 .tagpill--warn { color: var(--warn); border-color: var(--warn-soft); }
 
 .deploy__brief { display: flex; flex-direction: column; gap: 12px; overflow: auto; }
-.brief-block {
-  background: linear-gradient(180deg, rgba(22,32,37,.9), rgba(8,12,14,.9));
-  border: 1px solid var(--line-1); border-radius: var(--r-md); padding: 12px;
-}
-.brief-block h3 { font-size: 11px; letter-spacing: .2em; color: var(--pale); margin-bottom: 8px; }
-.brief-list { display: flex; flex-direction: column; gap: 6px; }
-.brief-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--tx-2); }
-.brief-row .ico { color: var(--tx-3); }
-.brief-row b { color: var(--tx-0); font-weight: 600; }
-.brief-row span.muted { margin-left: auto; }
 
 /* ---------------- traders (laid out like the in-game trading screen) ---------------- */
 .trade { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
@@ -409,9 +399,6 @@
 .gun-prompt.is-malf .interact-prompt__label { color: var(--danger); }
 .gun-prompt.is-malf .interact-prompt__label .ico { color: var(--danger); }
 
-.hud-clock { display: flex; align-items: center; gap: 8px; color: var(--tx-1); font-size: 17px; letter-spacing: .1em; font-variant-numeric: tabular-nums; }
-.hud-clock.is-low { color: var(--warn); }
-.hud-clock.is-crit { color: var(--danger); }
 /* which storey you are on, top to bottom like a section through the plant */
 .hud-floors { display: flex; gap: 3px; justify-content: center; margin-top: 7px; pointer-events: auto; }
 .floor-pip {
@@ -445,22 +432,6 @@
 .hudbtn.is-on .ico { color: var(--ok); }
 .hudbtn--danger:hover { border-color: var(--danger); color: #e6a99c; background: rgba(194,96,79,.16); }
 
-.raid-toast {
-  position: absolute; left: 50%; top: 76px; transform: translateX(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  pointer-events: none;
-}
-.raid-toast__row {
-  padding: 6px 14px;
-  background: rgba(6,10,12,.86); border: 1px solid var(--line-2);
-  color: var(--tx-1); font-size: 12px; letter-spacing: .1em;
-  animation: rt-in .16s ease-out;
-}
-.raid-toast__row.is-warn { border-color: var(--warn-soft); color: var(--warn); }
-.raid-toast__row.is-bad { border-color: var(--danger-dk); color: #e6a99c; }
-.raid-toast__row.is-ok { border-color: var(--ok); color: var(--ok); }
-@keyframes rt-in { from { opacity: 0; transform: translateY(-6px); } }
-
 .interact-prompt {
   position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%);
   width: 280px; text-align: center; pointer-events: none;
@@ -468,29 +439,6 @@
 .interact-prompt__label { color: var(--tx-1); font-size: 12px; letter-spacing: .16em; margin-bottom: 6px; }
 .interact-prompt__bar { height: 3px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); }
 .interact-prompt__bar > i { display: block; height: 100%; width: 0; background: var(--pale); }
-
-.extract-prompt {
-  position: absolute; left: 50%; bottom: 128px; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 14px;
-  padding: 12px 20px;
-  background: rgba(6,10,12,.9);
-  border: 1px solid var(--ok);
-  box-shadow: 0 0 30px rgba(127,179,154,.18);
-  pointer-events: auto;
-  cursor: pointer;
-  text-align: left;
-  transition: background .12s, box-shadow .12s;
-}
-.extract-prompt:hover { background: rgba(18,32,28,.94); box-shadow: 0 0 40px rgba(127,179,154,.3); }
-.extract-prompt:active { background: rgba(24,44,38,.96); }
-.extract-prompt.is-locked { border-color: var(--warn-soft); box-shadow: 0 0 30px rgba(217,164,65,.14); }
-.extract-prompt.is-locked .ico { color: var(--warn); }
-.extract-prompt .ico { color: var(--ok); }
-.extract-prompt__name { color: var(--white); font-size: 14px; letter-spacing: .18em; }
-.extract-prompt__bar { width: 220px; height: 4px; background: rgba(0,0,0,.6); border: 1px solid var(--line-1); margin-top: 7px; }
-.extract-prompt__bar > i { display: block; height: 100%; width: 0; background: var(--ok); }
-.extract-prompt__hint { color: var(--tx-dim); font-size: 10px; letter-spacing: .14em; margin-top: 5px; }
-.extract-prompt__hint b { color: var(--tx-1); font-family: var(--font-mono); }
 
 /* ---------- stairwell under the player ---------- */
 .stairs-prompt {
@@ -575,31 +523,6 @@
 .sw--stairs { background: #d9a441; }
 .sw--pmc { background: #7fb39a; height: 8px; width: 8px; border-radius: 50%; }
 .sw--scav { background: #d9a441; height: 8px; width: 8px; border-radius: 50%; }
-
-/* ---------------- result ---------------- */
-#screen-result { align-items: center; justify-content: center; }
-.result-wrap { width: min(880px, calc(var(--sw) * 0.92)); max-height: calc(var(--sh) * 0.88); display: flex; flex-direction: column; gap: 16px; }
-.result-head { text-align: center; }
-.result-verdict { font-size: 44px; letter-spacing: .3em; color: var(--ok); }
-.result-verdict.is-bad { color: var(--danger); }
-.result-verdict.is-warn { color: var(--warn); }
-.result-sub { color: var(--tx-3); font-size: 12px; letter-spacing: .2em; margin-top: 6px; }
-.result-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-.result-stat { padding: 12px; border: 1px solid var(--line-1); background: rgba(14,21,25,.7); text-align: center; }
-.result-stat__k { color: var(--tx-dim); font-size: 10px; letter-spacing: .18em; }
-.result-stat__v { color: var(--white); font-size: 22px; font-variant-numeric: tabular-nums; margin-top: 4px; }
-.result-loot { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.result-loot h3 { font-size: 11px; letter-spacing: .22em; color: var(--pale); margin-bottom: 8px; }
-.result-loot__list { flex: 1; overflow: auto; display: flex; flex-wrap: wrap; gap: 6px; align-content: start; padding: 10px; border: 1px solid var(--line-1); background: rgba(0,0,0,.35); }
-.result-loot__list .item { position: relative; }
-.result-loot--lost { flex: 0 0 auto; }
-.result-loot--lost h3 { color: var(--danger); }
-.result-loot--lost .result-loot__list { max-height: calc(var(--sh) * 0.26); border-color: var(--danger-dk); }
-.result-loot--lost .item { opacity: .45; filter: grayscale(.4); }
-#btn-result-continue { align-self: center; }
-
-/* raid toasts must clear the fullscreen inventory overlay (z 20) */
-.raid-toast { z-index: 30; }
 
 /* ---------------- responsive ----------------
    Both of these grids have THREE children. Dropping them to two columns left
