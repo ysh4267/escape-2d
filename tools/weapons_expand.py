@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 # =========================================================
-# ESCAPE 2D - weapon tree expansion
+# ESCAPE 2D - weapons, parts, magazines and cartridges
 #
-# The curated SELECTION names the guns. Everything a gun can be built out of -
-# every handguard, dust cover, mount, sight, stock, magazine, muzzle device -
-# and every cartridge those magazines take, is not curated by hand: it is the
-# transitive closure of the templates' own Slots / Cartridges / Chambers
-# filters, read straight out of the SPT 3.10.1 items.json dump. Add a weapon
-# to selection.py and its whole build tree comes with it on the next run.
+# What a template says about a gun and everything that goes on it or in it,
+# read out of the template's own _props (the SPT dumps' vocabulary, with the
+# live numbers already laid over them by items_live.live_props):
 #
-# Also read here:
 #   - the per-template modding numbers (Ergonomics, Recoil, Accuracy, Velocity,
 #     SightingRange, Loudness, ExtraSize*, HeatFactor ...)
 #   - the weapon's own numbers (RecoilForceUp/Back, weapFireType, bFirerate,
@@ -17,72 +13,18 @@
 #   - magazine capacity and cartridge filters
 #   - the ballistics of every round (Damage, PenetrationPower, ArmorDamage,
 #     FragmentationChance, InitialSpeed, ammoRec, ProjectileCount ...)
-#   - the default preset of every weapon from globals.json ItemPresets, so a
-#     gun bought from a trader or found in a crate arrives assembled the way
-#     the real one does, plus the factory alternates (AKMB, "Tactical" MP-133,
-#     the NERFGUN Saiga ...) the build screen offers
 #   - the repair numbers (RepairCost, Min/MaxRepairDegradation, the kit ones)
-#   - ammo packs: every AmmoBox whose StackSlots filter is a round we carry,
-#     the weapon repair kit, and the two weapon cases - records that are not
-#     parts but exist only because the weapons do
+#   - a preset out of globals.json ItemPresets as the tree the game hangs on a
+#     new gun, and the rounds it ships loaded with
+#
+# Which templates exist at all is not decided here any more: every weapon,
+# every part, every magazine and every cartridge of the live game is in the
+# database (build_items.py), so every slot filter resolves on its own.
 # =========================================================
 
 from __future__ import annotations
 
 import re
-from collections import Counter
-
-# template parent id -> (gameplay category, mod type)
-PARENT_KIND = {
-    '5447b5f14bdc2d61278b4567': ('weapon', None),        # AssaultRifle
-    '5447b5cf4bdc2d65278b4567': ('pistol', None),        # Pistol
-    '5447b6094bdc2dc3278b4567': ('weapon', None),        # Shotgun
-    '5447b5e04bdc2d62278b4567': ('weapon', None),        # Smg
-    '5447b6194bdc2d67278b4567': ('weapon', None),        # MarksmanRifle
-    '5447b5fc4bdc2d87278b4567': ('weapon', None),        # AssaultCarbine
-    '5447b6254bdc2dc3278b4568': ('weapon', None),        # SniperRifle
-    '5447bed64bdc2d97278b4568': ('weapon', None),        # MachineGun
-    '5448bc234bdc2d3c308b4569': ('mag', 'magazine'),     # Magazine
-    '610720f290b75a49ff2e5e25': ('mag', 'magazine'),     # CylinderMagazine
-    '555ef6e44bdc2de9068b457e': ('mod', 'barrel'),
-    '55818a104bdc2db9688b4569': ('mod', 'handguard'),
-    '56ea9461d2720b67698b456f': ('mod', 'gasblock'),
-    '550aa4bf4bdc2dd6348b456b': ('mod', 'muzzle'),       # FlashHider
-    '550aa4dd4bdc2dc9348b4569': ('mod', 'muzzle'),       # MuzzleCombo
-    '550aa4cd4bdc2dd8348b456c': ('mod', 'suppressor'),   # Silencer
-    '55818a684bdc2ddd698b456d': ('mod', 'grip'),         # PistolGrip
-    '55818af64bdc2d5b648b4570': ('mod', 'foregrip'),
-    '55818a594bdc2db9688b456a': ('mod', 'stock'),
-    '55818a304bdc2db5418b457d': ('mod', 'receiver'),
-    '55818b224bdc2dde698b456f': ('mod', 'mount'),
-    '55818ac54bdc2d5b648b456e': ('mod', 'ironsight'),
-    '55818ad54bdc2ddc698b4569': ('mod', 'reflex'),       # Collimator
-    '55818acf4bdc2dde698b456b': ('mod', 'reflex'),       # CompactCollimator
-    '55818add4bdc2d5b648b456f': ('mod', 'scope'),        # AssaultScope
-    '55818ae44bdc2dde698b456c': ('mod', 'scope'),        # OpticScope
-    '55818aeb4bdc2ddc698b456a': ('mod', 'scope'),        # SpecialScope
-    '55818b164bdc2ddc698b456c': ('mod', 'tactical'),     # TacticalCombo
-    '55818b084bdc2d5b648b4571': ('mod', 'tactical'),     # Flashlight
-    '55818b0e4bdc2dde698b456e': ('mod', 'tactical'),     # LaserDesignator
-    '55818a6f4bdc2db9688b456b': ('mod', 'charge'),
-    '5a74651486f7744e73386dd1': ('mod', 'aux'),
-    '55818afb4bdc2dde698b456d': ('mod', 'bipod'),
-}
-# a grenade launcher is a second weapon hanging under the first, with its own
-# ammunition and firing logic; it is out of scope for the modding system
-SKIP_PARENTS = {'55818b014bdc2ddc698b456b'}   # Launcher
-
-AMMO_BOX_PARENT = '543be5cb4bdc2deb348b4568'
-# things that ride along with the weapons: the kit that mends them and the
-# cases that store them - id -> (key, cat, extra template fields)
-COMPANIONS = {
-    '5910968f86f77425cf569c32': ('weaprepkit', 'barter',
-                                 {'repairKit': {'max': 1000, 'type': 'weapon'}, 'res': 1000}),
-    '59fb023c86f7746d0d4b423c': ('weaponcase', 'container',
-                                 {'filter': {'allow': ['weapon', 'pistol', 'mod', 'mag', 'ammo', 'ammobox']}}),
-    '5b6d9ce188a4501afc1b2b25': ('thiccweaponcase', 'container',
-                                 {'filter': {'allow': ['weapon', 'pistol', 'mod', 'mag', 'ammo', 'ammobox']}}),
-}
 
 MOD_TYPE_LABEL = {
     'barrel': 'Barrel', 'handguard': 'Handguard', 'gasblock': 'Gas block',
@@ -91,6 +33,7 @@ MOD_TYPE_LABEL = {
     'mount': 'Mount', 'ironsight': 'Iron sight', 'reflex': 'Reflex sight',
     'scope': 'Scope', 'tactical': 'Tactical device', 'charge': 'Charging handle',
     'aux': 'Auxiliary part', 'bipod': 'Bipod', 'magazine': 'Magazine',
+    'launcher': 'Underbarrel launcher',
 }
 
 # the slot names as the game labels them on the modding screen
@@ -116,58 +59,11 @@ def slot_label(name: str) -> str:
     return lab
 
 
-def kind_of(items, iid):
-    node = items.get(iid)
-    if not node:
-        return None
-    return PARENT_KIND.get(node['_parent'])
-
-
-def slug(text: str) -> str:
-    s = re.sub(r'[^a-z0-9]+', '_', text.lower()).strip('_')
-    return s or 'x'
-
-
 def _filters(entry):
     """all ids allowed by a Slots / Cartridges / Chambers entry"""
     out = []
     for f in entry.get('_props', {}).get('filters', []):
         out.extend(f.get('Filter', []))
-    return out
-
-
-def closure(items, roots):
-    """
-    Every template reachable from `roots` through Slots filters, minus the
-    launcher subtree. Returns {id: depth}.
-    """
-    depth = {}
-    queue = [(r, 0) for r in roots]
-    while queue:
-        iid, d = queue.pop()
-        if iid in depth or iid not in items:
-            continue
-        node = items[iid]
-        if node['_parent'] in SKIP_PARENTS:
-            continue
-        depth[iid] = d
-        for s in node['_props'].get('Slots', []) or []:
-            for f in _filters(s):
-                if f in items and f not in depth and items[f]['_parent'] not in SKIP_PARENTS:
-                    queue.append((f, d + 1))
-    return depth
-
-
-def ammo_for(items, ids, calibers):
-    """every cartridge the closure's magazines / chambers accept, in the given calibers"""
-    out = set()
-    for iid in ids:
-        p = items[iid]['_props']
-        for c in (p.get('Cartridges') or []) + (p.get('Chambers') or []):
-            for f in _filters(c):
-                a = items.get(f)
-                if a and a['_props'].get('Caliber') in calibers:
-                    out.add(f)
     return out
 
 
@@ -179,6 +75,9 @@ CAL_NAMES = {
     '366TKM': '.366 TKM', '46x30': '4.6x30', '57x28': '5.7x28', '1143x23ACP': '.45 ACP',
     '127x55': '12.7x55', '86x70': '.338 LM', '23x75': '23x75', '40x46': '40x46',
     '762x35': '.300 BLK', '68x51': '6.8x51',
+    '127x33': '.50 AE', '127x99': '.50 BMG', '9x33R': '.357', '58x42': '5.8x42',
+    '784x49': '.308 ME', '93x64': '9.3x64', '26x75': '26x75', '40mmRU': '40mm VOG',
+    '725': '72.5mm', '20x1mm': '20x1mm',
 }
 
 
@@ -299,6 +198,11 @@ def weapon_fields(props, key_of):
     _put(w, 'srpm', _num(props.get('SingleFireRate')))
     _put(w, 'burst', _num(props.get('BurstShotsCount')))
     _put(w, 'chambers', len(props.get('Chambers') or []))
+    # a gun with no magazine at all - a double barrel, a break-action launcher,
+    # a signal pistol - is loaded through its chambers, so it is the gun
+    # itself that says what it takes
+    if props.get('ReloadMode') == 'OnlyBarrel' and props.get('Chambers'):
+        _put(w, 'ammo', [k for k in (key_of(f) for f in _filters(props['Chambers'][0])) if k])
     _put(w, 'chamberLoad', bool(props.get('isChamberLoad')))
     _put(w, 'bolt', bool(props.get('BoltAction')))
     _put(w, 'reload', props.get('ReloadMode'))
@@ -343,6 +247,26 @@ def weapon_fields(props, key_of):
     if xs:
         w['xs'] = xs
     return w
+
+
+def cylinder_chambers(props):
+    """
+    A revolver's cylinder keeps its rounds in chambers of its own (`camora_000`
+    ... slots that take a cartridge), not in a feed. Those are capacity, not
+    part slots: they come off the slot list, and a cylinder whose feed says 0
+    holds as many rounds as it has chambers, of the kinds they take.
+    """
+    slots = props.get('Slots') or []
+    chambers = [s for s in slots if s.get('_name', '').startswith('camora')]
+    if not chambers:
+        return
+    props['Slots'] = [s for s in slots if s not in chambers]
+    carts = props.get('Cartridges') or []
+    if carts and not int(carts[0].get('_max_count') or 0):
+        ammo = []
+        for s in chambers:
+            ammo.extend(f for f in _filters(s) if f not in ammo)
+        props['Cartridges'] = [dict(carts[0], _max_count=len(chambers), _props={'filters': [{'Filter': ammo}]})]
 
 
 def mag_fields(props, key_of):
@@ -421,13 +345,14 @@ def slots_of(props, key_of, all_slots=False):
     return out
 
 
-def preset_tree(preset, key_of):
+def preset_tree(preset, key_of, is_part=None):
     """
     globals.json ItemPresets entry -> {slotName: {t: key, s: {...}}} for the
-    root weapon. Parts whose template we do not carry are dropped along with
-    whatever hangs off them.
+    root item. A cartridge - in the magazine or in the chamber - is a load,
+    not a part, and so is a built-in armour insert: `is_part(template id)`
+    says which is which. Parts whose template we do not carry are dropped
+    along with whatever hangs off them.
     """
-    by_id = {it['_id']: it for it in preset['_items']}
     kids = {}
     for it in preset['_items']:
         pid = it.get('parentId')
@@ -446,6 +371,8 @@ def preset_tree(preset, key_of):
             # rounds sitting in a magazine are a load, not a part
             if ch['slotId'] == 'cartridges':
                 continue
+            if is_part is not None and not is_part(ch['_tpl']):
+                continue
             rec = {'t': k}
             sub = build(ch)
             if sub:
@@ -454,6 +381,12 @@ def preset_tree(preset, key_of):
         return out
 
     return build(root)
+
+
+def preset_root(preset):
+    """the template id a preset is a build of"""
+    root = next((it for it in preset['_items'] if not it.get('parentId')), None)
+    return root['_tpl'] if root else None
 
 
 def preset_load(preset, key_of):
@@ -471,147 +404,3 @@ def preset_load(preset, key_of):
         else:
             runs.append({'t': k, 'n': n})
     return runs or None
-
-
-def alt_presets(globals_db, weapon_id, key_of, en):
-    """
-    The factory presets of a weapon other than the default one - the AKMB,
-    the "Tactical" MP-133, the NERFGUN Saiga - as the build screen offers them:
-    [{id, name, label, tree, load}]. Only builds every part of which we carry.
-    """
-    out = []
-    for pid, pr in (globals_db.get('ItemPresets') or {}).items():
-        if pr.get('_encyclopedia'):
-            continue
-        root = next((it for it in pr['_items'] if not it.get('parentId')), None)
-        if not root or root['_tpl'] != weapon_id:
-            continue
-        # every part must be one we carry, or the build lies about itself
-        if any(key_of(it['_tpl']) is None for it in pr['_items'] if it is not root):
-            continue
-        tree = preset_tree(pr, key_of)
-        if not tree:
-            continue
-        rec = {'id': pid, 'name': pr.get('_name') or pid, 'tree': tree}
-        label = en.get(pid) or en.get(pid + ' Name')
-        if label:
-            rec['label'] = label
-        load = preset_load(pr, key_of)
-        if load:
-            rec['load'] = load
-        out.append(rec)
-    return out
-
-
-def expand(items, hb_items, en, selection_ids, our_keys):
-    """
-    selection_ids : {id: key} for everything the curated list already names
-    our_keys      : set of keys already taken
-
-    Returns a list of new records the builder should add:
-      {'key','id','cat','modType'} — the builder pulls the rest from the
-      template exactly as it does for curated rows.
-    """
-    weapons = [iid for iid, k in selection_ids.items()
-               if (kind_of(items, iid) or (None,))[0] in ('weapon', 'pistol')]
-    depth = closure(items, weapons)
-    calibers = {items[w]['_props'].get('ammoCaliber') for w in weapons}
-    calibers.discard(None)
-    ammo = ammo_for(items, depth.keys(), calibers)
-
-    taken = set(our_keys)
-    new = []
-    counts = Counter()
-
-    def make_key(prefix, iid):
-        short = en.get(iid + ' ShortName') or en.get(iid + ' Name') or items[iid]['_name']
-        base = f'{prefix}_{slug(short)}'[:40]
-        k, n = base, 2
-        while k in taken:
-            k = f'{base}_{n}'
-            n += 1
-        taken.add(k)
-        return k
-
-    for iid in sorted(depth, key=lambda i: (depth[i], i)):
-        if iid in selection_ids:
-            continue
-        kind = kind_of(items, iid)
-        if not kind:
-            continue
-        cat, mtype = kind
-        if cat in ('weapon', 'pistol'):
-            continue    # a weapon reachable through a slot (launchers) is skipped
-        # a template the handbook does not price is noise: the only unpriced
-        # magazines reachable are the 999-round zombie-event ones, which the
-        # dump names *_infectedMagazin and marks Not_exist
-        if iid not in hb_items:
-            continue
-        prefix = 'mag' if cat == 'mag' else 'mod'
-        new.append({'key': make_key(prefix, iid), 'id': iid, 'cat': cat, 'modType': mtype})
-        counts[cat] += 1
-
-    ammo_keys = {}
-    for iid in sorted(ammo):
-        if iid in selection_ids:
-            ammo_keys[iid] = selection_ids[iid]
-            continue
-        if iid not in hb_items:
-            continue
-        k = make_key('am', iid)
-        ammo_keys[iid] = k
-        new.append({'key': k, 'id': iid, 'cat': 'ammo', 'modType': None})
-        counts['ammo'] += 1
-    # rounds the curated list names on its own (the AK calibres' PS/BP)
-    for iid, k in selection_ids.items():
-        if items.get(iid, {}).get('_parent') == '5485a8684bdc2da71d8b4567':
-            ammo_keys.setdefault(iid, k)
-
-    # --- ammo packs: a box of one round type, unpacked into stacks ---
-    # The handbook prices every box at a flat 1000, so a box is priced as its
-    # rounds. The dump carries dev duplicates of the 120-round 5.45 packs
-    # (ExaminedByDefault false, RarityPvE Not_exist); those are skipped.
-    for iid, node in items.items():
-        if node.get('_parent') != AMMO_BOX_PARENT:
-            continue
-        p = node['_props']
-        if p.get('ExaminedByDefault') is False or iid not in hb_items:
-            continue
-        slots = p.get('StackSlots') or []
-        if not slots:
-            continue
-        inside = None
-        for f in slots[0].get('_props', {}).get('filters', []):
-            for a in f.get('Filter', []):
-                if a in ammo_keys:
-                    inside = a
-        if not inside:
-            continue
-        n = int(slots[0].get('_max_count') or 0)
-        if n <= 0:
-            continue
-        rk = ammo_keys[inside]
-        price = int(hb_items.get(inside, {}).get('Price', 0) or 0) * n
-        short = en.get(inside + ' ShortName') or rk
-        base = f"box_{slug(short)}_{n}"
-        k2, i2 = base, 2
-        while k2 in taken:
-            k2 = f'{base}_{i2}'
-            i2 += 1
-        taken.add(k2)
-        # the box's own ammoCaliber is stale in the dump (5.45 packs say 9x18);
-        # the round inside is the truth
-        new.append({'key': k2, 'id': iid, 'cat': 'ammobox', 'modType': None,
-                    'extra': {'box': {'t': rk, 'n': n}, 'price': price, 'known': True,
-                              'cal': caliber(items[inside]['_props'])}})
-        counts['ammobox'] += 1
-
-    # --- the repair kit and the weapon cases ---
-    for iid, (key, cat, extra) in COMPANIONS.items():
-        if iid in selection_ids or iid not in items or key in taken:
-            continue
-        taken.add(key)
-        new.append({'key': key, 'id': iid, 'cat': cat, 'modType': None, 'extra': dict(extra)})
-        counts[cat] += 1
-
-    return new, counts, depth

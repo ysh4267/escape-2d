@@ -3,7 +3,7 @@
 Fetch the large (8x) grid images of each weapon's default preset from
 tarkov.dev and store a downscaled copy for the modding screen's stage.
 
-    python tools/fetch_preset_art.py [--width 1280]
+    python tools/fetch_preset_art.py [--width 1280] [--all]
 
 Why Playwright rather than curl: assets.tarkov.dev sits behind a bot check
 that answers a plain fetch with 403; a headless Chromium's request goes
@@ -11,8 +11,14 @@ through. The 8x images are ~2500 px wide and 400-800 KB each; the modding
 stage never shows a gun wider than ~1100 px, so they are resized to
 --width and re-encoded, which lands them at 100-250 KB.
 
-Output: assets/items/<weaponId>-preset-lg.webp (the same weapon id the
-grid-sized preset image uses with `-preset.webp`).
+Which preset is a gun's default comes out of the item database: the preset
+template that names the gun as its base and is flagged `def`. Without --all
+only the guns the game shipped with (`core`) are fetched - every other gun's
+stage falls back to its grid-sized preset sprite, which is already on disk.
+
+Output: assets/items/<weaponId>-preset-lg.webp. Run tools/build_items.py
+afterwards: it marks the guns that have one (`presetLg`), which is what the
+game goes by.
 """
 
 from __future__ import annotations
@@ -24,7 +30,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GLOBALS = ROOT / 'tools' / 'cache' / 'globals_3101.json'
 DB = ROOT / 'src' / 'data' / 'items-db.json'
 OUT = ROOT / 'assets' / 'items'
 
@@ -33,23 +38,22 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--width', type=int, default=1280)
     ap.add_argument('--quality', type=int, default=82)
+    ap.add_argument('--all', action='store_true', help='every gun, not only the ones the game shipped with')
     args = ap.parse_args()
     from PIL import Image
     from playwright.sync_api import sync_playwright
 
-    g = json.loads(GLOBALS.read_text(encoding='utf-8'))
-    presets = g.get('ItemPresets') or g['config']['ItemPresets']
     db = json.loads(DB.read_text(encoding='utf-8'))
-    items = db.get('items', db)
-    weapons = {k: v for k, v in items.items() if v.get('wpn') and v.get('presetImg')}
+    default_of = {t['base']: t['id'] for t in db.values() if t.get('cat') == 'preset' and t.get('def')}
     todo = []
-    for key, tpl in weapons.items():
-        wid = tpl['id']
-        pid = next((p for p, v in presets.items() if v.get('_encyclopedia') == wid), None)
+    for key, tpl in db.items():
+        if not tpl.get('wpn') or not tpl.get('presetImg') or not (args.all or tpl.get('core')):
+            continue
+        pid = default_of.get(key)
         if not pid:
             print(f'  no default preset for {key}')
             continue
-        todo.append((key, wid, pid))
+        todo.append((key, tpl['id'], pid))
 
     with sync_playwright() as p:
         b = p.chromium.launch(headless=True)

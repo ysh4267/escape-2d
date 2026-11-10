@@ -2,19 +2,42 @@
 # =========================================================
 # ESCAPE 2D - item database generator
 #
-# sources
-#   names / short names / descriptions : SPT locale dump (plain JSON on GitHub)
-#   handbook price + category tree     : SPT handbook.json
-#   exact grid footprint + artwork     : assets.tarkov.dev grid images
-#                                        (image is 63*cells + 1 px on each axis)
+# Every item of the live game gets a template, and nothing in a template is
+# typed in by hand. Three public data sets are joined, in this order of
+# authority:
+#
+#   1. tarkov.dev's static dataset (json.tarkov.dev/regular/items) - what
+#      exists today and its numbers today: footprint, weight, price, stack,
+#      category chain, slots and their filters, magazine capacity, ballistics,
+#      armour plates and inserts, container grids, medical effects, the
+#      trader-sold presets.
+#   2. the SPT server dumps - everything a template has that tarkov.dev does
+#      not carry: ItemSound, ExaminedByDefault, examine time and experience,
+#      RaidModdable, heat and malfunction numbers, repair degradation, what a
+#      med's effect costs, folding, chambers. Tag 4.1.2 of
+#      sp-tarkov/server-csharp first, tag 3.10.1 of sp-tarkov/server for
+#      anything it lacks.
+#   3. an item newer than both dumps borrows those deep fields from the most
+#      similar item of its own category (items_live.Donors).
+#
+# The items the game shipped with before keep their slugs (selection.py,
+# part_keys.json) and are marked `core`; everything else is keyed by its
+# tarkov id. Artwork is tarkov.dev's grid image, whose size is exactly
+# 63 * cells + 1 px a side - which cross-checks every footprint.
 #
 # output
 #   ../src/data/items-db.json          : the template table the game loads
 #   ../assets/items/<id>.webp          : local copies of every icon used
+#   cache/items_all/build_report.json  : what came from where, and what failed
 #
-# usage:  python build_items.py [--report]
+# usage:  python build_items.py [--no-art] [--retry-art] [--report]
+#   --no-art     build from the artwork already on disk, download nothing
+#   --retry-art  ask the CDN again for what it did not have last time
+#   --report     list every template
 # =========================================================
 
+import gzip
+import hashlib
 import json
 import os
 import re
@@ -22,102 +45,71 @@ import sys
 import time
 import urllib.request
 import urllib.error
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from selection import SELECTION  # noqa: E402
+from selection import ALIASES  # noqa: E402
 import weapons_expand as wx  # noqa: E402
+import items_live as lv  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 CACHE = os.path.join(HERE, 'cache')
 ASSETS = os.path.join(ROOT, 'assets', 'items')
 OUT = os.path.join(ROOT, 'src', 'data', 'items-db.json')
+REPORT = os.path.join(CACHE, 'items_all', 'build_report.json')
+ART_404 = os.path.join(CACHE, 'items_all', 'art_404.json')
+PART_KEYS = os.path.join(HERE, 'part_keys.json')
 
-# tag 3.10.1 is the newest tag where items.json is a plain blob rather than a
-# Git-LFS pointer, so it is the only place the real Width/Height/Weight/Grids
-# values can still be downloaded from.
-ITEMS_URL = 'https://raw.githubusercontent.com/sp-tarkov/server/3.10.1/project/assets/database/templates/items.json'
-LOCALE_URL = 'https://raw.githubusercontent.com/sp-tarkov/server/master/project/assets/database/locales/global/en.json'
-HANDBOOK_URL = 'https://raw.githubusercontent.com/sp-tarkov/server/master/project/assets/database/templates/handbook.json'
-# default weapon presets (ItemPresets) live in globals.json; the 3.10.1 tag is
-# a plain blob like items.json
-GLOBALS_URL = 'https://raw.githubusercontent.com/sp-tarkov/server/3.10.1/project/assets/database/globals.json'
+TDEV = 'https://json.tarkov.dev/regular/'
+# sp-tarkov/server-csharp, tag 4.1.2: the newest dump there is. Its items.json
+# is a Git-LFS object; the pointer names the sha256 the download is checked
+# against, wherever it ends up coming from.
+SPT412 = ('https://raw.githubusercontent.com/sp-tarkov/server-csharp/4.1.2/'
+          'Libraries/SPTarkov.Server.Assets/SPT_Data/database/')
+SPT412_MEDIA = ('https://media.githubusercontent.com/media/sp-tarkov/server-csharp/4.1.2/'
+                'Libraries/SPTarkov.Server.Assets/SPT_Data/database/')
+SPT412_LFSCONFIG = ['https://raw.githubusercontent.com/sp-tarkov/server-csharp/main/.lfsconfig',
+                    'https://raw.githubusercontent.com/sp-tarkov/server-csharp/4.1.2/.lfsconfig']
+# sp-tarkov/server, tag 3.10.1: the last tag where items.json is a plain blob
+SPT3101 = 'https://raw.githubusercontent.com/sp-tarkov/server/3.10.1/project/assets/database/'
 GRID_URL = 'https://assets.tarkov.dev/{id}-grid-image.webp'
 
-UA = {'User-Agent': 'escape2d-item-builder/1.0'}
-ID_RE = re.compile(r'^[0-9a-f]{24}$')
-
-# handbook category id -> gameplay category (sanity cross-check only)
-CAT_HINT = {
-    '5b5f78b786f77447ed5636af': 'money',
-    '5b47574386f77428ca22b338': 'meds',
-    '5b47574386f77428ca22b337': 'meds',
-    '5b47574386f77428ca22b339': 'meds',
-    '5b47574386f77428ca22b33a': 'meds',
-    '5b47574386f77428ca22b336': 'food',
-    '5b47574386f77428ca22b335': 'drink',
-    '5b5f6fa186f77409407a7eb7': 'container',
-    '5b5f6fd286f774093f2ecf0d': 'secure',
-    '5b5f6f6c86f774093f2ecf0b': 'backpack',
-    '5b5f6f8786f77447ed563642': 'rig',
-    '5b5f701386f774093f2ecf0f': 'armor',
-    '5b47574386f77428ca22b330': 'helmet',
-    '5b5f6f3c86f774094242ef87': 'headset',
-    '5b47574386f77428ca22b331': 'glasses',
-    '5b47574386f77428ca22b32f': 'facecover',
-    '5b5f754a86f774094242f19b': 'mag',
-    '5b47574386f77428ca22b33b': 'ammo',
-    '5b47574386f77428ca22b33c': 'ammobox',
-    '5b5f7a2386f774093f2ed3c4': 'grenade',
-    '5b5f7a0886f77409407a7f96': 'melee',
-    '5b5f792486f77447ed5636b3': 'pistol',
-    '5b5f78fc86f77409407a7f90': 'weapon',
-    '5b5f796a86f774093f2ed3c0': 'weapon',
-    '5b5f794b86f77409407a7f92': 'weapon',
-    '5b5f78e986f77447ed5636b1': 'weapon',
-    '5c518ec986f7743b68682ce2': 'key',
-    '5c518ed586f774119a772aee': 'key',
-    '5b47574386f77428ca22b341': 'info',
-    '5b47574386f77428ca22b343': 'info',
-}
+UA = {'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                     '(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36')}
+# the CDN is somebody else's: a handful of connections, and back off on error
+ART_WORKERS = 6
 
 
-def fetch(url, dest=None, binary=False, retries=3):
+# ---------------------------------------------------------
+# fetching and caching
+# ---------------------------------------------------------
+def fetch(url, dest=None, binary=False, retries=4, headers=None, data=None, missing=None):
+    """
+    The body of `url`, or None. A 404 is an answer, not a failure: it is not
+    retried, and `missing` (a list) is told about it so the caller can tell
+    "is not there" from "could not be reached".
+    """
     for attempt in range(retries):
         try:
-            req = urllib.request.Request(url, headers=UA)
-            with urllib.request.urlopen(req, timeout=60) as r:
-                data = r.read()
+            req = urllib.request.Request(url, headers={**UA, **(headers or {})}, data=data)
+            with urllib.request.urlopen(req, timeout=120) as r:
+                body = r.read()
             if dest:
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
                 with open(dest, 'wb') as f:
-                    f.write(data)
-            return data if binary else data.decode('utf-8')
+                    f.write(body)
+            return body if binary else body.decode('utf-8')
         except urllib.error.HTTPError as e:
             if e.code == 404:
+                if missing is not None:
+                    missing.append(url)
                 return None
-            time.sleep(1 + attempt)
+            time.sleep(1.5 * (attempt + 1))
         except Exception:
-            time.sleep(1 + attempt)
+            time.sleep(1.5 * (attempt + 1))
     return None
-
-
-def fetch_preset_image(preset_id, weapon_id):
-    """(filename, w, h) of the assembled-preset sprite, or None"""
-    fn = weapon_id + '-preset.webp'
-    dest = os.path.join(ASSETS, fn)
-    if os.path.exists(dest) and os.path.getsize(dest) > 500:
-        with open(dest, 'rb') as f:
-            data = f.read()
-    else:
-        data = fetch(GRID_URL.format(id=preset_id), dest=dest, binary=True)
-    size = webp_size(data) if data else None
-    if not size:
-        if os.path.exists(dest):
-            os.remove(dest)
-        return None
-    return fn, max(1, round((size[0] - 1) / 63)), max(1, round((size[1] - 1) / 63))
 
 
 def cached_json(url, name):
@@ -129,10 +121,55 @@ def cached_json(url, name):
     txt = fetch(url)
     if txt is None:
         raise SystemExit(f'failed to download {url}')
-    os.makedirs(CACHE, exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as f:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(txt)
     return json.loads(txt)
+
+
+def cached_lfs_json(rel, name):
+    """
+    A Git-LFS file of the 4.1.2 dump. The pointer on raw.githubusercontent.com
+    gives the object's sha256 and size; the object itself is looked for on
+    GitHub's media host and then on the LFS server the repository's own
+    .lfsconfig names, and is only kept if the hash matches.
+    """
+    path = os.path.join(CACHE, name)
+    if os.path.exists(path) and os.path.getsize(path) > 1000:
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    print(f'  downloading {name} (Git-LFS) ...')
+    pointer = fetch(SPT412 + rel) or ''
+    m = re.search(r'oid sha256:([0-9a-f]{64})\s+size (\d+)', pointer)
+    if not m:
+        raise SystemExit(f'no LFS pointer at {SPT412 + rel}')
+    oid, size = m.group(1), int(m.group(2))
+    sources = [lambda: fetch(SPT412_MEDIA + rel, binary=True)]
+    for cfg_url in SPT412_LFSCONFIG:
+        cfg = fetch(cfg_url) or ''
+        mm = re.search(r'url\s*=\s*(\S+)', cfg)
+        if mm:
+            sources.append(lambda base=mm.group(1): _lfs_object(base, oid, size))
+    for get in sources:
+        body = get()
+        if body and hashlib.sha256(body).hexdigest() == oid:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'wb') as f:
+                f.write(body)
+            return json.loads(body.decode('utf-8'))
+    raise SystemExit(f'could not fetch LFS object {oid} for {rel}')
+
+
+def _lfs_object(base, oid, size):
+    lfs = {'Accept': 'application/vnd.git-lfs+json', 'Content-Type': 'application/vnd.git-lfs+json'}
+    ask = json.dumps({'operation': 'download', 'transfers': ['basic'],
+                      'objects': [{'oid': oid, 'size': size}]}).encode()
+    txt = fetch(base.rstrip('/') + '/objects/batch', headers=lfs, data=ask)
+    try:
+        act = json.loads(txt)['objects'][0]['actions']['download']
+    except Exception:
+        return None
+    return fetch(act['href'], binary=True, headers=act.get('header') or {})
 
 
 def webp_size(data):
@@ -152,7 +189,6 @@ def webp_size(data):
     return None
 
 
-
 # ---------------------------------------------------------
 # medical / provisions: what a med does, straight from the template
 #
@@ -160,7 +196,8 @@ def webp_size(data):
 # how many HP one use of a medkit can put back, which conditions it removes
 # and what that costs out of its resource pool, and what a ration does to
 # energy and hydration. Stims name a buff set in globals (BuffsPropital ...)
-# which the client interprets by name.
+# which the client interprets by name; the dataset lists the same effects
+# resolved, and those ride along as `fx`.
 # ---------------------------------------------------------
 _MED_RM = {'LightBleeding': 'lb', 'HeavyBleeding': 'hb', 'Fracture': 'fr',
            'Contusion': 'ct', 'DestroyedPart': 'dp'}
@@ -233,184 +270,481 @@ def med_fields(props, cat):
     return m
 
 
+def stim_effects(it):
+    """the dataset's resolved effect list, compact: [{type, v, delay, dur, ...}]"""
+    out = []
+    for e in ((it or {}).get('properties') or {}).get('stimEffects') or []:
+        rec = {'type': e.get('type')}
+        if e.get('skill'):
+            rec['skill'] = e['skill']
+        if e.get('value'):
+            rec['v'] = wx._num(e['value'], 4)
+        if e.get('percent'):
+            rec['pct'] = True
+        if e.get('delay'):
+            rec['delay'] = wx._num(e['delay'])
+        if e.get('duration'):
+            rec['dur'] = wx._num(e['duration'])
+        if e.get('chance') not in (None, 1):
+            rec['chance'] = wx._num(e['chance'], 3)
+        out.append(rec)
+    return out
+
+
+# ---------------------------------------------------------
+# the footprint a built gun has, the way the game's model computes it
+# ---------------------------------------------------------
+def tree_footprint(tpl, tree, out):
+    """(w, h) of template `tpl` with preset `tree` on it; `out` is the database so far"""
+    mx, add = [0, 0, 0, 0], [0, 0, 0, 0]
+
+    def walk(t):
+        for rec in (t or {}).values():
+            part = out.get(rec['t'])
+            xs = (part or {}).get('mod', {}).get('xs')
+            if xs:
+                if part['mod'].get('xsAdd'):
+                    for i in range(4):
+                        add[i] += xs[i]
+                else:
+                    for i in range(4):
+                        mx[i] = max(mx[i], xs[i])
+            walk(rec.get('s'))
+    walk(tree)
+    return (max(1, tpl['w'] + mx[0] + mx[1] + add[0] + add[1]),
+            max(1, tpl['h'] + mx[2] + mx[3] + add[2] + add[3]))
+
+
+def tree_ids(tree, out=None):
+    out = [] if out is None else out
+    for rec in (tree or {}).values():
+        out.append(rec['t'])
+        tree_ids(rec.get('s'), out)
+    return out
+
+
+def map_tree(tree, key_of):
+    """an id tree as a key tree"""
+    out = {}
+    for slot, rec in (tree or {}).items():
+        r = {'t': key_of(rec['t'])}
+        if rec.get('s'):
+            r['s'] = map_tree(rec['s'], key_of)
+        out[slot] = r
+    return out
+
+
+# ---------------------------------------------------------
 def main():
-    report = '--report' in sys.argv
-    print('[1/5] loading source data')
-    en = cached_json(LOCALE_URL, 'en.json')
-    hb = cached_json(HANDBOOK_URL, 'handbook.json')
-    raw_items = cached_json(ITEMS_URL, 'items_3101.json')
-    globals_db = cached_json(GLOBALS_URL, 'globals_3101.json')
+    report_mode = '--report' in sys.argv
+    no_art = '--no-art' in sys.argv
+    t_start = time.time()
 
-    hb_items = {i['Id']: i for i in hb['Items']}
+    # =====================================================
+    print('[1/7] loading source data')
+    live = lv.Live(cached_json(TDEV + 'items', 'tdev/items.json'),
+                   cached_json(TDEV + 'items_en', 'tdev/items_en.json'))
+    tasks = cached_json(TDEV + 'tasks', 'tdev/tasks.json')['data']
+    tasks_en = cached_json(TDEV + 'tasks_en', 'tdev/tasks_en.json')
+    tasks_en = tasks_en.get('data', tasks_en)
+    spt412 = cached_lfs_json('templates/items.json', 'spt412/items.json')
+    g412 = cached_json(SPT412 + 'globals.json', 'spt412/globals.json')
+    hb412 = cached_json(SPT412 + 'templates/handbook.json', 'spt412/handbook.json')
+    en412 = cached_json(SPT412 + 'locales/global/en.json', 'spt412/en.json')
+    spt3101 = cached_json(SPT3101 + 'templates/items.json', 'items_3101.json')
+    g3101 = cached_json(SPT3101 + 'globals.json', 'globals_3101.json')
 
-    by_name = {}
-    for k, v in en.items():
-        if not k.endswith(' Name') or not isinstance(v, str):
-            continue
-        iid = k[:-5]
-        if not ID_RE.match(iid):
-            continue
-        by_name.setdefault(v.strip(), []).append(iid)
-    lower_index = {}
-    for name, ids in by_name.items():
-        lower_index.setdefault(name.lower(), []).extend(ids)
+    hb_price = {i['Id']: int(i.get('Price') or 0) for i in hb412['Items']}
+    presets_g = dict(g3101.get('ItemPresets') or g3101.get('config', {}).get('ItemPresets') or {})
+    presets_g.update(g412.get('ItemPresets') or {})
+    print(f'      tarkov.dev items: {len(live.items)}   SPT 4.1.2 templates: {len(spt412)}   '
+          f'3.10.1: {len(spt3101)}   globals presets: {len(presets_g)}')
 
-    print(f'      locale item names: {len(by_name)}   handbook items: {len(hb_items)}')
+    def spt_node(iid):
+        """(node, which dump) for an item template"""
+        n = spt412.get(iid)
+        if n and n.get('_type') == 'Item':
+            return n, '4.1.2'
+        n = spt3101.get(iid)
+        if n and n.get('_type') == 'Item':
+            return n, '3.10.1'
+        return None, None
 
-    print('[2/5] resolving selection')
-    resolved, misses, fuzzy = [], [], []
-    seen_keys, seen_ids = set(), {}
+    def spt_chain(iid):
+        """the category chain of a template, most specific first, from its parents"""
+        chain, cur = [], (spt412.get(iid) or spt3101.get(iid) or {}).get('_parent')
+        while cur and len(chain) < 12:
+            chain.append(cur)
+            cur = (spt412.get(cur) or spt3101.get(cur) or {}).get('_parent')
+        return chain
 
-    for query, key, cat, weight, stack, extra in SELECTION:
-        if key in seen_keys:
-            print(f'      !! duplicate key {key}')
-        seen_keys.add(key)
+    # =====================================================
+    print('[2/7] the item list')
+    aliases = {iid: key for iid, key in ALIASES}
+    with open(PART_KEYS, encoding='utf-8') as f:
+        aliases.update(json.load(f))
+    if len(set(aliases.values())) != len(aliases):
+        raise SystemExit('duplicate slug in selection.py / part_keys.json')
 
-        how = 'exact'
-        if ID_RE.match(query):
-            ids, how = [query], 'id'
+    live_ids = [i for i, it in live.items.items() if not live.is_preset(it)]
+    preset_ids = [i for i, it in live.items.items() if live.is_preset(it)]
+    # a slug whose item the live game no longer lists: kept, from the dumps
+    legacy_ids = [i for i in aliases if i not in live.items]
+    quest = {i: q for i, q in (tasks.get('questItems') or {}).items()
+             if i not in live.items and i not in aliases}
+    quest_ids = list(quest)
+    keys = {i: aliases.get(i, i) for i in live_ids + legacy_ids + quest_ids + preset_ids}
+    key_of = keys.get
+    print(f'      live items: {len(live_ids)}   presets: {len(preset_ids)}   quest items: {len(quest_ids)}   '
+          f'slugs: {len(aliases)} ({len(legacy_ids)} no longer listed live)')
+
+    # =====================================================
+    print('[3/7] templates: live numbers over the dumps')
+    donors = lv.Donors(live, spt412)
+    equip = lv.equip_filters(spt412)
+    # what an item nobody resembles falls back on: the commonest value there is
+    all_props = [n['_props'] for n in spt412.values() if n.get('_type') == 'Item']
+    generic = {k: Counter(p.get(k) for p in all_props if p.get(k) is not None).most_common(1)[0][0]
+               for k in ('ItemSound', 'ExaminedByDefault', 'ExamineTime', 'ExamineExperience',
+                         'LootExperience', 'StackMaxSize', 'BackgroundColor')}
+
+    recs = {}
+    src_count = Counter()
+    for iid in live_ids:
+        it = live.items[iid]
+        node, src = spt_node(iid)
+        rec = {'id': iid, 'key': keys[iid], 'it': it, 'kind': 'live',
+               'chain': list(it.get('categories') or []), 'hb': list(it.get('handbookCategories') or []),
+               'types': list(it.get('types') or [])}
+        if node:
+            rec['props'] = lv.live_props(it, node['_props'])
+            rec['src'] = src
         else:
-            ids = by_name.get(query) or lower_index.get(query.lower())
-        if not ids:
-            q = query.lower()
-            cands = sorted(
-                (len(name), name, iid)
-                for name, idlist in by_name.items() if q in name.lower()
-                for iid in idlist if iid in hb_items
-            )
-            if cands:
-                ids, how = [cands[0][2]], 'fuzzy'
-                fuzzy.append((key, query, cands[0][1]))
-        if not ids:
-            misses.append((key, query))
-            continue
+            did, score = donors.pick(it)
+            base = spt412[did]['_props'] if did else generic
+            rec['props'] = lv.live_props(it, base, fresh=True)
+            rec['src'] = 'tarkov.dev'
+            rec['donor'] = did
+            rec['donor_score'] = score
+        src_count[rec['src']] += 1
+        recs[iid] = rec
+    for iid in legacy_ids:
+        node, src = spt_node(iid)
+        if not node:
+            raise SystemExit(f'{aliases[iid]} ({iid}) is in neither tarkov.dev nor the dumps')
+        props = dict(node['_props'])
+        props['Slots'] = [s for s in (props.get('Slots') or []) if not lv.is_armor_slot(s)]
+        recs[iid] = {'id': iid, 'key': keys[iid], 'it': None, 'kind': 'legacy', 'props': props,
+                     'src': src, 'chain': spt_chain(iid), 'hb': [], 'types': []}
+        src_count[src + ' (not listed live)'] += 1
+    for iid in quest_ids:
+        node, src = spt_node(iid)
+        q = quest[iid]
+        props = dict(node['_props']) if node else dict(generic)
+        props['Width'], props['Height'] = q['width'], q['height']
+        props['Slots'], props['Grids'] = [], []
+        recs[iid] = {'id': iid, 'key': keys[iid], 'it': None, 'kind': 'quest', 'quest': q, 'props': props,
+                     'src': src or 'tarkov.dev', 'chain': spt_chain(iid) if node else [], 'hb': [], 'types': []}
+        src_count['quest: ' + (src or 'tarkov.dev')] += 1
 
-        iid = next((i for i in ids if i in hb_items), ids[0])
-        if iid in seen_ids:
-            print(f'      !! {key} and {seen_ids[iid]} both resolve to {iid}')
-        seen_ids[iid] = key
-        resolved.append({'key': key, 'id': iid, 'cat': cat, 'weight': weight,
-                         'stack': stack, 'extra': extra, 'query': query, 'how': how})
+    # --- gameplay category and part family, from the category chain ---
+    def base_cat(rec):
+        if rec['kind'] == 'quest':
+            return 'quest'
+        cat = live.cat_of(rec['chain'])
+        if cat in ('weapon', 'pistol'):
+            donor_cat = None
+            if rec.get('donor'):
+                d = recs.get(rec['donor'])
+                donor_cat = d['cat'] if d and 'cat' in d else None
+            cat = lv.weapon_cat(rec['id'], rec['chain'], rec['props'], equip, donor_cat)
+        return cat
 
-    if fuzzy:
-        print(f'      {len(fuzzy)} resolved by fuzzy match:')
-        for key, q, matched in fuzzy:
-            print(f'         {key}: "{q}" -> "{matched}"')
-    if misses:
-        print(f'      !! {len(misses)} unresolved:')
-        for key, q in misses:
-            print(f'         - {key}: "{q}"')
+    # donors are templates of the dumps, so they get their category first
+    for rec in sorted(recs.values(), key=lambda r: bool(r.get('donor'))):
+        rec['cat'] = base_cat(rec)
+        if rec['cat'] is None:
+            raise SystemExit(f"no category for {rec['id']} {rec['chain']}")
+        rec['modType'] = live.mod_type_of(rec['chain']) if rec['cat'] in ('mod', 'mag') else None
+        if rec['cat'] == 'mag':
+            wx.cylinder_chambers(rec['props'])
+    cat_count = Counter(r['cat'] for r in recs.values())
+    print('      ' + ', '.join(f'{v} {k}' for k, v in sorted(cat_count.items())))
+    print('      sources: ' + ', '.join(f'{v} {k}' for k, v in sorted(src_count.items())))
 
-    # --- weapon trees: every part, magazine and cartridge the guns can take ---
-    sel_ids = {r['id']: r['key'] for r in resolved}
-    expanded, ex_counts, tree_depth = wx.expand(raw_items, hb_items, en, sel_ids, seen_keys)
-    for rec in expanded:
-        resolved.append({'key': rec['key'], 'id': rec['id'], 'cat': rec['cat'], 'weight': 0.1,
-                         'stack': 1, 'extra': rec.get('extra', {}), 'query': rec['id'], 'how': 'tree',
-                         'modType': rec['modType']})
-        seen_ids[rec['id']] = rec['key']
-    print('      weapon trees: +%s' % ', '.join(f'{v} {k}' for k, v in sorted(ex_counts.items())))
-    key_of = lambda iid: seen_ids.get(iid)  # noqa: E731
-    presets = {}
-    for pr in globals_db.get('ItemPresets', {}).values():
+    def is_part(tid):
+        r = recs.get(tid)
+        return bool(r) and r['cat'] != 'ammo'
+
+    # =====================================================
+    print('[4/7] presets')
+    default_g = {}
+    for pid, pr in presets_g.items():
         enc = pr.get('_encyclopedia')
-        if enc and enc in seen_ids and enc not in presets:
-            presets[enc] = pr
+        if enc and enc in recs and wx.preset_root(pr) == enc and enc not in default_g:
+            default_g[enc] = pid
 
-    print(f'[3/5] fetching grid images for {len(resolved)} items')
+    def mod_slots(iid):
+        """[(slot name, allowed ids)] of an item's part slots, plate slots included"""
+        r = recs.get(iid)
+        if not r:
+            return []
+        out = [(s['_name'], set(wx._filters(s))) for s in (r['props'].get('Slots') or [])]
+        for a in ((r['it'] or {}).get('properties') or {}).get('armorSlots') or []:
+            if 'allowedPlates' in a:
+                out.append((a['nameId'], set(a['allowedPlates'])))
+        return out
+
+    preset_stats = Counter()
+    preset_fail = []
+
+    def split_contents(base_id, contained):
+        """a preset's flat list -> (part ids, load runs)"""
+        parts, load = [], []
+        for c in contained:
+            cid, n = c['item'], int(c.get('count') or 1)
+            if cid == base_id or cid not in recs:
+                continue
+            if recs[cid]['cat'] == 'ammo':
+                load.append({'t': keys[cid], 'n': n})
+            else:
+                parts.extend([cid] * n)
+        return parts, load
+
+    def build_tree(base_id, pid):
+        """(id tree, load, source) of preset `pid` on `base_id`; tree None when it cannot be built"""
+        P = live.items.get(pid)
+        gp = presets_g.get(pid)
+        live_parts, load = (None, [])
+        if P:
+            live_parts, load = split_contents(base_id, P.get('containsItems') or [])
+        if gp and wx.preset_root(gp) == base_id:
+            gt = wx.preset_tree(gp, lambda i: i if i in recs else None, is_part)
+            # a build the live game does not list is only offered when every
+            # part of it is carried, or it would lie about itself
+            whole = P is not None or recs[base_id]['cat'] not in ('weapon', 'pistol') or all(
+                x['_tpl'] in recs for x in gp['_items'] if x.get('parentId'))
+            if gt is not None and whole and (live_parts is None or sorted(tree_ids(gt)) == sorted(live_parts)):
+                gload = wx.preset_load(gp, key_of) or []
+                return gt, (load or gload), 'globals'
+        if live_parts is not None:
+            if not live_parts:
+                return {}, load, 'live'
+            t = lv.rebuild_tree(mod_slots(base_id), mod_slots, live_parts)
+            if t is not None:
+                return t, load, 'live'
+        return None, load, 'failed'
+
+    # every preset the live game lists, plus the dump's own builds of a gun
+    by_base = {}
+    for pid in preset_ids:
+        P = live.items[pid]
+        b = (P.get('properties') or {}).get('baseItem')
+        if b in recs:
+            by_base.setdefault(b, []).append(pid)
+    for pid, pr in presets_g.items():
+        b = wx.preset_root(pr)
+        if b in recs and pid not in live.items and recs[b]['cat'] in ('weapon', 'pistol'):
+            by_base.setdefault(b, []).append(pid)
+
+    preset_data = {}       # pid -> {base, tree (ids), load, default, src}
+    g_order = {pid: i for i, pid in enumerate(presets_g)}
+    for b, pids in by_base.items():
+        it = recs[b]['it'] or {}
+        live_default = (it.get('properties') or {}).get('defaultPreset')
+        default_pid = live_default or default_g.get(b)
+        if not default_pid:
+            # a wearable: its default is the live preset flagged so
+            default_pid = next((p for p in pids if p in live.items
+                                and (live.items[p].get('properties') or {}).get('default')), None)
+        if default_pid and default_pid not in pids:
+            pids.append(default_pid)
+        # the dump's order first (the build screen has always listed them so),
+        # then the builds only the live game knows
+        pids.sort(key=lambda p: (p != default_pid, g_order.get(p, len(g_order))))
+        for pid in pids:
+            tree, load, how = build_tree(b, pid)
+            preset_stats[how] += 1
+            if tree is None:
+                preset_fail.append((pid, b))
+                continue
+            preset_data[pid] = {'base': b, 'tree': tree, 'load': load, 'default': pid == default_pid, 'src': how}
+    # a wearable the dump has a default build for but the live list does not
+    for b, pid in default_g.items():
+        if b in by_base or recs[b]['cat'] in ('weapon', 'pistol'):
+            continue
+        tree, load, how = build_tree(b, pid)
+        if tree:
+            preset_data[pid] = {'base': b, 'tree': tree, 'load': load, 'default': True, 'src': how}
+            by_base.setdefault(b, []).append(pid)
+    print('      ' + ', '.join(f'{v} {k}' for k, v in sorted(preset_stats.items()))
+          + f'   ({len(preset_fail)} could not be built)')
+
+    def default_tree(b):
+        for pid in by_base.get(b, []):
+            d = preset_data.get(pid)
+            if d and d['default']:
+                return pid, d
+        return None, None
+
+    def split_plates(base_id, tree):
+        """a wearable's preset tree -> (plates {slot lower: plate id}, the rest of the tree)"""
+        plates, rest = {}, {}
+        plate_slots = {a['nameId'] for a in ((recs[base_id]['it'] or {}).get('properties') or {}).get('armorSlots') or []
+                       if 'allowedPlates' in a}
+        for slot, rec in (tree or {}).items():
+            if slot in plate_slots:
+                plates[slot.lower()] = rec['t']
+            else:
+                rest[slot] = rec
+        return plates, rest
+
+    # =====================================================
+    print(f'[5/7] artwork for {len(recs) + len(preset_data)} templates')
     os.makedirs(ASSETS, exist_ok=True)
+    art = {}        # template id -> {'img', 'w', 'h'} | {'why'}
 
-    def grab(rec):
-        dest = os.path.join(ASSETS, rec['id'] + '.webp')
-        data = None
+    # what the CDN answered 404 for last time is not asked for again, unless told to
+    known_404 = {}
+    if os.path.exists(ART_404) and '--retry-art' not in sys.argv:
+        with open(ART_404, encoding='utf-8') as f:
+            known_404 = json.load(f)
+    new_404 = {}
+
+    def grab(job):
+        """the grid image of one template: (id, {'img', 'w', 'h'} | {'why'})"""
+        tid, url, fn, guess = job
+        dest = os.path.join(ASSETS, fn)
+        data, fresh = None, False
         if os.path.exists(dest) and os.path.getsize(dest) > 500:
             with open(dest, 'rb') as f:
                 data = f.read()
+        elif url in known_404:
+            new_404[url] = known_404[url]
+            return tid, {'why': 'no artwork upstream'}
+        elif no_art:
+            return tid, {'why': 'not downloaded (--no-art)'}
         else:
-            data = fetch(GRID_URL.format(id=rec['id']), dest=dest, binary=True)
+            missing = []
+            data, fresh = fetch(url, binary=True, missing=missing), True
+            if missing:
+                new_404[url] = time.strftime('%Y-%m-%d')
+                return tid, {'why': 'no artwork upstream'}
         size = webp_size(data) if data else None
         if not size:
-            if os.path.exists(dest):
+            if not fresh and os.path.exists(dest):
                 os.remove(dest)
-            rec['img'] = None
-            return rec
-        pw, ph = size
-        rec['w'] = max(1, round((pw - 1) / 63))
-        rec['h'] = max(1, round((ph - 1) / 63))
-        rec['img'] = rec['id'] + '.webp'
-        return rec
+            return tid, {'why': 'download failed' if not data else 'not an image'}
+        cells = (max(1, round((size[0] - 1) / 63)), max(1, round((size[1] - 1) / 63)))
+        # A picture found under a name the dataset did not give is only the
+        # item's if it is the item's size: 63 px a cell plus one. What is not
+        # is somebody else's sprite filed under this id, and is not kept.
+        if fresh and guess and cells != guess:
+            new_404[url] = 'a %dx%d sprite for a %dx%d item' % (cells + guess)
+            return tid, {'why': 'no artwork upstream'}
+        if fresh:
+            with open(dest, 'wb') as f:
+                f.write(data)
+        return tid, {'img': fn, 'w': cells[0], 'h': cells[1]}
 
-    with ThreadPoolExecutor(max_workers=12) as ex:
-        resolved = list(ex.map(grab, resolved))
+    def art_job(tid, link, fn, size):
+        """
+        The dataset's own link where it is a grid image (a preset may point at
+        another id's); the conventional name otherwise - the dataset marks
+        some items as having no picture, or only a JPEG, that the CDN does
+        have a grid image for - and then the picture has to measure `size`.
+        """
+        if link and link.endswith('-grid-image.webp') and 'unknown-item' not in link:
+            return (tid, link, fn, None)
+        return (tid, GRID_URL.format(id=tid), fn, None if link is None else size)
 
-    no_img = [r for r in resolved if not r.get('img')]
-    if no_img:
-        print(f'      !! {len(no_img)} without artwork (text tiles will be used):')
-        for r in no_img:
-            print(f'         - {r["key"]}  {r["id"]}')
+    jobs = []
+    for iid, rec in recs.items():
+        link = (rec['it'] or rec.get('quest') or {}).get('gridImageLink')
+        jobs.append(art_job(iid, link, iid + '.webp', (int(rec['props'].get('Width') or 1), int(rec['props'].get('Height') or 1))))
+    for pid in preset_ids:
+        d = preset_data.get(pid)
+        if not d:
+            continue        # a preset that could not be built is not carried
+        P = live.items[pid]
+        # the twelve guns' assembled sprites are already on disk under the
+        # weapon's id; everything else is filed under the preset's own
+        fn = pid + '.webp'
+        if d['default'] and os.path.exists(os.path.join(ASSETS, d['base'] + '-preset.webp')):
+            fn = d['base'] + '-preset.webp'
+        jobs.append(art_job(pid, P.get('gridImageLink'), fn, (P['width'], P['height'])))
+    with ThreadPoolExecutor(max_workers=ART_WORKERS) as ex:
+        for tid, res in ex.map(grab, jobs):
+            art[tid] = res
+    if not no_art:
+        os.makedirs(os.path.dirname(ART_404), exist_ok=True)
+        with open(ART_404, 'w', encoding='utf-8', newline='\n') as f:
+            json.dump(dict(sorted(new_404.items())), f, indent=1)
+    art_missing = {tid: a['why'] for tid, a in art.items() if 'img' not in a}
+    why = Counter(art_missing.values())
+    print(f'      {len(art) - len(art_missing)} images, {len(art_missing)} without'
+          + (' (' + ', '.join(f'{v} {k}' for k, v in sorted(why.items())) + ')' if why else ''))
 
-    print('[4/5] assembling database')
+    # =====================================================
+    print('[6/7] assembling the database')
     out = {}
     warns = []
-    no_props = []
-    for r in resolved:
-        iid = r['id']
-        name = en.get(iid + ' Name', r['query'])
-        short = en.get(iid + ' ShortName') or name[:6]
-        desc = en.get(iid + ' Description', '')
-        hbrec = hb_items.get(iid, {})
-        price = int(hbrec.get('Price', 0) or 0)
-        hint = CAT_HINT.get(hbrec.get('ParentId'))
-        extra = dict(r['extra'])
+    cat_ids = set(live.cats)
+    # slot id -> (owner item id, slot name), for the conflicts that name a slot
+    slot_owner = {sl['id']: (iid, sl['nameId'])
+                  for iid in live_ids
+                  for sl in ((live.items[iid].get('properties') or {}).get('slots') or []) if sl.get('id')}
 
-        node = raw_items.get(iid)
-        props = node.get('_props', {}) if node else {}
-        if not node:
-            no_props.append(r['key'])
+    def text(rec):
+        iid, it = rec['id'], rec['it']
+        if it:
+            name = live.T(it['name'], '')
+            short = live.T(it['shortName'], '')
+            desc = live.T(it.get('description') or '', '')
+        elif rec['kind'] == 'quest':
+            q = rec['quest']
+            name = tasks_en.get(q['name']) or ''
+            short = tasks_en.get(q['shortName']) or ''
+            desc = tasks_en.get(q.get('description') or '') or ''
+        else:
+            name = short = desc = ''
+        name = name or en412.get(iid + ' Name') or iid
+        short = short or en412.get(iid + ' ShortName') or name[:6]
+        desc = desc or en412.get(iid + ' Description') or ''
+        return name.strip(), short.strip(), re.sub(r'\s+', ' ', desc).strip()[:340]
 
-        # --- footprint: prefer the real template, fall back to the sprite ---
-        w = props.get('Width') or r.get('w')
-        h = props.get('Height') or r.get('h')
-        if not w or not h:
-            gh = extra.get('gridsHint')
-            w, h = (2, 2) if not gh else (gh[0][0], gh[0][1])
-        if r.get('w') and props.get('Width') and (r['w'] != w or r['h'] != h):
-            warns.append((r['key'], 'sprite %dx%d' % (r['w'], r['h']),
-                          'template %dx%d' % (w, h)))
+    def common(tid, key, name, short, desc, cat, w, h, weight, price, stack):
+        tpl = {'id': tid, 'name': name, 'short': short, 'desc': desc, 'cat': cat,
+               'w': int(w), 'h': int(h), 'weight': round(float(weight or 0), 3),
+               'price': int(price or 0), 'stack': int(stack or 1)}
+        if tid in aliases:
+            tpl['core'] = True
+        a = art.get(tid) or {}
+        if a.get('img'):
+            tpl['img'] = a['img']
+            if (a['w'], a['h']) != (tpl['w'], tpl['h']):
+                warns.append((key, 'sprite %dx%d' % (a['w'], a['h']), 'template %dx%d' % (tpl['w'], tpl['h'])))
+        return tpl
 
-        weight = props.get('Weight')
-        if weight is None:
-            weight = r['weight']
-        stack = props.get('StackMaxSize') or r['stack']
-
-        tpl = {
-            'id': iid, 'key': r['key'], 'name': name, 'short': short,
-            'desc': re.sub(r'\s+', ' ', desc).strip()[:340],
-            'cat': r['cat'], 'w': int(w), 'h': int(h),
-            'weight': round(float(weight), 3), 'price': price, 'stack': int(stack),
-        }
-        if r.get('img'):
-            tpl['img'] = r['img']
+    for iid, rec in recs.items():
+        key, it, props, cat = rec['key'], rec['it'], rec['props'], rec['cat']
+        pr = (it or {}).get('properties') or {}
+        name, short, desc = text(rec)
+        if it:
+            price = it.get('basePrice') or 0
+        else:
+            price = hb_price.get(iid, 0)
+        tpl = common(iid, key, name, short, desc, cat, props.get('Width') or 1, props.get('Height') or 1,
+                     props.get('Weight'), price, props.get('StackMaxSize') or 1)
+        if rec['chain']:
+            tpl['cats'] = rec['chain']
+        if rec['hb']:
+            tpl['hb'] = rec['hb']
+        if rec['types']:
+            tpl['types'] = rec['types']
         bg = props.get('BackgroundColor')
         if bg:
             tpl['bg'] = bg
-
-        # --- container grids: the template layout wins over the hint ---
-        grids = []
-        for g in (props.get('Grids') or []):
-            gp = g.get('_props', {})
-            cw, ch = gp.get('cellsH'), gp.get('cellsV')
-            if cw and ch:
-                grids.append([int(cw), int(ch)])
-        hint_grids = extra.pop('gridsHint', None)
-        if not grids and hint_grids:
-            grids = hint_grids
-        if grids:
-            tpl['container'] = {'grids': grids}
-            f = extra.pop('filter', None)
-            if f:
-                tpl['container']['filter'] = f
-        extra.pop('filter', None)
 
         # Which foley the item makes when it is picked up, dropped or used.
         # This is the game's own per-template field, so a helmet lands like a
@@ -418,18 +752,6 @@ def main():
         # category sharing one guessed sound.
         if props.get('ItemSound'):
             tpl['snd'] = props['ItemSound']
-
-        # --- gameplay props straight from the template where they exist ---
-        if props.get('MaxHpResource'):
-            tpl['res'] = {'max': int(props['MaxHpResource'])}
-            if props.get('hpResourceRate'):
-                tpl['heal'] = int(props['hpResourceRate'])
-        elif props.get('MaxResource') and r['cat'] in ('food', 'drink', 'meds'):
-            tpl['res'] = {'max': int(props['MaxResource'])}
-        if props and r['cat'] in ('meds', 'food', 'drink'):
-            tpl['med'] = med_fields(props, r['cat'])
-        if props.get('MaximumNumberOfUsage'):
-            tpl['uses'] = int(props['MaximumNumberOfUsage'])
         # examination: most templates are known on sight, the rest have to be
         # inspected before their name and stats are revealed
         if props.get('ExaminedByDefault'):
@@ -438,139 +760,395 @@ def main():
             tpl['examineTime'] = float(props['ExamineTime'])
         if props.get('ExamineExperience'):
             tpl['examineXp'] = int(props['ExamineExperience'])
-        if props.get('Damage'):
+        if props.get('LootExperience'):
+            tpl['lootXp'] = int(props['LootExperience'])
+        if props.get('DiscardLimit') not in (None, -1):
+            tpl['discard'] = int(props['DiscardLimit'])
+        if cat == 'money':
+            tpl['alwaysExamined'] = True
+        if cat == 'quest':
+            tpl['quest'] = True
+
+        # --- container grids, each with the filter the template gives it ---
+        if cat != 'lootbox':
+            grids, filters = lv.grids_of(props, key_of, cat_ids, live.root)
+            if grids:
+                tpl['container'] = {'grids': grids}
+                if any(filters):
+                    if all(f == filters[0] for f in filters):
+                        tpl['container']['filter'] = filters[0]
+                    else:
+                        tpl['container']['filters'] = filters
+
+        # --- meds, food and drink ---
+        if props.get('MaxHpResource'):
+            tpl['res'] = {'max': int(props['MaxHpResource'])}
+            if props.get('hpResourceRate'):
+                tpl['heal'] = int(props['hpResourceRate'])
+        elif props.get('MaxResource') and (cat in ('food', 'drink', 'meds')
+                                         or pr.get('propertiesType') == 'ItemPropertiesResource'):
+            # a ration's bites, a fuel tank's litres, a filter's hours
+            tpl['res'] = {'max': int(props['MaxResource'])}
+        if cat in ('meds', 'food', 'drink'):
+            tpl['med'] = med_fields(props, cat)
+            fx = stim_effects(it)
+            if fx:
+                tpl['med']['fx'] = fx
+            # a med with no resource pool - an injector, a tourniquet - is one use
+            if cat == 'meds':
+                tpl.setdefault('res', {'max': 1})
+        if props.get('MaximumNumberOfUsage'):
+            tpl['uses'] = int(props['MaximumNumberOfUsage'])
+
+        # --- what a card shows at a glance ---
+        if cat == 'ammo' and props.get('Damage'):
             tpl['dmg'] = int(props['Damage'])
-        if props.get('PenetrationPower'):
+        if cat == 'ammo' and props.get('PenetrationPower'):
             tpl['pen'] = int(props['PenetrationPower'])
-        if props.get('Ergonomics'):
-            tpl['ergo'] = int(props['Ergonomics'])
-        if props.get('bFirerate'):
+        if props.get('Ergonomics') and cat in ('weapon', 'pistol', 'mod', 'mag', 'nvg', 'gearmod'):
+            tpl['ergo'] = wx._num(props['Ergonomics'])
+        if props.get('bFirerate') and cat in ('weapon', 'pistol'):
             tpl['rpm'] = int(props['bFirerate'])
-        cal = wx.caliber(props)
-        if cal:
-            tpl['cal'] = cal
-        if props.get('speedPenaltyPercent'):
-            tpl['speedPen'] = float(props['speedPenaltyPercent'])
-        if props.get('ArmorMaterial'):
-            tpl['armorMat'] = props['ArmorMaterial']
+        if cat in ('weapon', 'pistol', 'ammo', 'flare'):
+            cal = wx.caliber(props)
+            if cal:
+                tpl['cal'] = cal
 
-        # --- weapon system: parts tree, ballistics, presets ---
-        kind = wx.kind_of(raw_items, iid)
-        if kind and props:
-            kcat, ktype = kind
-            slots = wx.slots_of(props, key_of)
-            if slots:
-                for sl in slots:
-                    sl['label'] = wx.slot_label(sl['n'])
-                tpl['slots'] = slots
-            conf = [key_of(c) for c in (props.get('ConflictingItems') or [])]
-            conf = sorted({c for c in conf if c})
-            if conf:
-                tpl['conflicts'] = conf
-            if kcat in ('weapon', 'pistol'):
-                tpl['wpn'] = wx.weapon_fields(props, key_of)
-                pr = presets.get(iid)
-                tree = wx.preset_tree(pr, key_of) if pr else None
-                if tree:
-                    tpl['preset'] = tree
-                    tpl['presetName'] = pr.get('_name')
-                    # tarkov.dev also draws the assembled default preset, under
-                    # the preset's own id; the bare receiver's sprite is only
-                    # the receiver. The assembled sprite is what a built gun
-                    # shows in the grid, and its size is the cross-check that
-                    # the footprint arithmetic (ExtraSize per part) is right.
-                    pimg = fetch_preset_image(pr['_id'], iid)
-                    if pimg:
-                        tpl['presetImg'] = pimg[0]
-                        tpl['presetSize'] = [pimg[1], pimg[2]]
-                # the factory's other builds of the same gun, for the build screen
-                alts = wx.alt_presets(globals_db, iid, key_of, en)
-                if alts:
-                    tpl['wpn']['alts'] = alts
-                if props.get('weapFireType'):
-                    tpl['fire'] = list(props['weapFireType'])
-            elif kcat == 'mag':
-                mg = wx.mag_fields(props, key_of)
-                tpl['magSize'] = mg.pop('size', 0)
-                tpl['ammoFilter'] = mg.pop('ammo', [])
-                tpl['mag'] = mg
-                mf = wx.mod_fields(props)
-                if mf:
-                    tpl['mod'] = mf
-                tpl['modType'] = 'magazine'
-                # the calibre is the one most of the rounds we carry are in: an
-                # AKM mag also lists .366 TKM for the VPO-209, and that must not
-                # relabel it
-                cal_votes = {}
-                for a in wx._filters((props.get('Cartridges') or [{}])[0]):
-                    if a in raw_items and key_of(a):
-                        c = wx.caliber(raw_items[a]['_props'])
-                        cal_votes[c] = cal_votes.get(c, 0) + 1
-                if cal_votes:
-                    tpl['cal'] = max(cal_votes, key=cal_votes.get)
-                if not tpl.get('price'):
-                    tpl['price'] = 1500
-            elif kcat == 'mod':
-                tpl['mod'] = wx.mod_fields(props)
-                tpl['modType'] = r.get('modType') or ktype
-        if r['cat'] == 'ammo' and props:
+        # --- worn gear ---
+        wearable = cat in ('armor', 'rig', 'helmet', 'facecover', 'glasses', 'headset', 'backpack',
+                           'plate', 'gearmod', 'armband', 'nvg')
+        if wearable:
+            if props.get('speedPenaltyPercent'):
+                tpl['speedPen'] = float(props['speedPenaltyPercent'])
+            if props.get('mousePenalty'):
+                tpl['turnPen'] = wx._num(props['mousePenalty'])
+            if props.get('weaponErgonomicPenalty'):
+                tpl['ergoPen'] = wx._num(props['weaponErgonomicPenalty'])
+            blocks = [slot for flag, slot in (('BlocksEarpiece', 'ears'), ('BlocksEyewear', 'eyes'),
+                                              ('BlocksFaceCover', 'face'), ('BlocksHeadwear', 'head'),
+                                              ('BlocksArmorVest', 'armor')) if props.get(flag)]
+            if blocks:
+                tpl['blocks'] = blocks
+            if props.get('DeafStrength') and props['DeafStrength'] != 'None':
+                tpl['deaf'] = props['DeafStrength']
+            if props.get('BlindnessProtection'):
+                tpl['blind'] = wx._num(props['BlindnessProtection'])
+            if it:
+                _pid, d = default_tree(iid)
+                plates, _rest = split_plates(iid, d['tree']) if d else ({}, {})
+                st, summary = lv.armor_of(live, it, key_of, plates, props.get('armorColliders') or ())
+                if st and (st.get('ins') or st.get('slots') or summary):
+                    tpl['armor'] = st
+                tpl.update(summary)
+        if cat == 'headset' and pr.get('propertiesType') == 'ItemPropertiesHeadphone':
+            hs = {}
+            for k_out, k_in in (('amb', 'ambientVolume'), ('dry', 'dryVolume'), ('dist', 'distanceModifier'),
+                                ('distort', 'distortion'), ('att', 'compressorAttack'), ('rel', 'compressorRelease'),
+                                ('gain', 'compressorGain'), ('thr', 'compressorThreshold')):
+                wx._put(hs, k_out, wx._num(pr.get(k_in), 4))
+            if hs:
+                tpl['hs'] = hs
+        if cat == 'nvg' and pr.get('propertiesType') == 'ItemPropertiesNightVision':
+            nv = {}
+            for k_out, k_in in (('intensity', 'intensity'), ('noise', 'noiseIntensity'),
+                                ('noiseScale', 'noiseScale'), ('diffuse', 'diffuseIntensity')):
+                wx._put(nv, k_out, wx._num(pr.get(k_in), 4))
+            if nv:
+                tpl['nvg'] = nv
+
+        # --- weapon system: slots, parts, ballistics ---
+        slots = wx.slots_of(props, key_of)
+        if slots:
+            for sl in slots:
+                sl['label'] = wx.slot_label(sl['n'])
+            tpl['slots'] = slots
+        conf = sorted({c for c in (key_of(c) for c in (props.get('ConflictingItems') or [])) if c})
+        if conf:
+            tpl['conflicts'] = conf
+        # the few that rule out a whole category (a mandible and thermal
+        # goggles) or one slot of one item (a headset and a helmet's shield)
+        if it and it.get('conflictingCategories'):
+            tpl['conflictCats'] = list(it['conflictingCategories'])
+        cs = [slot_owner[s] for s in ((it or {}).get('conflictingSlotIds') or []) if s in slot_owner]
+        if cs:
+            tpl['conflictSlots'] = [[keys[o], n] for o, n in cs]
+        if cat in ('weapon', 'pistol'):
+            tpl['wpn'] = wx.weapon_fields(props, key_of)
+            if props.get('weapFireType'):
+                tpl['fire'] = list(props['weapFireType'])
+        elif cat == 'mag':
+            mg = wx.mag_fields(props, key_of)
+            tpl['magSize'] = mg.pop('size', 0)
+            tpl['ammoFilter'] = mg.pop('ammo', [])
+            tpl['mag'] = mg
+            mf = wx.mod_fields(props)
+            if mf:
+                tpl['mod'] = mf
+            tpl['modType'] = 'magazine'
+            # the calibre is the one most of the rounds it takes are in: an
+            # AKM mag also lists .366 TKM for the VPO-209, and that must not
+            # relabel it
+            votes = Counter()
+            for a in wx._filters((props.get('Cartridges') or [{}])[0]):
+                if a in recs and recs[a]['cat'] == 'ammo':
+                    votes[wx.caliber(recs[a]['props'])] += 1
+            if votes:
+                top = max(votes.values())
+                tpl['cal'] = next(c for c in votes if votes[c] == top)
+        elif cat in ('mod', 'nvg', 'gearmod'):
+            mf = wx.mod_fields(props)
+            if cat == 'mod':
+                tpl['mod'] = mf
+                tpl['modType'] = rec['modType'] or 'aux'
+            elif mf:
+                tpl['mod'] = mf
+        if cat == 'ammo':
             tpl['ammo'] = wx.ammo_fields(props)
-
-        # authored overrides last: armor class and durability are no longer in
-        # the template because armor moved to a plate-based system
-        for k, v in extra.items():
-            if k == 'res':
-                tpl.setdefault('res', {'max': v})
-            elif k == 'heal':
-                # the template's own hpResourceRate wins; the authored number
-                # is only a fallback for an item missing from the dump
-                tpl.setdefault('heal', v)
+        elif cat == 'ammobox':
+            # a box of one round type, unpacked into stacks. The handbook
+            # prices every box at a flat 1000, so a box is priced as its rounds
+            # and the handbook's number rides along as basePrice.
+            inside = None
+            if it and it.get('containsItems'):
+                c = it['containsItems'][0]
+                inside = (c['item'], int(c.get('count') or 0))
             else:
-                tpl[k] = v
+                ss = (props.get('StackSlots') or [{}])[0]
+                ids = wx._filters(ss)
+                if ids:
+                    inside = (ids[0], int(ss.get('_max_count') or 0))
+            if inside and inside[0] in recs and inside[1] > 0:
+                rid, n = inside
+                tpl['box'] = {'t': keys[rid], 'n': n}
+                tpl['cal'] = wx.caliber(recs[rid]['props'])
+                round_price = int((recs[rid]['it'] or {}).get('basePrice') or hb_price.get(rid, 0))
+                if round_price:
+                    tpl['basePrice'] = tpl['price']
+                    tpl['price'] = round_price * n
+        elif cat == 'grenade':
+            g = {}
+            wx._put(g, 'type', (props.get('ThrowType') or '').replace('_grenade', ''))
+            wx._put(g, 'fuse', wx._num(props.get('explDelay')))
+            wx._put(g, 'min', wx._num(props.get('MinExplosionDistance')))
+            wx._put(g, 'max', wx._num(props.get('MaxExplosionDistance')))
+            wx._put(g, 'frags', wx._num(props.get('FragmentsCount')))
+            wx._put(g, 'contusion', wx._num(props.get('ContusionDistance')))
+            wx._put(g, 'strength', wx._num(props.get('Strength')))
+            wx._put(g, 'emit', wx._num(props.get('EmitTime')))
+            tpl['grenade'] = g
+            tpl['frag'] = g.get('type') == 'frag' or (not g.get('type') and bool(g.get('frags')))
+        elif cat == 'melee':
+            m = {}
+            wx._put(m, 'slash', wx._num(props.get('knifeHitSlashDam')))
+            wx._put(m, 'stab', wx._num(props.get('knifeHitStabDam')))
+            wx._put(m, 'radius', wx._num(props.get('knifeHitRadius')))
+            wx._put(m, 'slashPen', wx._num(props.get('SlashPenetration')))
+            wx._put(m, 'stabPen', wx._num(props.get('StabPenetration')))
+            wx._put(m, 'dura', wx._num(props.get('MaxDurability')))
+            tpl['melee'] = m
+            if m.get('slash') or m.get('stab'):
+                tpl['dmg'] = max(m.get('slash') or 0, m.get('stab') or 0)
+        elif cat == 'repairkit':
+            kind = {'Firearms': 'weapon', 'Armor': 'armor'}.get(props.get('RepairType'), 'weapon')
+            mx = int(props.get('MaxRepairResource') or 0)
+            tpl['repairKit'] = {'max': mx, 'type': kind}
+            if mx:
+                tpl['res'] = {'max': mx}
+        out[key] = tpl
 
-        if hint and hint != r['cat']:
-            warns.append((r['key'], 'declared ' + r['cat'], 'handbook ' + hint))
-        out[r['key']] = tpl
+    # --- presets: the tree on the gun, the builds the factory and the traders know ---
+    foot_bad = []
+    for b, pids in by_base.items():
+        base = out[recs[b]['key']]
+        for pid in pids:
+            d = preset_data.get(pid)
+            if not d:
+                continue
+            P = live.items.get(pid)
+            gp = presets_g.get(pid)
+            is_weapon = recs[b]['cat'] in ('weapon', 'pistol')
+            plates, rest = ({}, d['tree']) if is_weapon else split_plates(b, d['tree'])
+            tree = map_tree(rest, key_of)
+            # the default build goes by the game's own name for it ("AKM
+            # Default"); the others keep the dump's internal name where they
+            # have one - the build screen shows their label, not this
+            lname = live.T(P['shortName'], '') if P else ''
+            gname = (gp or {}).get('_name')
+            pname = (lname or gname or pid) if d['default'] else (gname or lname or pid)
+            full = live.T(P['name'], '') if P else ''
+            label = en412.get(pid) or en412.get(pid + ' Name')
+            if not label and full.startswith(base['name']):
+                label = full[len(base['name']):].strip()
+            if d['default']:
+                if tree:
+                    base['preset'] = tree
+                    base['presetName'] = pname
+                if is_weapon and tree:
+                    # The assembled size is worked out the way the game's model
+                    # does it (ExtraSize per part) and has to be what the
+                    # dataset says the preset measures. tarkov.dev also draws
+                    # the assembled preset; that sprite is what a built gun
+                    # shows in the grid, and its size is the second witness.
+                    fw, fh = tree_footprint(base, tree, out)
+                    base['presetSize'] = [fw, fh]
+                    if P and (fw, fh) != (P['width'], P['height']):
+                        foot_bad.append((recs[b]['key'], base['name'], [fw, fh], [P['width'], P['height']]))
+                    a = art.get(pid) or {}
+                    if a.get('img'):
+                        base['presetImg'] = a['img']
+                        if (a['w'], a['h']) != (fw, fh):
+                            warns.append((recs[b]['key'], 'preset sprite %dx%d' % (a['w'], a['h']),
+                                          'assembled %dx%d (%s)' % (fw, fh, base['name'])))
+                        if os.path.exists(os.path.join(ASSETS, b + '-preset-lg.webp')):
+                            base['presetLg'] = True
+            elif is_weapon:
+                alt = {'id': pid, 'name': pname, 'tree': tree}
+                if label:
+                    alt['label'] = label
+                if d['load']:
+                    alt['load'] = d['load']
+                base['wpn'].setdefault('alts', []).append(alt)
+            # the preset as something a trader can list: a template of its
+            # own that names what it is a build of
+            if P:
+                name = full or pname
+                short = live.T(P['shortName'], '') or name[:12]
+                ptpl = common(pid, pid, name, short, base['desc'], 'preset', P['width'], P['height'],
+                              P['weight'], P.get('basePrice'), 1)
+                ptpl['base'] = recs[b]['key']
+                if d['default']:
+                    ptpl['def'] = True
+                if base.get('bg'):
+                    ptpl['bg'] = base['bg']
+                if base.get('snd'):
+                    ptpl['snd'] = base['snd']
+                ptpl['known'] = True
+                if P.get('types'):
+                    ptpl['types'] = list(P['types'])
+                if base.get('cats'):
+                    ptpl['cats'] = base['cats']
+                if P.get('handbookCategories'):
+                    ptpl['hb'] = list(P['handbookCategories'])
+                if not is_weapon:
+                    if plates:
+                        ptpl['plates'] = {s: key_of(t) for s, t in plates.items()}
+                    if tree:
+                        ptpl['tree'] = tree
+                out[pid] = ptpl
+    for pid in preset_ids:
+        if pid not in out:
+            P = live.items[pid]
+            b = (P.get('properties') or {}).get('baseItem')
+            warns.append((pid, 'preset not carried', live.T(P['name'], '') + (' (no base)' if b not in recs else ' (tree could not be built)')))
 
-    if no_props:
-        print('      note: %d items missing from the 3.10.1 template dump '
-              '(authored values used): %s' % (len(no_props), ', '.join(no_props)))
+    # default magazine of a gun newer than the dumps: the one its default build carries
+    for iid, rec in recs.items():
+        if rec['cat'] in ('weapon', 'pistol'):
+            tpl = out[rec['key']]
+            mag = (tpl.get('preset') or {}).get('mod_magazine')
+            if mag and not tpl['wpn'].get('defMag'):
+                tpl['wpn']['defMag'] = mag['t']
+            fs = tpl['wpn'].get('foldSlot')
+            if fs and not any(s['n'] == fs for s in tpl.get('slots') or []):
+                del tpl['wpn']['foldSlot']
 
+    # =====================================================
+    # checks
+    problems = []
+    for key, tpl in out.items():
+        for sl in tpl.get('slots') or []:
+            for k in sl['f']:
+                if k not in out:
+                    problems.append(f'{key}: slot {sl["n"]} names {k}')
+        for k in tpl.get('ammoFilter') or []:
+            if out.get(k, {}).get('cat') != 'ammo':
+                problems.append(f'{key}: ammo filter names {k}')
+        for k in tpl.get('conflicts') or []:
+            if k not in out:
+                problems.append(f'{key}: conflict names {k}')
+        for k in tree_ids(tpl.get('preset')):
+            if k not in out:
+                problems.append(f'{key}: preset names {k}')
+        if tpl.get('box') and tpl['box']['t'] not in out:
+            problems.append(f'{key}: box names {tpl["box"]["t"]}')
+        if tpl.get('cat') == 'preset' and tpl['base'] not in out:
+            problems.append(f'{key}: preset of {tpl["base"]}')
+    ids_seen = Counter(t['id'] for t in out.values())
+    dup = [i for i, n in ids_seen.items() if n > 1]
+    if dup:
+        problems.append('duplicate ids: ' + ', '.join(dup))
+    if problems:
+        print(f'      !! {len(problems)} integrity problems:')
+        for p in problems[:40]:
+            print('         - ' + p)
+    if foot_bad:
+        print(f'      !! {len(foot_bad)} default builds whose footprint is not the preset\'s:')
+        for row in foot_bad:
+            print('         - %s  %s: built %s, preset %s' % tuple(row))
+    if warns:
+        print('      note: %d field disagreements:' % len(warns))
+        for key, a, b in warns[:60]:
+            print('         - %s: %s  vs  %s' % (key, a, b))
     suspicious = [t for t in out.values()
-                  if t['w'] * t['h'] == 1
+                  if t['w'] * t['h'] == 1 and t.get('core')
                   and t['cat'] in ('weapon', 'pistol', 'armor', 'backpack', 'rig', 'helmet', 'secure')]
     if suspicious:
         print(f'      !! {len(suspicious)} gear items resolved to a 1x1 icon (likely a CDN placeholder):')
         for t in suspicious:
-            print(f'         - {t["key"]}  {t["name"]}')
+            print(f'         - {t["name"]}')
 
-    if warns:
-        print('      note: %d field disagreements:' % len(warns))
-        for key, a, b in warns:
-            print('         - %s: %s  vs  %s' % (key, a, b))
-
-    if report:
+    if report_mode:
         print('\n--- resolution report ---')
-        for t in sorted(out.values(), key=lambda x: (x['cat'], x['key'])):
+        for key, t in sorted(out.items(), key=lambda kv: (kv[1]['cat'], kv[0])):
             g = t.get('container', {}).get('grids')
             gs = ' [' + '+'.join('%dx%d' % (a, b) for a, b in g) + ']' if g else ''
-            print('  %-11s %-13s %dx%-2d %6.2fkg %8d %8s  %s%s' % (
-                t['cat'], t['key'], t['w'], t['h'], t['weight'],
+            print('  %-11s %-24s %dx%-2d %6.2fkg %8d %8s  %s%s' % (
+                t['cat'], key, t['w'], t['h'], t['weight'],
                 t['price'], t.get('bg', '-'), t['name'], gs))
 
-    print('\n[5/5] writing', OUT)
+    # =====================================================
+    print('\n[7/7] writing', OUT)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, 'w', encoding='utf-8') as f:
-        json.dump(out, f, ensure_ascii=False, separators=(',', ':'), sort_keys=True)
+    blob = json.dumps(out, ensure_ascii=False, separators=(',', ':'), sort_keys=True)
+    with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(blob)
+    raw = len(blob.encode('utf-8'))
+    gz = len(gzip.compress(blob.encode('utf-8'), 9))
 
     used = {t['img'] for t in out.values() if 'img' in t}
     used |= {t['presetImg'] for t in out.values() if 'presetImg' in t}
-    for fn in os.listdir(ASSETS):
-        if fn.endswith('.webp') and fn not in used:
-            os.remove(os.path.join(ASSETS, fn))
-    total = sum(os.path.getsize(os.path.join(ASSETS, f)) for f in os.listdir(ASSETS))
-    print(f'done: {len(out)} templates, artwork {total/1024:.0f} KiB in {len(used)} files')
-    return 1 if misses else 0
+    used |= {t['id'] + '-preset-lg.webp' for t in out.values() if t.get('presetLg')}
+    on_disk = [f for f in os.listdir(ASSETS) if f.endswith('.webp')]
+    stray = sorted(f for f in on_disk if f not in used)
+    total = sum(os.path.getsize(os.path.join(ASSETS, f)) for f in on_disk)
+
+    tdev_only = [r for r in recs.values() if r['src'] == 'tarkov.dev' and r['kind'] == 'live']
+    os.makedirs(os.path.dirname(REPORT), exist_ok=True)
+    with open(REPORT, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump({
+            'templates': len(out),
+            'by_cat': dict(sorted(Counter(t['cat'] for t in out.values()).items())),
+            'core': sum(1 for t in out.values() if t.get('core')),
+            'sources': dict(sorted(src_count.items())),
+            'presets': {'built': dict(preset_stats), 'failed': preset_fail,
+                        'carried': sum(1 for t in out.values() if t['cat'] == 'preset')},
+            'tdev_only': [{'id': r['id'], 'name': out[r['key']]['name'], 'cat': r['cat'],
+                           'donor': r.get('donor'), 'donor_name': out[keys[r['donor']]]['name'] if r.get('donor') else None,
+                           'score': r.get('donor_score')} for r in tdev_only],
+            'no_art': {tid: why_ for tid, why_ in sorted(art_missing.items())},
+            'sprite_vs_template': warns,
+            'footprint_mismatch': foot_bad,
+            'problems': problems,
+            'stray_artwork': stray,
+            'size': {'raw': raw, 'gzip': gz},
+            'artwork': {'files': len(on_disk), 'bytes': total},
+        }, f, ensure_ascii=False, indent=1)
+    print(f'done: {len(out)} templates ({raw / 1e6:.2f} MB, {gz / 1e6:.2f} MB gzipped), '
+          f'artwork {total / 1048576:.1f} MiB in {len(on_disk)} files, {time.time() - t_start:.0f}s')
+    if stray:
+        print(f'      note: {len(stray)} artwork files no template uses (left alone): ' + ', '.join(stray[:6])
+              + (' ...' if len(stray) > 6 else ''))
+    return 1 if problems else 0
 
 
 if __name__ == '__main__':
