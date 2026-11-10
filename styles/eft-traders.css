@@ -1,0 +1,437 @@
+/* =========================================================
+   Traders: the list, one trader's screen (TRADING / TASKS / SERVICES) and
+   the windows that open from it.
+
+   Every position is the client's own, in its 1920 x 1080 frame: the trader
+   screens' layout was read out of the client (Trader Screens Group, Trader
+   Card, Trader Panel Template, Merchants List) and checked against captures
+   of 1.0 and 1.1. Shared parts and the frame are in eft.css.
+   ========================================================= */
+
+/* ---------------- the two screen tabs over the list ---------------- */
+.scrtabs { position: absolute; left: 0; right: 0; top: 14px; display: flex; justify-content: center; gap: 26px; }
+.scrtabs .dbtn { font-size: 24px; padding: 6px 36px; }
+.scrback { position: absolute; right: 10px; top: 4px; min-width: 200px; }
+
+/* ---------------- TRADERS: the list ---------------- */
+.tlist { position: absolute; inset: 0; }
+.tlist__grid { position: absolute; left: 535px; top: 330px; width: 850px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.tcard { position: relative; width: 160px; height: 205px; padding: 0; border: 0; background: #000; text-align: left; flex: none; }
+.tcard__lines { position: absolute; left: 0; top: 0; width: 58px; height: 58px; background: var(--ui-image_diagonal_trader) 0 0 / 100% 100% no-repeat; opacity: .9; }
+.tcard__pic { position: absolute; left: 15px; top: 15px; width: 130px; height: 130px; background: #1e1e1e; box-shadow: inset 0 0 0 1px #e0e0e0; }
+.tcard__pic > img { position: absolute; left: 1px; top: 1px; width: 128px; height: 128px; display: block; }
+.tcard__marks { position: absolute; right: 0; top: 0; width: 29px; height: 128px; display: flex; flex-direction: column; align-items: flex-end; background: var(--ui-avatar_background) 0 0 / 100% 100% no-repeat; }
+.tcard__marks:empty { display: none; }
+.tcard__marks img { display: block; margin-right: -1px; }
+.tcard .rank { position: absolute; left: 14px; top: 14px; z-index: 2; }
+.tcard__q { position: absolute; left: 121px; top: 121px; width: 20px; height: 20px; z-index: 2; }
+.tcard__name { position: absolute; left: 15px; top: 145px; width: 130px; height: 26px; background: rgba(197,195,178,.196); color: #c5c3b2; font-size: 18px; line-height: 25px; text-align: center; }
+.tcard__standing { position: absolute; left: 12px; top: 178px; height: 22px; display: flex; align-items: center; color: #b6c1c7; font-size: 14px; }
+.tcard__standing .uii { width: 22px; height: 22px; }
+.tcard__time { position: absolute; left: 77px; top: 180px; height: 20px; display: flex; align-items: center; color: #b6c1c7; font-size: 14px; }
+.tcard__time .uii { width: 20px; height: 20px; }
+.tcard__time span { text-transform: uppercase; }
+.tcard__lock { position: absolute; left: 65px; top: 168px; width: 30px; height: 36px; opacity: .62; }
+.tcard:hover:not(:disabled) { background: #b3b1a9; }
+.tcard:hover:not(:disabled) .tcard__name { color: #101214; background: rgba(255,255,255,.1); }
+.tcard:hover:not(:disabled) .tcard__standing, .tcard:hover:not(:disabled) .tcard__time { color: #101214; }
+.tcard.is-locked { cursor: default; }
+.tcard.is-locked .tcard__pic { box-shadow: inset 0 0 0 1px #4a4a4a; }
+.tcard.is-locked .tcard__pic > img { filter: grayscale(1) brightness(.45); }
+.tcard.is-locked .tcard__name { color: #6a6a66; background: #2e2d2b; }
+
+/* ---------------- ONE TRADER: the bar of tabs ---------------- */
+.trbar { position: absolute; left: 0; top: 0; width: 1920px; height: 54px; }
+.trbar::before { content: ""; position: absolute; left: 0; top: -7px; width: 100%; height: 61px; background: var(--ui-upper_gradient) 0 0 / 100% 100% repeat-x; }
+.trbar__tabs { position: absolute; left: 8px; top: 18px; display: flex; }
+.trvisit {
+  position: absolute; left: 885px; top: 20px; width: 150px; height: 30px; padding: 0; border: 0; isolation: isolate;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: none; color: var(--e-text-hi); font-size: 16px; text-transform: uppercase;
+}
+.trvisit::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--ui-social_trader_screen_chat_button_1) 0 0 / 100% 100% no-repeat; opacity: .58; }
+.trvisit:hover:not(:disabled)::before { background-image: var(--ui-social_trader_screen_chat_button_0); opacity: .8; }
+.trvisit:hover:not(:disabled) { color: #000; }
+.trvisit:disabled { color: #4a4d4c; cursor: default; }
+.trvisit img { width: 18px; height: 16px; object-fit: contain; }
+.trvisit.is-calling::before { background-image: var(--ui-social_trader_screen_chat_button_0); opacity: 1; filter: sepia(1) saturate(6) hue-rotate(-12deg); animation: tr-pulse 1.6s ease-in-out infinite; }
+@keyframes tr-pulse { 50% { opacity: .45; } }
+.trback { position: absolute; right: 10px; top: 4px; min-width: 200px; }
+
+/* ---------------- the strip: every trader's card, then you ---------------- */
+.trtop { position: absolute; left: 0; top: 52px; width: 1920px; height: 171px; background: rgba(254,255,249,.157); }
+.trtop::before, .trtop::after { content: ""; position: absolute; left: 0; width: 100%; height: 2px; background: var(--e-khaki); }
+.trtop::before { top: -2px; } .trtop::after { top: 171px; }
+.trtop__pattern { position: absolute; left: 0; top: 0; width: 1270px; height: 171px; background: var(--ui-traderbar_texture_square_big) 0 0 repeat; opacity: .2; filter: brightness(0); }
+.trtop__cards { position: absolute; left: 8px; top: -1px; display: flex; gap: 5px; }
+.scard { position: relative; width: 120px; height: 172px; padding: 0; border: 0; background: #0a0a0a; text-align: left; flex: none; }
+.scard::before, .scard::after { content: ""; position: absolute; top: 0; width: 8px; height: 172px; background: var(--ui-playercard_shadow_1) 0 0 / 100% 100% no-repeat; opacity: .3; pointer-events: none; }
+.scard::before { left: -8px; } .scard::after { left: 112px; display: none; }
+.scard__pic { position: absolute; left: 5px; top: 7px; width: 110px; height: 110px; background: #1e1e1e; overflow: hidden; box-shadow: inset 0 0 0 2px #272823; }
+.scard__pic > img { position: absolute; inset: 0; width: 110px; height: 110px; display: block; }
+.scard__name { position: absolute; left: 5px; top: 95px; width: 110px; height: 22px; background: #272823; color: rgba(249,244,212,.6); font-size: 14px; line-height: 22px; text-align: center; }
+.scard__marks { position: absolute; right: 5px; top: 7px; display: flex; flex-direction: column; align-items: flex-end; gap: 0; z-index: 2; }
+.scard__marks img { display: block; margin-bottom: -7px; }
+.scard .rank { position: absolute; left: 5px; top: 7px; z-index: 2; }
+.scard__q { position: absolute; left: 92px; top: 75px; width: 20px; height: 20px; z-index: 2; }
+.scard__row { position: absolute; left: 23px; height: 20px; display: flex; align-items: center; gap: 6.5px; color: rgba(255,255,255,.69); font-size: 13px; }
+.scard__row .uii { width: 20px; height: 20px; }
+.scard__row--rep { top: 125px; }
+.scard__row--time { top: 147px; }
+.scard__lock { position: absolute; left: 44px; top: 122px; width: 32px; height: 39px; opacity: .74; }
+.scard:hover:not(:disabled):not(.is-active) { background: #1d1e1b; }
+.scard:hover:not(:disabled):not(.is-active) .scard__pic { box-shadow: inset 0 0 0 2px #3a3a3a; }
+.scard.is-active { background: linear-gradient(180deg, #f3eac0 0, #d1c9a5 2px, #d1c9a5 calc(100% - 2px), #c9c3a1 100%); }
+.scard.is-active .scard__pic { box-shadow: inset 0 0 0 2px var(--e-gold); }
+.scard.is-active .scard__name { background: #3d3b2f; color: #fff; }
+.scard.is-active .scard__row { color: #2a2a22; }
+.scard.is-locked { cursor: default; }
+.scard.is-locked .scard__pic > img { filter: grayscale(1) brightness(.45); }
+.scard.is-locked .scard__name { color: #6a6a66; }
+
+.trplayer { position: absolute; left: 1270px; top: 0; width: 650px; height: 171px; background: rgba(0,0,0,.5); }
+.trplayer::before { content: ""; position: absolute; inset: 0; background: var(--ui-playercard_texture_rightdiagonalline) 0 0 repeat; opacity: .03; }
+.trplayer__rank { position: absolute; left: 350.8px; top: 0; width: 84.4px; height: 84.4px; background-color: var(--e-khaki); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }
+.trplayer__name { position: absolute; right: 313.4px; top: 21.6px; height: 20px; color: #fef8d5; font-size: 16px; font-weight: 700; white-space: nowrap; }
+.trplayer__money { position: absolute; right: 304.5px; top: 46.4px; height: 30px; display: flex; align-items: center; gap: 20px; font-size: 16px; color: #fff; white-space: nowrap; }
+.trplayer__money span:first-child { color: #c5c3b2; }
+.trplayer__rule { position: absolute; left: 24.7px; top: 85.1px; width: 415.3px; height: 2px; background: var(--ui-requirement_separator) 0 0 / 100% 100% no-repeat; }
+.trplayer__row { position: absolute; left: 0; width: 445px; height: 28px; color: #b6c1c7; font-size: 16px; }
+.trplayer__row--now { top: 97.7px; } .trplayer__row--next { top: 126.2px; }
+.trplayer__row > * { position: absolute; }
+.trplayer__lbl { left: 2.5px; top: 4px; width: 170px; text-align: right; color: #c5c3b2; font-size: 14px; white-space: nowrap; }
+.trplayer__row .rank { left: 181.5px; top: 0; }
+.trplayer__lvlico { left: 212.5px; top: 0; width: 28px; height: 28px; }
+.trplayer__lvl { left: 240.5px; top: 4px; height: 20px; line-height: 20px; }
+.trplayer__repico { left: 262.5px; top: -1.5px; width: 28px; height: 28px; }
+.trplayer__rep { left: 290.5px; top: 3px; width: 45px; height: 20px; line-height: 20px; }
+.trplayer__spent { left: 338.5px; top: 3px; width: 102px; height: 20px; line-height: 20px; text-align: right; white-space: nowrap; }
+.trplayer .is-met { color: var(--e-met); } .trplayer .is-unmet { color: var(--e-unmet); }
+.trplayer__face { position: absolute; left: 470px; top: 0; width: 172px; height: 172px; background: #0d0e0e var(--ui-playercard_facebackground) 0 0 / 100% 100% no-repeat; overflow: hidden; }
+.trplayer__face svg { position: absolute; left: -22px; top: 10px; width: 216px; height: 287px; color: #2a2c2b; }
+.trplayer__level { position: absolute; left: 465px; top: -4px; width: 45px; height: 45px; display: grid; place-items: center; z-index: 2; background: #c9ced1 var(--ui-bind_label) 0 0 / 100% 100% no-repeat; color: #4b4b4b; font-size: 20px; font-weight: 700; }
+
+/* ---------------- TRADING ---------------- */
+.trdeal, .trquests, .trservices { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+.trdeal > *, .trquests > *, .trservices > * { pointer-events: auto; }
+.trdeal[hidden], .trquests[hidden], .trservices[hidden] { display: none; }
+
+.trshow { position: absolute; left: 7px; top: 241px; width: 133px; padding-left: 0; }
+.trrefresh {
+  position: absolute; left: 128px; top: 242px; width: 215px; height: 20px; padding: 0; border: 0; box-sizing: border-box;
+  border-style: solid; border-width: 0 22px; border-image: var(--ui-tab_215px_idle) 0 22 fill stretch;
+  background: none; color: #fff; font-size: 14px; text-transform: uppercase; white-space: nowrap;
+}
+.trrefresh:hover { border-image-source: var(--ui-tab_215px_selected); color: #000; }
+.trrefresh span { position: absolute; left: 26px; top: 0; width: 137px; height: 20px; line-height: 20px; text-align: center; }
+.trrefresh .uii { position: absolute; left: -3px; top: -1.5px; width: 23px; height: 23px; }
+.trrefresh.is-busy .uii { animation: tr-spin .8s linear infinite; }
+@keyframes tr-spin { to { transform: rotate(360deg); } }
+
+/* the small square tabs: loyalty levels over the goods, categories beside the grids */
+.ftabs { position: absolute; display: flex; gap: 2px; }
+.ftabs--ll { left: 482px; top: 231px; }
+.ftabs--goods { left: 650px; top: 263px; flex-direction: column; }
+.ftabs--stash { left: 1234px; top: 263px; flex-direction: column; }
+.ftab { position: relative; width: 32px; height: 32px; padding: 0; border: 0; background: none; display: grid; place-items: center; flex: none; color: #c5c3b2; }
+.ftab::before { content: ""; position: absolute; left: -3px; top: -4px; width: 38px; height: 40px; background: var(--ui-itemfilter_rightside) 0 0 / 100% 100% no-repeat; }
+.ftab:hover:not(:disabled)::before { background-image: var(--ui-itemfilter_rightside_hover); }
+.ftab.is-active::before { left: 0; top: 0; width: 32px; height: 32px; background: #595c5b var(--ui-itemfilter_rightside_selected) 0 0 / 100% 100% no-repeat; }
+.ftab img, .ftab .uii { position: relative; width: 30px; height: 30px; object-fit: contain; }
+.ftab--ll img { width: auto; height: auto; max-width: 30px; max-height: 30px; }
+.ftab:disabled { cursor: default; }
+.ftab:disabled img, .ftab:disabled .uii { opacity: .28; }
+
+.trgoods, .trstash { position: absolute; top: 263px; width: 642px; height: 742px; box-sizing: border-box; background: rgba(0,0,0,.5); border: 1px solid var(--e-line); }
+.trgoods { left: 8px; }
+.trstash { left: 1270px; overflow-x: hidden; overflow-y: scroll; }
+.trgoods .assort-scroll { position: absolute; left: 0; top: 0; width: 640px; height: 740px; overflow-x: hidden; overflow-y: scroll; padding: 0; border: 0; background: none; border-radius: 0; }
+.trgoods .assort-scroll::-webkit-scrollbar { width: 10px; }
+.trgoods .grid, .trstash .grid, .selltable .grid { border: 0; }
+.trgoods__empty { position: absolute; left: 0; right: 0; top: 330px; text-align: center; color: #4a4d4c; font-size: 16px; }
+.trgoods__spin { position: absolute; left: 299px; top: 349px; width: 44px; height: 44px; background: var(--ui-spinner_big) 0 0 / 100% 100% no-repeat; animation: tr-spin 1s linear infinite; }
+
+.trsearch { position: absolute; left: 1270px; top: 241px; width: 120px; height: 21px; display: flex; align-items: center; gap: 5px; box-sizing: border-box; border-style: solid; border-width: 0 22px 0 8px; border-image: var(--ui-header_panel) 0 22 0 8 fill stretch; filter: brightness(.82); }
+.trsearch:focus-within, .trsearch:hover { filter: none; }
+.trsearch .uii { width: 14px; height: 14px; color: #c4d7ff; margin-left: -1px; }
+.trsearch input { width: 86px; min-width: 0; background: none; border: 0; outline: 0; padding: 0; color: var(--e-text-blue); font-family: inherit; font-size: 14px; font-weight: 700; }
+.trsearch input::placeholder { color: var(--e-text-blue); text-transform: uppercase; }
+
+/* what he asks, on each thing he sells */
+.assort-grid .item { cursor: var(--ui-cursor_idle) 0 0, default; }
+.toffer__price {
+  position: absolute; left: 2px; top: 1px; z-index: 4; padding: 0; background: none; display: flex; align-items: baseline; gap: 3px;
+  color: #fff; font-size: 12px; font-weight: 400; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 1px #000; pointer-events: none; white-space: nowrap;
+}
+.toffer__price em { font-style: normal; font-size: 14px; font-weight: 700; margin: 0; }
+.toffer__price--barter { align-items: center; gap: 1px; left: 1px; top: 0; }
+.toffer__price--barter .uii { width: 18px; height: 18px; }
+.toffer__stock { position: absolute; right: 2px; bottom: 1px; z-index: 4; color: #b6c1c7; font-size: 11px; text-shadow: 0 0 2px #000, 0 0 2px #000; pointer-events: none; text-transform: uppercase; }
+.toffer__stock.is-out { color: #da0a0a; }
+.toffer__lock { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; background: rgba(0,0,0,.42); pointer-events: none; }
+.toffer__lock img { width: 17px; height: 19px; }
+.toffer__lock .rank { position: absolute; left: 0; top: 0; transform: scale(.8); transform-origin: 0 0; }
+.toffer--locked .item__img { filter: grayscale(.6) brightness(.75); }
+.toffer--staged { box-shadow: inset 0 0 0 1px #e7e5d4 !important; z-index: 2; }
+.assort-grid .item .item__name { top: 1px; }
+.assort-grid .item.has-price .item__name { top: 14px; }
+
+/* ---- the deal column ---- */
+.fillbtn { position: absolute; left: 706px; top: 229.8px; width: 111px; height: 33px; padding: 0; border: 0; background: var(--ui-tab_blue) 0 0 / 100% 100% no-repeat; }
+.fillbtn:hover:not(:disabled) { background-image: var(--ui-tab_blue_selected); }
+.fillbtn:disabled { opacity: .7; cursor: default; }
+.fillbtn__box { position: absolute; left: 21.1px; top: 3.5px; width: 26px; height: 26px; }
+.fillbtn__ico { position: absolute; left: 46.1px; top: 3.5px; width: 26px; height: 26px; }
+.fillbtn__tick { position: absolute; left: 26.9px; top: 9.6px; width: 14.5px; height: 13.8px; display: none; }
+.fillbtn.is-on .fillbtn__tick { display: block; }
+.dtab { position: absolute; top: 231px; width: 164px; height: 32px; padding: 0; border: 0; background: var(--ui-tab_new) 0 0 / 100% 100% no-repeat; color: #fff; font-size: 15px; text-transform: uppercase; }
+.dtab--buy { left: 794.5px; } .dtab--sell { left: 961.5px; }
+.dtab--sell { background: none; }
+.dtab--sell::before { content: ""; position: absolute; inset: 0; background: var(--ui-tab_new) 0 0 / 100% 100% no-repeat; transform: scaleX(-1); }
+.dtab:hover:not(.is-active) { filter: brightness(1.35); }
+.dtab.is-active { color: #000; background-image: var(--ui-tab_new_selected); }
+.dtab--sell.is-active { background: none; }
+.dtab--sell.is-active::before { background-image: var(--ui-tab_new_selected); }
+.dtab span { position: absolute; left: 37.6px; top: 0; width: 91.9px; height: 32px; line-height: 32px; text-align: center; }
+.dtab img { position: absolute; top: 0; width: 31px; height: 31px; }
+.dtab--buy img { left: 122.8px; } .dtab--sell img { left: 10px; width: 29.4px; height: 29.4px; top: .5px; }
+.clearbtn { position: absolute; left: 1103px; top: 229.8px; width: 111px; height: 33px; padding: 0; border: 0; background: none; }
+.clearbtn::before { content: ""; position: absolute; inset: 0; background: var(--ui-tab_blue) 0 0 / 100% 100% no-repeat; transform: scaleX(-1); }
+.clearbtn:hover:not(:disabled)::before { background-image: var(--ui-tab_blue_selected); }
+.clearbtn img { position: absolute; left: 43.6px; top: -3.5px; width: 40px; height: 40px; }
+.clearbtn:disabled { cursor: default; }
+.clearbtn:disabled img { opacity: .35; }
+
+.dealcol { position: absolute; left: 707px; top: 263px; width: 506px; height: 742px; }
+.deal-bar {
+  position: absolute; left: 0; top: 0; width: 506px; height: 45px; padding: 0; border: 0; box-sizing: border-box; overflow: hidden;
+  background: #1a1a0c var(--ui-trade_buyl_button_background_idle) 0 0 repeat; box-shadow: inset 0 0 0 1px var(--e-line);
+  color: #fff; font-family: var(--font-ui); letter-spacing: 0; text-transform: none; display: block;
+}
+.deal-bar::after { content: ""; position: absolute; left: 1px; top: 1px; right: 1px; bottom: 1px; background: var(--ui-trade_buyl_button_pattern) 0 0 repeat; opacity: .043; pointer-events: none; }
+.deal-bar__ico { position: absolute; left: 153.7px; top: 0; width: 45px; height: 45px; }
+.deal-bar__ico--hover { display: none; }
+.deal-bar__label { position: absolute; left: 202.7px; top: 11.5px; font-size: 20px; font-weight: 700; line-height: 22px; white-space: nowrap; margin: 0; }
+.deal-bar__sum { position: absolute; right: 14.3px; top: 2.9px; height: 39.2px; line-height: 39.2px; font-size: 20px; font-weight: 400; letter-spacing: 0; color: inherit; white-space: nowrap; }
+.deal-bar .kcap { position: absolute; left: 3px; top: 3px; padding: 0; }
+.deal-bar:not(:disabled):hover { background: #d0a856; color: #000; }
+.deal-bar:not(:disabled):hover { border-style: solid; border-width: 4px; border-image: var(--ui-trade_buyl_button_background_hover) 4 fill stretch; }
+.deal-bar:not(:disabled):hover .deal-bar__ico { display: none; }
+.deal-bar:not(:disabled):hover .deal-bar__ico--hover { display: block; left: 149.7px; top: -4px; }
+.deal-bar:not(:disabled):hover .deal-bar__label { left: 198.7px; top: 7.5px; }
+.deal-bar:not(:disabled):hover .deal-bar__sum { right: 10.3px; top: -1.1px; }
+.deal-bar:not(:disabled):hover .kcap { left: -1px; top: -1px; }
+.deal-bar:disabled { cursor: default; filter: saturate(.25) brightness(.62); color: #9aa39f; }
+.deal-bar:disabled .kcap { filter: brightness(.45); }
+
+.barter { position: absolute; left: 0; top: 43.7px; width: 506px; height: 698.3px; box-sizing: border-box; background: rgba(0,0,0,.5); border: 1px solid var(--e-line); overflow-x: hidden; overflow-y: auto; }
+.barter__in { position: relative; width: 400px; margin: 0 0 20px 50.5px; padding-top: 3px; display: flex; flex-direction: column; align-items: stretch; }
+.barter__buy { position: relative; height: 169px; flex: none; }
+.barter__cap { position: absolute; left: 20px; top: 14.6px; width: 360px; text-align: center; color: #c5c3b2; font-size: 14px; line-height: 15.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.barter__tile { position: absolute; left: 1px; top: 40px; width: 397px; height: 128px; background: var(--ui-chtoto) 0 0 repeat; }
+.barter__tile::after { content: ""; position: absolute; left: -1px; top: -2px; width: 399px; height: 130px; box-sizing: border-box; border-style: solid; border-width: 15px; border-image: var(--ui-unsearched_border_sliced) 15 fill stretch; pointer-events: none; }
+.barter__arrow { position: absolute; left: 26px; top: 77.5px; width: 35px; height: 54px; }
+.barter__show { position: absolute; left: 0; top: 39px; width: 400px; height: 128px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.barter__item { position: relative; flex: none; background: #0c0d0d var(--ui-grid_cell) 0 0 / 63px 63px; box-shadow: 0 0 0 1px #000, 0 0 8px 3px rgba(0,0,0,.8); pointer-events: auto; }
+.barter__item .item { position: absolute !important; left: 0 !important; top: 0 !important; }
+.barter__x { margin: 0 4px 0 13px; color: #9da6ab; font-size: 16px; pointer-events: none; }
+.barter__qty {
+  width: 58px; height: 39px; flex: none; box-sizing: border-box; padding: 0; text-align: center; pointer-events: auto;
+  border-style: solid; border-width: 21px; border-image: var(--ui-input_box) 21 fill stretch; background: none;
+  color: #c5c3b2; font: inherit; font-size: 18px; outline: 0;
+}
+.barter__qtywrap { position: relative; width: 58px; height: 39px; flex: none; pointer-events: auto; }
+.barter__qtywrap::before { content: ""; position: absolute; inset: 0; box-sizing: border-box; border-style: solid; border-width: 19px 21px; border-image: var(--ui-input_box) 21 fill stretch; pointer-events: none; }
+.barter__qtywrap input { position: absolute; inset: 0; width: 100%; height: 100%; box-sizing: border-box; padding: 0; border: 0; background: none; text-align: center; color: #c5c3b2; font: inherit; font-size: 18px; outline: 0; }
+.barter__qtywrap input::selection { background: #2f6fb0; color: #fff; }
+.barter__gap { height: 23px; flex: none; }
+.barter__warn {
+  position: relative; margin: 10px -33px 0; padding: 7px 10px 10px; background: rgba(204,0,0,.6);
+  color: #000; font-size: 16px; line-height: 19.8px; text-align: center; white-space: pre-line; isolation: isolate;
+}
+.barter__warn::before { content: ""; position: absolute; left: -14px; right: -10px; top: -48.5px; bottom: -48.5px; z-index: -1; background: var(--ui-warning_glow) center / 100% 100% no-repeat; pointer-events: none; }
+.barter__warn:first-of-type { margin-top: 0; }
+.barter__need { margin-top: 10px; text-align: center; color: #c5c3b2; font-size: 14px; line-height: 15.4px; }
+.barter__reqs { position: relative; margin: 5px auto 0; padding: 28px 23px 1px; min-width: 112px; display: grid; grid-template-columns: repeat(var(--cols, 1), auto); justify-content: center; gap: 10px 46px; background: var(--ui-chtoto) 0 0 repeat; }
+.barter__reqs::after { content: ""; position: absolute; inset: -1px; box-sizing: border-box; border-style: solid; border-width: 15px; border-image: var(--ui-unsearched_border_sliced) 15 fill stretch; pointer-events: none; }
+.barter__reqs > .barter__arrow { left: calc(50% + 42px); top: 4.5px; }
+.req { position: relative; width: 64px; min-height: 128px; }
+.req__cell { position: relative; width: 64px; height: 64px; display: grid; place-items: center; background: #0c0d0d var(--ui-grid_cell) 0 0 / 63px 63px; box-shadow: 0 0 0 1px #000, 0 0 8px 3px rgba(0,0,0,.8); margin-top: 32px; }
+.req__cell img { max-width: 62px; max-height: 62px; object-fit: contain; }
+.assort-grid .item.is-narrow .item__name { display: none; }
+.req__sym { font-size: 34px; color: #c5c3b2; }
+.req__mark { position: absolute; left: 40px; top: -30px; width: 77px; height: 75px; pointer-events: none; z-index: 2; }
+.req__count { position: absolute; left: 69px; top: 110.7px; color: #fff; font-size: 18px; line-height: 19.4px; white-space: nowrap; }
+.req__level { position: absolute; left: 0; top: 16px; color: #fff; font-size: 14px; white-space: nowrap; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.req__side { position: absolute; left: 32px; top: 112.9px; color: #fff; font-size: 14px; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+.req__name { position: absolute; left: 50%; top: 98px; transform: translateX(-50%); max-width: 150px; color: #a6b0b5; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.barter__none { margin-top: 26px; text-align: center; color: #c5c3b2; font-size: 14px; }
+
+.selltable { position: absolute; left: 0; top: 45px; width: 506px; height: 700px; box-sizing: border-box; border: 1px solid var(--e-line); background: rgba(0,0,0,.5); overflow: hidden; }
+.selltable .grid { position: absolute; left: .5px; top: 0; }
+.is-nosell { opacity: .35; }
+.is-nosell:hover { opacity: .5; }
+.item.is-ontable-copy { opacity: .35; }
+.item .tsell { position: absolute; left: 2px; top: 1px; z-index: 4; display: flex; align-items: baseline; gap: 3px; color: #fff; font-size: 12px; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 1px #000; pointer-events: none; white-space: nowrap; }
+.item .tsell em { font-style: normal; font-size: 14px; font-weight: 700; }
+.item.has-price > .item__name { top: 14px; }
+
+/* =========================================================
+   TASKS at a trader
+   ========================================================= */
+.trquests::before { content: ""; position: absolute; left: 0; top: 225px; width: 1920px; height: 855px; background: linear-gradient(180deg, rgba(0,0,0,.8) 0, rgba(0,0,0,.6) 64px, rgba(0,0,0,.6) 100%); border-top: 1px solid rgba(255,255,255,.07); pointer-events: none; }
+.ql { position: absolute; left: 8px; top: 232px; width: 554px; height: 815px; }
+.ql__head { position: absolute; left: 0; top: 0; width: 554px; height: 60px; display: flex; align-items: center; justify-content: center; gap: 35px; }
+.ql__head::before { content: ""; position: absolute; left: 0; top: 0; width: 594.6px; height: 60px; background: #262626 var(--ui-eft_traderquest_mainbutton_background) 0 0 / 100% 100% no-repeat; z-index: -1; }
+.ql__head .dbtn { min-width: 242px; height: 50px; box-sizing: border-box; color: #fff; }
+.ql__head .dbtn:disabled { color: #5a5a5a; }
+.ql__filters { position: absolute; left: 0; top: 78px; width: 554px; height: 50px; background: #22211b; }
+.ql__filters .chk { position: absolute; top: 14.5px; }
+.ql__filters .chk:nth-child(1) { left: 17.8px; } .ql__filters .chk:nth-child(2) { left: 207.8px; }
+.ql__views { position: absolute; left: 461px; top: 10px; width: 88px; height: 30px; display: flex; gap: 10px; justify-content: center; }
+.vtog { position: relative; width: 35px; height: 30px; padding: 0; border: 0; background: none; display: grid; place-items: center; color: #c5c3b2; }
+.vtog::before { content: ""; position: absolute; left: -1px; top: 1px; width: 37px; height: 28px; background: var(--ui-option_button_on) 0 0 / 100% 100% no-repeat; filter: brightness(0); }
+.vtog:hover::before { filter: brightness(.82); }
+.vtog.is-active::before { filter: none; }
+.vtog img { position: relative; width: 20px; height: 20px; object-fit: contain; }
+.ql__list { position: absolute; left: 3px; top: 128px; width: 561px; height: 687px; overflow-x: hidden; overflow-y: scroll; }
+.ql__list::-webkit-scrollbar { width: 10px; }
+.ql__list > * { width: 551px; }
+.qrow {
+  position: relative; display: block; width: 551px; height: 64px; margin: 0 0 5px; padding: 0; border: 0; text-align: left;
+  background: rgba(133,91,36,.114); color: #c5c3b2; font-size: 18px;
+}
+.qrow__type { position: absolute; left: 15.7px; top: 18px; width: 28px; height: 28px; object-fit: contain; }
+.qrow__name { position: absolute; left: 50px; top: 0; width: 316px; height: 64px; display: flex; align-items: center; gap: 8px; line-height: 19.8px; }
+.qrow__name span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.qrow__right { position: absolute; right: 14px; top: 0; height: 64px; width: 160px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; }
+.qrow__status { display: flex; align-items: center; gap: 5px; font-size: 18px; line-height: 19.8px; white-space: nowrap; }
+.qrow__status img { width: 17px; height: 19px; }
+.qrow__timer { display: flex; align-items: center; gap: 5px; color: #b6c1c7; font-size: 17.75px; height: 30px; }
+.qrow__timer img { width: 29px; height: 30px; }
+.qrow__arrow { position: absolute; left: 533.3px; top: 26.5px; width: 9px; height: 11px; display: none; filter: brightness(0); }
+.qrow--active { background: rgba(133,91,36,.24); } .qrow--active .qrow__status { color: var(--e-orange); }
+.qrow--ready { background: rgba(133,91,36,.24); } .qrow--ready .qrow__status { color: var(--e-green); }
+.qrow--available .qrow__status { color: #c5c3b2; }
+.qrow--done { background: rgba(40,83,113,.22); } .qrow--done .qrow__status { color: #6f7679; }
+.qrow--failed { background: rgba(120,20,20,.2); } .qrow--failed .qrow__status { color: var(--e-red); }
+.qrow--locked { background: rgba(84,88,91,.1); color: #7c817f; } .qrow--locked .qrow__status { color: #7c817f; }
+.qrow:hover { filter: brightness(1.4); }
+.qrow.is-selected { background: #a09f92; color: #000; filter: none; }
+.qrow.is-selected .qrow__status { color: #000; }
+.qrow.is-selected .qrow__type { filter: brightness(0); }
+.qrow.is-selected .qrow__arrow { display: block; }
+.qrow--daily::before { content: ""; position: absolute; inset: 0; background: var(--ui-dailyquestsbackgroundsmall) 0 0 repeat; opacity: .157; pointer-events: none; }
+.qtier { position: relative; display: block; width: 551px; height: 51px; margin: 0 0 5px; padding: 0; border: 0; background: none; text-align: left; color: #acb5b7; font-size: 18px; text-transform: uppercase; }
+.qtier__in { position: absolute; left: 0; top: 10px; width: 551px; height: 40px; display: flex; align-items: center; gap: 5px; padding: 0 20px 0 5px; box-sizing: border-box; border-bottom: 1px solid #404444; }
+.qtier:hover .qtier__in { background: rgba(115,115,115,.16); }
+.qtier__ico { width: 32px; height: 32px; display: grid; place-items: center; flex: none; }
+.qtier__ico img { max-width: 32px; max-height: 32px; }
+.qtier__title { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.qtier__title img { height: 27px; width: auto; }
+.qtier__caret { width: 20px; height: 20px; flex: none; opacity: .9; transition: transform .1s; }
+.qtier.is-shut .qtier__caret { transform: rotate(-90deg); }
+.qtier__rows { margin: 0; padding: 0; }
+.qtier__rows .qrow.is-child { margin-left: 34px; width: 517px; }
+.qtier__rows .qrow.is-child .qrow__name { width: 282px; }
+.ql__empty { padding: 40px 0; text-align: center; color: #4a4d4c; font-size: 18px; }
+
+.qv { position: absolute; left: 562px; top: 232px; width: 1350px; height: 815px; }
+.qv__head { position: absolute; left: 0; top: 0; width: 1350px; height: 60px; background: rgba(84,88,91,.49); }
+.qv__head.is-daily::before { content: ""; position: absolute; inset: 0; background: var(--ui-dailyquestsbackgroundsmall) 0 0 repeat; opacity: .157; }
+.qv__type { position: absolute; left: 20px; top: 16px; width: 28px; height: 28px; object-fit: contain; }
+.qv__title { position: absolute; left: 52px; top: 0; width: 720px; height: 60px; display: flex; align-items: center; color: #fffee9; font-size: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qv__right { position: absolute; right: 20px; top: 0; height: 60px; display: flex; align-items: center; gap: 9px; font-size: 18px; white-space: nowrap; }
+.qv__loc { color: #c5c3b4; }
+.qv__status { color: #6f7679; margin-left: 30px; }
+.qv__status--active { color: var(--e-orange); } .qv__status--ready { color: var(--e-green); } .qv__status--failed { color: var(--e-red); } .qv__status--available { color: #c5c3b2; }
+.qv__right img { height: 19px; width: auto; }
+.qv__right .rank { margin-left: 6px; }
+.qv__scroll { position: absolute; left: 0; top: 78px; width: 1350px; height: 737px; overflow-x: hidden; overflow-y: auto; }
+.qv__in { position: relative; width: 1280px; display: flex; flex-direction: column; gap: 20px; padding-bottom: 30px; }
+.qv__blocked { position: relative; margin-left: 20px; width: 1260px; height: 60px; display: grid; place-items: center; background: #2a1414 var(--ui-blocked_background) 0 0 repeat; color: #c5c3b2; font-size: 24px; text-transform: uppercase; }
+.qv__desc { position: relative; height: 250px; flex: none; }
+.qv__pic { position: absolute; left: 20px; top: 0; width: 430px; height: 250px; object-fit: cover; background: #0d0f0f; box-shadow: inset 0 0 0 1px #404444; outline: 1px solid #404444; outline-offset: -1px; }
+.qv__text { position: absolute; left: 476.3px; top: 0; width: 783px; height: 250px; overflow-y: auto; padding-right: 12px; box-sizing: border-box; }
+.qv__text p { margin: 0 0 19.8px; color: #a6b0b5; font-size: 18px; line-height: 19.8px; }
+.qv__reqs { position: absolute; left: 460px; top: 0; width: 800px; height: 256px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 0 5px; box-sizing: border-box; }
+.qreq { display: flex; align-items: center; gap: 10px; height: 28px; padding: 0 5px; color: #aeb9bf; font-size: 18px; font-weight: 700; flex: none; }
+.qreq__box { width: 20px; height: 20px; flex: none; display: grid; place-items: center; background: #000 var(--ui-checkbox) 0 0 / 100% 100% no-repeat; margin-right: 2px; }
+.qreq__box img { width: 14px; height: 14px; display: none; }
+.qreq.is-ok .qreq__box img { display: block; }
+.qreq > img { width: 28px; height: 28px; object-fit: contain; margin-right: -6px; }
+.qreq.is-ok { color: #7c8a91; }
+.qsec { display: flex; flex-direction: column; gap: 8px; }
+.qsec__title { padding-left: 20px; display: flex; align-items: center; gap: 10.3px; color: #b6c1c7; font-size: 18px; line-height: 19.8px; }
+.qsec__title small { font-size: 18px; color: #75b9de; }
+.qsec__tiles { margin-left: 0; padding-left: 52px; min-height: 72px; display: flex; flex-wrap: wrap; gap: 5px; background: rgba(84,88,91,.1); }
+.qtile { position: relative; width: 245px; height: 72px; background: rgba(84,88,91,.118); flex: none; }
+.qtile__art { position: absolute; left: 5.8px; top: 4px; width: 64px; height: 64px; display: grid; place-items: center; background: #1b1c1c var(--ui-grid_cell) 0 0 / 64px 64px; box-shadow: inset 0 0 0 1px #585d60, 0 0 6px 2px rgba(0,0,0,.6); overflow: hidden; }
+.qtile__art img { max-width: 64px; max-height: 64px; object-fit: contain; }
+.qtile__art img.is-sym { width: 46px; height: 46px; }
+.qtile__unlock { position: absolute; left: 6px; top: 5px; width: 28px; height: 28px; z-index: 2; }
+.qtile__cap { position: absolute; left: 79px; top: 14.5px; width: 160px; height: 20px; display: flex; align-items: flex-end; color: #b0bac1; font-size: 12px; text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+.qtile__val { position: absolute; left: 79px; top: 35px; width: 160px; color: #c5c3b2; font-size: 14px; font-weight: 700; }
+.qtile__name { position: absolute; left: 79px; top: 0; width: 160px; height: 72px; display: flex; align-items: center; color: #c5c3b2; font-size: 14px; line-height: 15.4px; overflow: hidden; }
+.qtile__fir { position: absolute; left: 55px; top: 53px; width: 13px; height: 12px; opacity: .7; }
+.qobjs { display: flex; flex-direction: column; gap: 6px; padding-top: 5px; }
+.qobj { position: relative; margin-left: 20px; width: 1310px; min-height: 50px; box-sizing: border-box; padding: 6px 60px 6px 40px; display: flex; align-items: center; justify-content: center; gap: 9px; background: rgba(84,88,91,.49); color: #a6b0b5; font-size: 18px; font-weight: 700; }
+.qobj__ico { width: 30px; height: 27px; object-fit: contain; flex: none; }
+.qobj__text { text-align: left; line-height: 19.8px; }
+.qobj__bar { width: 190px; height: 22px; flex: none; box-sizing: border-box; border-style: solid; border-width: 3px 4px; border-image: var(--ui-objectiveprogressback) 3 4 fill stretch; position: relative; background: #000; }
+.qobj__bar i { position: absolute; left: 0; top: 1px; height: 14px; max-width: 182px; background: #9aa5ab var(--ui-objectiveprogress) 0 0 / 100% 100%; }
+.qobj__count { flex: none; }
+.qobj__done { width: 37px; height: 31px; flex: none; }
+.qobj .dbtn { min-width: 130px; flex: none; padding: 4px 20px; }
+.qobj.is-done { color: #7f8a90; }
+.qobj--child { margin-left: 70px; width: 1260px; min-height: 0; padding: 3px 60px 3px 40px; background: rgba(84,88,91,.227); font-size: 16px; font-weight: 400; }
+.qfail { margin-left: 20px; display: flex; align-items: center; gap: 4px; color: #c5c3b2; font-size: 18px; }
+.qfail img { width: 31px; height: 31px; }
+
+/* the window a task's items are handed over in */
+.hwin { position: relative; width: 678px; min-height: 300px; box-sizing: border-box; padding: 2px; background: #000; box-shadow: 0 0 0 1px #000, 0 0 30px 10px rgba(0,0,0,.7); }
+.hwin__cap { height: 17px; display: flex; align-items: center; padding-left: 5px; background: rgba(84,88,91,.3); color: #fff; font-size: 14px; }
+.hwin__cap span { flex: 1; }
+.hwin__body { padding: 10px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.hwin__line { width: 654px; display: flex; align-items: center; gap: 15px; color: #c5c3b2; font-size: 18px; line-height: 19.8px; }
+.hwin__line span:first-child { flex: 1; }
+.hwin__auto { width: 60px; height: 18px; padding: 0; border: 0; background: #2b2d2e; color: #fff; font-size: 11px; text-transform: uppercase; }
+.hwin__auto:hover { background: #595c5b; }
+.hwin__grid { width: 654px; height: 397px; box-sizing: border-box; padding: 5px 15px 5px 5px; border: 1px solid var(--e-line); overflow-x: hidden; overflow-y: scroll; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 1px; background: #0c0d0d; }
+.hwin__grid .item { position: relative; left: auto; top: auto; flex: none; opacity: .5; }
+.hwin__grid .item.is-picked { opacity: 1; box-shadow: inset 0 0 0 2px #e7e5d4; }
+.hwin__note { width: 654px; color: #d0a856; font-size: 14px; }
+.hwin .dbtn { min-width: 200px; }
+.hgun { width: 634px; display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #2a2c2c; }
+.hgun .item { position: relative; left: auto; top: auto; --cell: 44px; }
+.spec { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.spec li { display: flex; justify-content: space-between; gap: 16px; padding: 1px 0; }
+.spec li.is-ok b { color: var(--e-met); } .spec li.is-miss b { color: var(--e-unmet); }
+
+/* ---------------- SERVICES ---------------- */
+.trservices::before { content: ""; position: absolute; left: 0; top: 225px; width: 1920px; height: 822px; background: linear-gradient(180deg, rgba(0,0,0,.8) 0, rgba(0,0,0,.6) 64px, rgba(0,0,0,.6) 100%); border-top: 1px solid rgba(255,255,255,.07); pointer-events: none; }
+.svc__list { position: absolute; left: 8px; top: 232px; width: 548px; }
+.svc__row { position: relative; width: 548px; height: 100px; display: flex; align-items: center; gap: 18px; padding: 0 24px 0 2px; box-sizing: border-box; border: 0; background: #c9c5ad; color: #101214; font-size: 18px; font-weight: 700; text-align: left; }
+.svc__thumb { width: 96px; height: 96px; display: grid; place-items: center; background: #1b1c1c var(--ui-tactical_background) center / cover; flex: none; }
+.svc__thumb img { width: 53px; height: 65px; }
+.svc__pane { position: absolute; left: 568px; top: 232px; width: 1344px; height: 789px; background: rgba(10,10,10,.4); }
+.svc__head { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 16px; background: rgba(84,88,91,.3); color: #c5c3b2; font-size: 18px; }
+.svc__head span { flex: 1; }
+.svc__head em { font-style: normal; color: #8a8d8b; }
+.svc__note { padding: 60px 0; text-align: center; color: #6f7679; font-size: 18px; }
+
+/* ---------------- the trader's own tooltip ---------------- */
+.ttip { position: absolute; z-index: 60; width: 418px; box-sizing: border-box; padding: 6px 6px 12px 8px; background: #000; box-shadow: inset 0 0 0 1px var(--e-line), 0 0 14px 4px rgba(0,0,0,.7); display: flex; flex-direction: column; gap: 12px; pointer-events: none; color: #b6c1c7; font-size: 12px; line-height: 13.2px; }
+.ttip::before { content: ""; position: absolute; left: 1px; top: 1px; right: 1px; height: 29px; background: #1a1a1a; }
+.ttip > * { position: relative; }
+.ttip__cap { display: flex; align-items: center; gap: 10px; padding-top: 2px; height: 17.4px; }
+.ttip__cap b { flex: 1; color: #edebd6; font-size: 14px; }
+.ttip__cap span { color: var(--e-red); display: flex; align-items: center; gap: 4px; }
+.ttip__cap img { width: 17px; height: 20px; opacity: .7; }
+.ttip__sep { height: 1.4px; background: var(--ui-tooltip_separator) 0 0 / 100% 100% no-repeat; }
+.ttip__cols { display: flex; }
+.ttip__cols > div { display: flex; flex-direction: column; gap: 4px; color: #a5aeb5; }
+.ttip__cols > div:first-child { width: 177px; }
+.ttip__cols em { font-style: normal; color: #747b7e; }
+.ttip__cols em.is-met { color: #00e5ff; } .ttip__cols em.is-unmet { color: #f00; }
+.ttip__cols img { width: 14px; height: 12px; margin-left: 6px; vertical-align: -1px; }

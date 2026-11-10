@@ -1,255 +1,329 @@
 // =========================================================
-// trader screen, laid out like the real game:
+// a trader's own screen
 //
-//  - a strip of trader portrait tabs across the top (LL numeral + currency)
-//  - loyalty bar with roman numeral tiers and the player's balance
-//  - BUY: the assortment packed into an item grid, price captions on the
-//    tiles, lock plates over higher-loyalty offers, stock counters. Picking
-//    an offer STAGES it on a trading table - it does not buy it. The table
-//    totals up, the payment has to be allocated ("Fill items"), and DEAL!
-//    commits every staged offer in one transaction.
-//  - SELL: the mirror of that. Drag items onto the table, each carries what
-//    the trader will pay for it, then DEAL!.
-//  - REPAIR (Prapor, Skier, Mechanic): a gun goes on the bench, a slider picks
-//    how many points of durability to put back, the price is the weapon's
-//    RepairCost x points x the trader's rate for your loyalty level, and the
-//    trader's quality decides how much comes off the gun's ceiling.
-//  - the stash stays docked on the right the whole time
+// The client's arrangement, part for part. Along the top three tabs
+// (TRADING, TASKS, SERVICES), VISIT in the middle and BACK in the corner.
+// Under them, between two khaki rules, a strip with a card for every trader -
+// the one being dealt with turns cream - and to its right the player's own
+// block: name, the three currencies, "Current attitude:" and "Next Loyalty
+// Level:" with what is still unmet in red, level label, face.
 //
-// The wording is the game's own, read out of tools/cache/en.json: "DEAL!"
-// keeps its exclamation mark, "Fill items" is the Autofill key, and the
-// blocked states say "No selected items" / "Not enough money" /
-// "Not enough space in stash" / "Bad user loyalty level" verbatim. Neither
-// side pops a confirmation modal - staging is the confirmation.
+//  TRADING   his goods on the left as one item grid (the price on every
+//            tile, a currency sign or the two arrows of a barter; "A LOT" or
+//            the number in stock in the corner), your stash on the right,
+//            and between them the deal: the auto-fill toggle, BUY and SELL,
+//            the clear-table button, and under the DEAL! bar either what the
+//            chosen offer costs - each thing it wants with a glowing tick or
+//            a glowing empty box and have/need - or, when selling, the table
+//            the things to sell are dragged onto.
+//  TASKS     what he will hand out and take back (src/ui/tasks-ui.js)
+//  SERVICES  the trader's own service; repairs and insurance are not here,
+//            they open from an item's menu and before a raid
+//
+// Every number comes from src/game/traders.js, which reads the live game's
+// own offers. Nothing here pops a confirmation: an offer on the table with
+// its price met is the confirmation, DEAL! (or SPACE) closes it.
 // =========================================================
 
-import { $, $$, el, icon, fmtNum, clamp, keepScroll, debounce } from '../core/util.js';
-import { TRADERS, TRADER_BY_ID, loyaltyFor, canBuyFrom, sellValue, buyPrice, buyCurrency, LOYALTY_LEVELS } from '../data/traders.js';
-import { TPL, FX } from '../data/items.js';
-import { game, countMoney, addMoney, canAddMoney, takeMoney, traderState, saveSoon, addExp, registerSaveSection } from '../core/state.js';
-import { Item, Grid, autoPlace, detach } from '../inventory/model.js';
-import { renderGrid } from '../inventory/view.js';
+import { $, $$, el, icon, fmtNum, fmtShort, clamp, keepScroll } from '../core/util.js';
+import { game, countMoney, saveSoon, registerSaveSection } from '../core/state.js';
+import { Item, Grid, autoPlace } from '../inventory/model.js';
+import { renderGrid, renderItem } from '../inventory/view.js';
 import { isKnown, needsExamine } from '../inventory/examine.js';
 import { dndContext, quickTransfer, isDragging } from '../inventory/dnd.js';
 import { setContextProvider, inspectDialog, closeContext } from '../inventory/dialogs.js';
 import { openContainerWindow, refreshContainerWindows, closeContainerWindow } from '../inventory/window.js';
 import { moddingContext } from '../inventory/modding.js';
-import {
-  isRepairable, repairNeeded, traderRepairRate, traderRepairPrice, traderRepair, wearRange,
-} from '../inventory/repair.js';
 import { buildMenu, markOpenable, examineNow } from './stash.js';
 import { sfx } from '../core/audio.js';
 import { on, emit, EV } from '../core/events.js';
-import { toast, refreshTopbar } from './shell.js';
+import { t, tOr } from '../core/i18n.js';
+import { uiImg, uiIcon, loadUiGroup } from '../core/uiart.js';
+import { toast, showScreen, currentScreen, onLeaveScreen } from './shell.js';
+import { DB, CUR_OF_ITEM, CUR_SYM, tplOf, itemName, levelGroup } from '../game/db.js';
+import {
+  loyaltyLevel, traderRecord, nextLevel, restockIn, offersOf, offerTpl, offerState, offerLeft,
+  offerCurrency, offerPrice, requirements, buyBlocker, buyOffer, buildPreset,
+  sellBlocker, sellPrice, sellItems, isUnlocked,
+} from '../game/traders.js';
+import { talkTo } from '../game/quests.js';
+import { renderTasksPane } from './tasks-ui.js';
+import { setTraderOpener, listedTraders, rankNode, traderMarks, attachTooltip, fmtTimer } from './traders-list.js';
 
-let activeId = 'prapor';
-let mode = 'buy';
+/** @type {any} the trader whose screen is up */
+let trader = null;
+let tab = 'trade';        // trade | tasks | services
+let mode = 'buy';         // buy | sell
+let category = 'all';
+let stashCategory = 'all';
+let llFilter = 0;         // 0 = every loyalty level
+let autoFill = true;
+let search = '';
 
-const CUR_SYM = { RUB: '₽', USD: '$', EUR: '€' };
-const ROMAN = ['I', 'II', 'III', 'IV'];
-const FENCE_REFRESH_COST = 5000;
 /** ceiling on one order, matching the three digits the quantity box takes */
 const MAX_BUY_QTY = 999;
 
 /**
- * The sell zone: items dragged here are what the DEAL button will sell. Its
- * footprint is not fixed — fitTable() sizes it to the box the middle column
- * has for it, so the whole table is on screen at once and never scrolls. This
- * is only the floor it starts from and can never drop under.
+ * The sell table: what is dragged here is what DEAL! sells. Eight cells
+ * across, as the client's, and as many rows as its panel shows.
  */
-const TABLE_MIN = { w: 4, h: 4 };
-export const tradeTable = new Grid(TABLE_MIN.w, TABLE_MIN.h, { tag: 'tradeTable', label: 'TRADING TABLE' });
-tradeTable.mayAccept = (item) => (mode === 'repair'
-  ? repairableHere(TRADER_BY_ID[activeId], item)
-  : sellableTo(TRADER_BY_ID[activeId], item));
+const TABLE = { w: 8, h: 11 };
+export const tradeTable = new Grid(TABLE.w, TABLE.h, { tag: 'tradeTable', label: 'TRADING TABLE' });
+tradeTable.mayAccept = (item) => !!trader && tab === 'trade' && mode === 'sell' && !sellBlocker(trader, item) && isKnown(item);
 
 /**
- * The repair bench takes one gun at a time: this trader mends weapons, the
- * item is a gun with a durability track and it is short of its ceiling.
- */
-function repairableHere(trader, item) {
-  if (!trader?.repair || !isRepairable(item)) return false;
-  if (!isKnown(item)) return false;
-  if (repairNeeded(item) <= 0) return false;
-  const on = tradeTable.items();
-  return on.length === 0 || (on.length === 1 && on[0] === item);
-}
-/** points staged for the repair of the gun on the bench (null = all of it) */
-let repairPts = null;
-
-/**
- * The buy-side trading table. Picking an offer stages it here; nothing is
- * bought until DEAL!.
- *
- * One offer at a time, with a quantity - not a cart. The client's own locale
- * is singular throughout: the header key is "Item to purchase", and the
- * restock limits read "This item is purchased in quantities of {0} pcs." and
- * "You have already bought the maximum amount of this item". The multi-select
- * wording that does exist ("Amount of items to purchase:", "Are you sure you
- * want to buy selected items for {0}?") is all prefixed ragfair/ - it belongs
- * to the flea market, which is a different screen.
- *
+ * The buy side of the table. One offer at a time, with a quantity - not a
+ * cart: the client's own wording is singular ("Item to purchase").
  * Either null or { off, tpl, qty }.
  */
 let staged = null;
+/** with auto-fill off: the requirement rows the player has filled by hand */
+let filledRows = new Set();
+
+function clearStaged() { staged = null; filledRows = new Set(); }
+
+// ---------------------------------------------------------
+// what goes in which tab beside the grids
+// ---------------------------------------------------------
 /**
- * Whether the payment has been allocated. The game makes you put the money
- * on the table too - by hand, or with the "Fill items" button - and DEAL!
- * stays inert until the requirement slot is covered.
+ * The tabs beside a grid are the handbook's top categories, in the order the
+ * client's filter strip lists them, with magazines lifted out of weapon
+ * parts into a tab of their own as the client does. `hb` is the handbook
+ * category's id (a template carries its chain of them, most specific first);
+ * `cats` are the short categories of this build's item table, for a template
+ * the handbook does not file.
  */
-let filled = false;
+const CATEGORIES = [
+  { key: 'all', ico: 'icon_itemtype_all' },
+  { key: 'barter', ico: 'icon_itemtype_barter', hb: '5b47574386f77428ca22b33e', cats: ['barter', 'electronics', 'valuables', 'lootbox'] },
+  { key: 'gear', ico: 'icon_itemtype_gear_armor', hb: '5b47574386f77428ca22b33f', cats: ['armor', 'helmet', 'rig', 'backpack', 'headset', 'glasses', 'facecover', 'container', 'secure', 'armband', 'plate', 'gearmod'] },
+  { key: 'mod', ico: 'icon_itemtype_mod', hb: '5b5f71a686f77447ed5636ab', cats: ['mod'] },
+  { key: 'weapon', ico: 'icon_itemtype_weapon', hb: '5b5f78dc86f77409407a7f8e', cats: ['weapon', 'pistol', 'melee', 'grenade', 'preset'] },
+  { key: 'mag', ico: 'icon_itemtype_mags', hb: '5b5f754a86f774094242f19b', cats: ['mag'] },
+  { key: 'ammo', ico: 'icon_itemtype_ammo', hb: '5b47574386f77428ca22b346', cats: ['ammo', 'ammobox'] },
+  { key: 'food', ico: 'icon_itemtype_food', hb: '5b47574386f77428ca22b340', cats: ['food', 'drink'] },
+  { key: 'meds', ico: 'icon_itemtype_meds', hb: '5b47574386f77428ca22b344', cats: ['meds'] },
+  { key: 'key', ico: 'icon_itemtype_keys', hb: '5b47574386f77428ca22b342', cats: ['key'] },
+  { key: 'info', ico: 'icon_itemtype_info', hb: '5b47574386f77428ca22b341', cats: ['info'] },
+  { key: 'spec', ico: 'icon_itemtype_spec', hb: '5b47574386f77428ca22b345', cats: ['special', 'nvg', 'repairkit', 'flare'] },
+  { key: 'maps', ico: 'icon_maps', hb: '5b47574386f77428ca22b343', cats: [] },
+  { key: 'money', ico: 'icon_money', hb: '5b5f78b786f77447ed5636af', cats: ['money'] },
+];
+const GROUP_OF = {};
+const GROUP_OF_HB = {};
+CATEGORIES.forEach((c, i) => {
+  for (const k of c.cats || []) GROUP_OF[k] = { key: c.key, order: i };
+  if (c.hb) GROUP_OF_HB[c.hb] = { key: c.key, order: i };
+});
+/** which tab a template is filed under */
+function groupEntry(tpl) {
+  // the chain is walked from the specific end, so Magazines wins over Weapon parts & mods
+  for (const id of tpl.hb || []) if (GROUP_OF_HB[id]) return GROUP_OF_HB[id];
+  return GROUP_OF[tpl.cat] || GROUP_OF.barter;
+}
+const groupOf = (tpl) => groupEntry(tpl).key;
 
-function clearStaged() {
-  staged = null;
-  filled = false;
+/** display items for the goods grid, one an offer, kept while the offer list stands */
+const shelfItems = new Map();
+function displayItem(off) {
+  let it = shelfItems.get(off.id);
+  if (it) return it;
+  const tpl = offerTpl(off);
+  try {
+    it = off.preset ? buildPreset(off.preset) : new Item(tpl.key, { examined: true, stack: Math.min(off.n || 1, tpl.stack || 1) });
+  } catch { it = null; }
+  if (!it) return null;
+  it.examined = true;
+  for (const m of it.allMods()) m.examined = true;
+  it.virtual = true;
+  it.offer = off;
+  shelfItems.set(off.id, it);
+  return it;
 }
 
-const stagedTotal = (t) =>
-  (staged ? buyPrice(t, staged.tpl, FX, staged.off) * staged.qty : 0);
+const offerName = (off) => (off.preset ? (DB.presets[off.preset]?.name || offerTpl(off).short) : offerTpl(off).short || offerTpl(off).name);
 
-const stagedCurrency = (t) =>
-  (staged ? buyCurrency(t, staged.tpl, staged.off) : t.currency);
-
-function sellableTo(trader, item) {
-  if (!trader || !canBuyFrom(trader, item)) return false;
-  if (item.tpl.cat === 'money') return false;
-  // like the game: unexamined items cannot be traded, and containers have to
-  // be emptied before they go on the table
-  if (!isKnown(item)) return false;
-  if (!item.isEmptyContainer) return false;
-  // hard-currency traders round down; if that lands on zero they pass
-  if (sellValue(trader, item, FX) < 1) return false;
-  return true;
+// ---------------------------------------------------------
+// opening
+// ---------------------------------------------------------
+export function openTraderScreen(next, nextTab = 'trade') {
+  if (!next || !isUnlocked(next)) return;
+  if (trader !== next) {
+    returnTableItems();
+    clearStaged();
+    category = 'all';
+    llFilter = 0;
+    shelfItems.clear();
+  }
+  trader = next;
+  tab = nextTab;
+  mode = 'buy';
+  // walking in is the conversation the game asks for before some tasks
+  talkTo(next);
+  showScreen('trader');
+  activateTradeContext();
+  renderTrade();
 }
 
-// remember the starting stock so restocks can restore it — at module scope,
-// because the save's stock section restores before initTrade ever runs
-for (const t of TRADERS) for (const off of t.assort) off.base = off.stock;
+/** the parts of the screen that never change, built once */
+function build() {
+  const scr = $('#screen-trader');
+  const visit = el('button', { class: 'trvisit', id: 'btn-trader-visit', disabled: true, dataset: { sfx: 'own' } },
+    uiImg('social_trader_chat_full_call_icon_2_0'), el('span', {}, tOr('Chat/DialogueInvitation/StartMethod/InLobby', 'VISIT')));
+  const back = el('button', { class: 'dbtn dbtn--25 trback', dataset: { sfx: 'own' } }, t('BACK'));
+  back.addEventListener('click', () => { sfx.ui('click'); showScreen('traders'); });
 
-export function initTrade() {
-  for (const seg of $$('#pane-traders .seg')) {
-    seg.addEventListener('click', () => {
-      if (mode === seg.dataset.mode) return;
-      mode = seg.dataset.mode;
+  const refresh = el('button', { class: 'trrefresh', id: 'btn-refresh-store', dataset: { sfx: 'own' } },
+    uiIcon('icon_info_reload'), el('span', {}, t('UPDATE STORE')));
+  refresh.addEventListener('click', () => {
+    sfx.ui('click');
+    refresh.classList.add('is-busy');
+    shelfItems.clear();
+    $('#trader-content').replaceChildren(el('div', { class: 'trgoods__spin' }));
+    setTimeout(() => { refresh.classList.remove('is-busy'); if (tradeScreenActive()) renderTrade(); }, 420);
+  });
+
+  const fill = el('button', { class: 'fillbtn', id: 'deal-auto', title: t('Select to auto fill requirements'), dataset: { sfx: 'own' } },
+    uiImg('trade_fill_toggle_idle', 'fillbtn__box'), uiImg('trade_fill_icon_idle', 'fillbtn__ico'),
+    uiImg('checkmark_trader_big_0', 'fillbtn__tick'));
+  fill.addEventListener('click', () => {
+    autoFill = !autoFill;
+    filledRows = new Set();
+    sfx.ui('checkbox');
+    renderTrade();
+  });
+
+  const tabBtn = (key, label, ico, icoOn) => {
+    const b = el('button', { class: `dtab dtab--${key}`, dataset: { mode: key, sfx: 'own', ico, icoOn } },
+      el('span', {}, label), uiImg(ico));
+    b.addEventListener('click', () => {
+      if (mode === key) return;
+      mode = key;
       sfx.trade('click');
       returnTableItems();
       clearStaged();
       renderTrade();
+      emit(EV.INVENTORY_CHANGED);
     });
-  }
+    return b;
+  };
 
-  // leaving the trader pane clears the table back into the stash
-  on(EV.SCREEN_CHANGED, (id) => {
-    if (id !== 'hideout:traders' && tradeTable.count) {
+  const clear = el('button', { class: 'clearbtn', id: 'btn-trade-clear', title: t('Clear table'), dataset: { sfx: 'own' } },
+    uiImg('trade_clear_icon_idle'));
+  clear.addEventListener('click', () => {
+    clearStaged();
+    if (tradeTable.count) returnTableItems();
+    sfx.trade('click');
+    renderTrade();
+    emit(EV.INVENTORY_CHANGED);
+    saveSoon();
+  });
+
+  const find = el('input', { type: 'text', id: 'trade-search', placeholder: t('UI/Inventory/SearchButtonCaption'), autocomplete: 'off', spellcheck: 'false' });
+  find.addEventListener('input', () => { search = find.value.trim().toLowerCase(); renderDockedStash(); });
+
+  scr.replaceChildren(
+    el('div', { class: 'trbar' },
+      el('div', { class: 'trbar__tabs', id: 'trader-tabs' }), visit, back),
+    el('div', { class: 'trtop' },
+      el('div', { class: 'trtop__pattern' }),
+      el('div', { class: 'trtop__cards', id: 'trader-strip' }),
+      el('div', { class: 'trplayer', id: 'trader-player' })),
+    el('div', { class: 'trdeal', id: 'trade-body' },
+      el('div', { class: 'hplate trshow' }, t('SHOWCASE')),
+      refresh,
+      el('div', { class: 'ftabs ftabs--ll', id: 'assort-ll' }),
+      el('div', { class: 'trgoods', id: 'trader-content' }),
+      el('div', { class: 'ftabs ftabs--goods', id: 'assort-tools' }),
+      fill,
+      tabBtn('buy', t('BUY'), 'trade_buytab_icon_idle', 'trade_buytab_icon_hover'),
+      tabBtn('sell', t('SELL'), 'trade_sell_icon_idle', 'trade_sell_icon_hover'),
+      clear,
+      el('div', { class: 'dealcol', id: 'trade-table-host' }),
+      el('div', { class: 'ftabs ftabs--stash', id: 'stash-cats' }),
+      el('label', { class: 'trsearch' }, uiIcon('icon_search'), find),
+      el('div', { class: 'trstash', id: 'trade-stash-host' })),
+    el('div', { class: 'trquests', id: 'trader-tasks-host', hidden: true }),
+    el('div', { class: 'trservices', id: 'trader-services-host', hidden: true }));
+}
+
+export function initTrade() {
+  build();
+  setTraderOpener(openTraderScreen);
+
+  // leaving the trader clears the table back into the stash
+  onLeaveScreen((from, to) => {
+    if (from === 'trader' && to !== 'trader' && tradeTable.count) {
       returnTableItems();
       emit(EV.INVENTORY_CHANGED);
       saveSoon();
     }
   });
 
-  // closing the tab with items still on the table must not lose them: this
-  // listener registers before main.js registers save(), so it runs first
+  // closing the tab with items still on the table must not lose them
   window.addEventListener('beforeunload', () => {
     if (tradeTable.count) returnTableItems();
   });
 
-  // the table is cut to the column's size, so a resized window (or a cell-size
-  // breakpoint) has to cut it again
-  window.addEventListener('resize', debounce(() => {
-    if ((mode === 'sell' || mode === 'repair') && tradeScreenActive()) renderTrade();
-  }, 160));
-
-  // the deal bar advertises SPACE, so SPACE has to actually close the deal
+  // the deal bar shows SPACE on a key cap, so SPACE has to close the deal
   document.addEventListener('keydown', (e) => {
     if (e.key !== ' ' && e.code !== 'Space') return;
-    if (!tradeScreenActive()) return;
+    if (!tradeScreenActive() || tab !== 'trade') return;
     const tag = e.target?.tagName;
-    // typing, or a focused control that already answers to SPACE itself
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || e.target?.isContentEditable) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
     if (!$('#modal-root').hidden || isDragging()) return;
-    // Clicking DEAL! closes the context menu on the way in, because the
-    // pointerdown lands outside it. A key press does not, and the menu's
-    // actions still hold the Item that the deal is about to detach — REMOVE
-    // FROM TABLE on a sold item put it back in the stash, payout and all.
+    // a key press does not close the context menu the way a click on DEAL!
+    // does, and the menu's actions still hold the Item the deal detaches
     if (!$('#context-menu').hidden) return;
     e.preventDefault();
-    const t = TRADER_BY_ID[activeId];
-    if (mode === 'buy') doBuyStaged(t);
-    else if (mode === 'repair') doRepair(t);
-    else doSell(t);
+    if (mode === 'buy') doBuyStaged();
+    else doSell();
   });
+
+  on(EV.TRADER_RESTOCK, (who) => {
+    if (who === trader) { shelfItems.clear(); clearStaged(); if (tradeScreenActive()) renderTrade(); }
+  });
+  on(EV.TRADER_LEVEL, () => { if (tradeScreenActive()) renderTrade(); });
+  on(EV.QUEST, () => { if (tradeScreenActive()) { renderChrome(); if (tab === 'tasks') renderTasksTab(); } });
+  on(EV.LEVEL_UP, () => { if (tradeScreenActive()) renderChrome(); });
+
+  setInterval(() => {
+    if (!tradeScreenActive()) return;
+    for (const node of $$('#trader-strip [data-restock]')) {
+      const who = DB.traderByKey[node.dataset.restock];
+      if (who) node.textContent = fmtTimer(restockIn(who));
+    }
+  }, 1000);
 }
 
-function tradeScreenActive() {
-  return !!$('#screen-hideout')?.classList.contains('is-active')
-    && !!$('#pane-traders')?.classList.contains('is-active');
-}
+function tradeScreenActive() { return currentScreen() === 'trader'; }
 
-// if the page dies between the debounced saves (crash, hard reload), whatever
-// sat on the trading table is serialised too, and lands back in the stash on
-// the next boot; anything the stash cannot take simply stays on the table
+// if the page dies between the debounced saves, whatever sat on the trading
+// table is serialised too and lands back in the stash on the next boot
 registerSaveSection('tradeTable', {
   roots: () => [tradeTable],
   dump: () => (tradeTable.count ? tradeTable.toJSON() : null),
   restore: (v) => {
-    // the table was as big as that window's column when it was saved; loadJSON
-    // drops whatever falls outside the current footprint, so match it first
     if (v && v.w && v.h) tradeTable.resize(v.w, v.h);
     tradeTable.loadJSON(v);
     for (const it of tradeTable.items()) autoPlace(it, [game.stash]);
-  },
-});
-
-// trader stock and Fence's rotating assortment survive a reload too —
-// otherwise F5 was a free global restock
-registerSaveSection('traderStock', {
-  dump: () => {
-    const stock = {};
-    for (const t of TRADERS) {
-      const s = {};
-      for (const off of t.assort) if (off.base != null && off.stock !== off.base) s[off.key] = off.stock;
-      if (Object.keys(s).length) stock[t.id] = s;
-    }
-    const fence = fenceStock
-      ? fenceStock.map((o) => ({ key: o.key, ll: o.ll, stock: o.stock, base: o.base }))
-      : null;
-    return (Object.keys(stock).length || fence) ? { stock, fence } : null;
-  },
-  restore: (v) => {
-    if (!v) return;
-    for (const t of TRADERS) {
-      const s = v.stock?.[t.id];
-      if (!s) continue;
-      for (const off of t.assort) {
-        if (s[off.key] != null) off.stock = Math.max(0, Math.min(off.base ?? s[off.key], s[off.key]));
-      }
-    }
-    if (Array.isArray(v.fence)) {
-      const valid = v.fence.filter((o) => TPL[o.key]);
-      if (valid.length) fenceStock = valid;
-    }
+    tradeTable.resize(TABLE.w, TABLE.h);
   },
 });
 
 export function activateTradeContext() {
   dndContext.quickTargets = (item) => {
-    // on the buy side there is nowhere for a stash item to go; returning the
-    // stash itself made ctrl+click shuffle items to a random free cell
-    if (mode !== 'sell' && mode !== 'repair') return [];
+    // on the buy side there is nowhere for a stash item to go
+    if (tab !== 'trade' || mode !== 'sell') return [];
     return onTable(item) ? [game.stash] : [tradeTable];
   };
-  // the modding screen and the ammo dialogs are reachable from here too:
-  // parts and rounds come from the stash and what is worn, as in the hideout
   moddingContext.sources = () => [game.stash, ...game.equipment.allGrids(), ...game.equipment.nestedGrids()];
   dndContext.equipSlotFor = () => null;
   dndContext.requestSplit = null;
   dndContext.canMove = (item) => !item.virtual;
   dndContext.onActivate = (item) => {
-    // a single click on a shelf tile already stages the offer; letting the
-    // double-click stage it again put three on the table for two clicks
+    // a single click on a goods tile already stages the offer
     if (item.virtual) return;
-    // the menu on this screen promises EXAMINE on DBL-CLICK just as the stash
-    // does, and this branch was the one thing missing to make that true
     if (needsExamine(item)) { examineNow(item); return; }
     if (item.isContainer && !onTable(item)) { openContainerWindow(item); return; }
     quickTransfer(item);
@@ -257,87 +331,44 @@ export function activateTradeContext() {
   dndContext.onChange = () => { renderTrade(); emit(EV.INVENTORY_CHANGED); saveSoon(); };
 
   setContextProvider((item) => {
-    const t = TRADER_BY_ID[activeId];
     if (item.virtual) {
       const off = item.offer;
-      const locked = off.ll > loyaltyLevel(t);
       const actions = [];
-      // in SELL mode the showcase is a display case: buying from it here would
-      // stage an offer the player cannot see and cannot complete
-      if (mode === 'buy') {
-        actions.push({
-          label: `BUY — ${fmtNum(buyPrice(t, item.tpl, FX, off))}${CUR_SYM[buyCurrency(t, item.tpl, off)]}`,
-          icon: 'cart', disabled: locked || off.stock <= 0,
-          run: () => stageOffer(t, off),
-        });
+      if (off && tab === 'trade' && mode === 'buy') {
+        actions.push({ label: t('BUY'), icon: 'cart', disabled: offerState(off) !== 'ok', run: () => stageOffer(off) });
       }
       actions.push({ label: 'INSPECT', icon: 'info', run: () => inspectDialog(item) });
       return actions;
     }
     const extra = [];
-    if (mode === 'sell') {
+    if (tab === 'trade' && mode === 'sell') {
       if (onTable(item)) {
         extra.push({
           label: 'REMOVE FROM TABLE', icon: 'back',
           run: () => {
-            // a sold item still has a holder-less object behind this closure;
-            // autoPlace would happily put it back and pay the player twice
+            // a sold item still has a holder-less object behind this closure
             if (!item.holder) return;
-            if (!autoPlace(item, [game.stash])) toast('No room in the stash', 'warn');
+            if (!autoPlace(item, [game.stash])) toast('Not enough space in stash', 'warn');
             dndContext.onChange();
           },
         });
-      } else if (sellableTo(t, item)) {
-        extra.push({
-          label: `PLACE ON TABLE — ${fmtNum(sellValue(t, item, FX))}${CUR_SYM[t.currency]}`,
-          icon: 'sell',
-          run: () => {
-            if (!item.holder) return;
-            if (!autoPlace(item, [tradeTable])) toast('No room on the table', 'warn');
-            dndContext.onChange();
-          },
-        });
-      } else if (item.tpl.cat !== 'money') {
-        const why = !isKnown(item) ? 'EXAMINE IT TO SELL'
-          : !item.isEmptyContainer ? 'EMPTY IT TO SELL'
-            : `${t.name} DOES NOT BUY THIS`;
-        extra.push({ label: why, icon: 'warn', disabled: true, run: () => {} });
-      }
-    } else if (mode === 'repair') {
-      if (onTable(item)) {
-        extra.push({
-          label: 'TAKE OFF THE BENCH', icon: 'back',
-          run: () => {
-            if (!item.holder) return;
-            if (!autoPlace(item, [game.stash])) toast('No room in the stash', 'warn');
-            repairPts = null;
-            dndContext.onChange();
-          },
-        });
-      } else if (repairableHere(t, item)) {
-        extra.push({
-          label: `PUT ON THE BENCH — ${fmtNum(traderRepairPrice(t, item, repairNeeded(item), loyaltyLevel(t)))}₽ FULL`,
-          icon: 'check',
-          run: () => {
-            if (!item.holder) return;
-            if (!autoPlace(item, [tradeTable])) toast('The bench is taken', 'warn');
-            repairPts = null;
-            dndContext.onChange();
-          },
-        });
-      } else if (item.isWeapon && t.repair && isRepairable(item) && repairNeeded(item) <= 0) {
-        extra.push({ label: 'NOTHING TO REPAIR', icon: 'warn', disabled: true, run: () => {} });
+      } else {
+        const why = !isKnown(item) ? null : sellBlocker(trader, item);
+        if (isKnown(item) && !why) {
+          extra.push({
+            label: t('SELL'), icon: 'sell',
+            run: () => {
+              if (!item.holder) return;
+              if (!autoPlace(item, [tradeTable])) toast('No room on the table', 'warn');
+              dndContext.onChange();
+            },
+          });
+        }
       }
     }
-    // a case sitting on the trading table must not be openable: filling it
-    // there hid items inside something the trader was about to take away
+    // a case sitting on the trading table must not be openable
     return buildMenu(item, 'trade', extra, { noOpen: onTable(item) });
   });
-}
-
-function loyaltyLevel(t) {
-  const st = traderState(t.id);
-  return loyaltyFor(game.profile.level, st.rep, st.spent);
 }
 
 function onTable(item) {
@@ -356,72 +387,172 @@ function onTable(item) {
 function returnTableItems() {
   let stuck = 0;
   for (const it of tradeTable.items()) {
-    // autoPlace only detaches once it has found a home, so a failure simply
-    // leaves the item sitting on the table
     if (!autoPlace(it, [game.stash])) stuck++;
   }
-  if (stuck) toast('Stash is full — items left on the table', 'warn');
+  if (stuck) toast('Not enough space in stash', 'warn');
 }
 
 // ---------------------------------------------------------
-export function renderTrade() {
+// the bar of tabs, the strip of cards, the player's block
+// ---------------------------------------------------------
+const TABS = [
+  { key: 'trade', label: () => t('Trading'), ico: 'tab_icon_buy', icoOn: 'tab_icon_buy_selected' },
+  { key: 'tasks', label: () => t('TASKS'), ico: 'tab_icon_tasks', icoOn: 'tab_icon_tasks_selected' },
+  { key: 'services', label: () => t('SERVICES'), ico: 'trade_buy_icon_idle', icoOn: 'trade_buy_icon_hover', wide: true },
+];
+
+/** the services a trader offers on his own screen; the rest of what traders do lives elsewhere */
+function servicesOf(who) {
+  return who.key === 'ragman' ? ['clothing'] : [];
+}
+
+function renderChrome() {
+  if (!trader) return;
+  // ---- tabs ----
   const tabs = $('#trader-tabs');
-  if (!tabs) return;
-  const t = TRADER_BY_ID[activeId];
-
-  renderTabs(tabs);
-  renderBar($('#trader-bar'), t);
-  renderAssortTools(t);
-
-  // only the three who mend guns get the REPAIR tab; landing on it at a
-  // trader who does not falls back to BUY
-  const repairSeg = $('#pane-traders .seg[data-mode="repair"]');
-  if (repairSeg) repairSeg.hidden = !t.repair;
-  if (mode === 'repair' && !t.repair) { returnTableItems(); mode = 'buy'; }
-  for (const seg of $$('#pane-traders .seg')) {
-    seg.classList.toggle('is-active', seg.dataset.mode === mode);
-  }
-
-  // left column is the shelf, middle column is the table; in sell mode the
-  // shelf is idle and the table is what the stash drops onto
-  const content = $('#trader-content');
-  const table = $('#trade-table-host');
-  // both of these scrollers are rebuilt as brand-new elements, so their offset
-  // has to be carried across by hand or every action scrolls them home
-  const shelfTop = $('.assort-scroll', content)?.scrollTop || 0;
-  const zone = $('.table-zone', table);
-  const zoneTop = zone?.scrollTop || 0;
-  const zoneLeft = zone?.scrollLeft || 0;
-  content.replaceChildren();
-  table.replaceChildren();
-  if (mode === 'buy') { renderBuy(t, content); renderBuyTable(t, table); }
-  else if (mode === 'repair') { renderShowcaseIdle(t, content); renderRepair(t, table); }
-  else { renderShowcaseIdle(t, content); renderSell(t, table); }
-  const shelf = $('.assort-scroll', content);
-  if (shelf) shelf.scrollTop = shelfTop;
-  const zone2 = $('.table-zone', table);
-  if (zone2) { zone2.scrollTop = zoneTop; zone2.scrollLeft = zoneLeft; }
-
-  const clear = $('#btn-trade-clear');
-  if (clear) {
-    // the button is labelled "Clear the table", so it has to be live whenever
-    // the table holds something — items stranded there are invisible in BUY
-    // mode, and this was the only control that could reach them
-    clear.disabled = !staged && !tradeTable.count;
-    clear.onclick = () => {
-      if (mode === 'buy') clearStaged();
-      repairPts = null;
-      if (tradeTable.count) returnTableItems();
-      sfx.trade('click');
+  tabs.replaceChildren();
+  for (const d of TABS) {
+    const active = tab === d.key;
+    const off = d.key === 'services' && !servicesOf(trader).length;
+    const b = el('button', { class: `ptab${active ? ' is-active' : ''}`, disabled: off, dataset: { tab: d.key, sfx: 'own' } },
+      el('span', { class: `ptab__ico${d.wide ? ' ptab__ico--wide' : ''}` }, uiImg(active ? d.icoOn : d.ico)),
+      el('span', {}, d.label()));
+    b.addEventListener('click', () => {
+      if (tab === d.key) return;
+      sfx.trade('tab');
+      returnTableItems();
+      clearStaged();
+      tab = d.key;
       renderTrade();
       emit(EV.INVENTORY_CHANGED);
-      saveSoon();
-    };
+    });
+    tabs.append(b);
   }
 
-  renderDockedStash(t);
-  // a case on the trading table is on its way out of the stash; its popped-out
-  // window would let the player keep loading it right up to the sale
+  // ---- every trader's card ----
+  const strip = $('#trader-strip');
+  const frame = $('#screen-trader');
+  strip.replaceChildren();
+  for (const who of listedTraders()) {
+    const open = isUnlocked(who);
+    const st = traderRecord(who);
+    const card = el('button', {
+      class: `scard${who === trader ? ' is-active' : ''}${open ? '' : ' is-locked'}`, disabled: !open,
+      dataset: { trader: who.key, sfx: 'own', hover: 'own' },
+    },
+    el('span', { class: 'scard__pic' }, uiImg(`avatar_${who.key}`)),
+    el('span', { class: 'scard__name' }, who.name),
+    open ? el('span', { class: 'scard__marks' }, traderMarks(who)) : null,
+    open ? rankNode(loyaltyLevel(who), who.levels.length) : null,
+    uiImg('icon_question_mark', 'scard__q'));
+    if (open) {
+      card.append(
+        el('span', { class: 'scard__row scard__row--rep' }, uiIcon('icon_standing_small'), st.rep.toFixed(2)),
+        el('span', { class: 'scard__row scard__row--time' }, uiIcon('icon_update_time'),
+          el('span', { dataset: { restock: who.key } }, fmtTimer(restockIn(who)))));
+    } else card.append(uiImg('icon_lock', 'scard__lock'));
+    card.addEventListener('pointerenter', () => { if (open && who !== trader) sfx.trade('card_hover'); });
+    card.addEventListener('click', () => {
+      if (who === trader) return;
+      sfx.trade('card_click');
+      openTraderScreen(who, tab === 'services' && !servicesOf(who).length ? 'trade' : tab);
+    });
+    attachTooltip(card.querySelector('.scard__q'), who, frame, () => {
+      const r = card.getBoundingClientRect(), h = frame.getBoundingClientRect();
+      const k = h.width / frame.offsetWidth || 1;
+      return [(r.right - h.left) / k - 2, (r.top - h.top) / k + 66];
+    });
+    strip.append(card);
+  }
+
+  renderPlayer();
+}
+
+function renderPlayer() {
+  const host = $('#trader-player');
+  const p = game.profile;
+  const st = traderRecord(trader);
+  const ll = loyaltyLevel(trader);
+  const max = trader.levels.length;
+  const next = nextLevel(trader);
+  const sym = CUR_SYM[trader.cur] || '₽';
+  // sales are kept in roubles; a trader who deals in another currency shows them in his own
+  const spent = (rub) => `${sym} ${fmtShort(trader.cur === 'RUB' ? rub : rub / (trader.cur === 'USD' ? 120 : 130))}`;
+
+  const row = (cls, label, rankLevel, lvl, rep, sales, marks) => el('div', { class: `trplayer__row ${cls}` },
+    el('span', { class: 'trplayer__lbl' }, label),
+    rankNode(rankLevel, max),
+    uiImg('lvl', 'trplayer__lvlico'),
+    el('span', { class: `trplayer__lvl ${marks ? (p.level >= lvl ? 'is-met' : 'is-unmet') : ''}` }, String(lvl)),
+    uiImg('standing_icon', 'trplayer__repico'),
+    el('span', { class: `trplayer__rep ${marks ? (st.rep + 1e-9 >= rep ? 'is-met' : 'is-unmet') : ''}` }, Number(rep).toFixed(2)),
+    sales != null ? el('span', { class: `trplayer__spent ${marks ? (st.sales >= sales ? 'is-met' : 'is-unmet') : ''}` },
+      `${spent(sales)} (${t('Spent short')})`) : null);
+
+  const rank = el('div', { class: 'trplayer__rank' });
+  const badge = `rank${levelGroup(p.level) * 5}`;
+  loadUiGroup('ranks').then(() => {
+    rank.style.webkitMaskImage = `var(--ui-${badge})`;
+    rank.style.maskImage = `var(--ui-${badge})`;
+  });
+
+  host.replaceChildren(
+    rank,
+    el('div', { class: 'trplayer__name' }, `${p.name || 'PMC'} ${t('(you)')}`),
+    el('div', { class: 'trplayer__money' },
+      el('span', {}, `₽ ${fmtNum(countMoney('RUB'))}`),
+      el('span', {}, `€ ${fmtNum(countMoney('EUR'))}`),
+      el('span', {}, `$ ${fmtNum(countMoney('USD'))}`)),
+    el('div', { class: 'trplayer__rule' }),
+    row('trplayer__row--now', t('Current attitude:'), ll, p.level, st.rep, st.sales, false),
+    next ? row('trplayer__row--next', t('Next Loyalty Level:'), ll + 1, next.pmc, next.rep, next.sales || null, true) : null,
+    el('div', { class: 'trplayer__face' }, icon('pmc', 'ico')),
+    el('div', { class: 'trplayer__level' }, String(p.level)));
+}
+
+// ---------------------------------------------------------
+// drawing
+// ---------------------------------------------------------
+export function renderTrade() {
+  if (!trader) return;
+  renderChrome();
+
+  const body = $('#trade-body');
+  const tasksHost = $('#trader-tasks-host');
+  const svcHost = $('#trader-services-host');
+  body.hidden = tab !== 'trade';
+  tasksHost.hidden = tab !== 'tasks';
+  svcHost.hidden = tab !== 'services';
+  if (tab === 'tasks') { renderTasksTab(); return; }
+  if (tab === 'services') { renderServices(); return; }
+
+  for (const b of $$('#trade-body .dtab')) {
+    const active = b.dataset.mode === mode;
+    b.classList.toggle('is-active', active);
+    const img = b.querySelector('img');
+    const fresh = uiImg(active ? b.dataset.icoOn : b.dataset.ico);
+    img.replaceWith(fresh);
+  }
+  $('#deal-auto').classList.toggle('is-on', autoFill);
+  $('#btn-trade-clear').disabled = !staged && !tradeTable.count;
+
+  renderLevelTabs();
+  renderCategoryTabs();
+  const content = $('#trader-content');
+  // the scroller is rebuilt as a new element; carry its offset across
+  const shelfTop = $('.assort-scroll', content)?.scrollTop || 0;
+  content.replaceChildren();
+  renderShelf(content);
+  const shelf = $('.assort-scroll', content);
+  if (shelf) shelf.scrollTop = shelfTop;
+
+  const table = $('#trade-table-host');
+  table.replaceChildren();
+  if (mode === 'buy') renderBuy(table);
+  else renderSell(table);
+
+  renderDockedStash();
+  // a case on the table is on its way out of the stash: shut its window
   for (const it of tradeTable.items()) {
     if (it.isContainer) closeContainerWindow(it.uid);
     for (const d of it.descendants()) if (d.isContainer) closeContainerWindow(d.uid);
@@ -429,295 +560,221 @@ export function renderTrade() {
   refreshContainerWindows();
 }
 
-/** in sell mode the showcase still shows what the trader stocks, unclickable */
-function renderShowcaseIdle(t, host) {
-  renderBuy(t, host, true);
-}
-
-/**
- * The showcase toolbar. Only Fence has anything to put in it — but it lives in
- * static DOM, so it has to be cleared for everyone else or his REFRESH STORE
- * button stayed behind on Prapor's shelf and still charged 5000₽ to reroll a
- * store the player was no longer looking at.
- */
-function renderAssortTools(t) {
-  const tools = $('#assort-tools');
-  if (!tools) return;
-  tools.replaceChildren();
-  if (t.id !== 'fence') return;
-
-  const btn = el('button', {
-    class: 'btn btn--sm', dataset: { sfx: 'own' },
-    disabled: countMoney('RUB') < FENCE_REFRESH_COST,
-    onclick: () => {
-      if (!takeMoney(FENCE_REFRESH_COST, 'RUB')) { toast('Not enough money', 'warn'); return; }
-      fenceStock = null;
-      // the staged offer belonged to the old assortment and no longer exists
-      clearStaged();
-      sfx.trade('click');
-      toast('Fence found new stock', 'ok');
-      renderTrade(); refreshTopbar(); emit(EV.INVENTORY_CHANGED); saveSoon();
-    },
-  }, icon('rotate'), 'REFRESH STORE');
-  btn.title = `Fence finds new stock — ${fmtNum(FENCE_REFRESH_COST)}₽`;
-  tools.append(btn);
-}
-
-function renderTabs(host) {
+/** the loyalty levels over the goods: all of them, or one at a time */
+function renderLevelTabs() {
+  const host = $('#assort-ll');
   host.replaceChildren();
-  for (const t of TRADERS) {
-    const ll = loyaltyLevel(t);
-    const tab = el('button', {
-      class: `ttab${t.id === activeId ? ' is-active' : ''}`,
-      onclick: () => {
-        if (activeId !== t.id) {
-          activeId = t.id;
-          sfx.trade('tab');
-          returnTableItems();
-          // an unfinished deal does not follow you to the next trader
-          clearStaged();
-          renderTrade();
-        }
-      },
-    });
-    const pic = el('div', { class: 'ttab__pic' });
-    pic.append(el('img', { src: `assets/traders/${t.id}.png`, alt: '', loading: 'lazy' }));
-    pic.append(el('span', { class: 'ttab__ll' }, ROMAN[ll - 1] || 'I'));
-    pic.append(el('span', { class: 'ttab__cur' }, CUR_SYM[t.currency]));
-    tab.append(pic, el('div', { class: 'ttab__name' }, t.name));
-    host.append(tab);
+  if (trader.fence) return;
+  const have = loyaltyLevel(trader);
+  const max = trader.levels.length;
+  const ICONS = ['loyalty_one', 'loyalty_two', 'loyalty_three'];
+  const add = (level, img) => {
+    const b = el('button', { class: `ftab ftab--ll${llFilter === level ? ' is-active' : ''}`, disabled: level > have, dataset: { sfx: 'own' } }, img);
+    b.addEventListener('click', () => { if (llFilter !== level) { llFilter = level; sfx.ui('click'); renderTrade(); } });
+    host.append(b);
+  };
+  add(0, uiImg('icon_itemtype_all'));
+  for (let l = 1; l <= max; l++) {
+    add(l, l === max ? uiImg('loyalty_king_new', '', { w: 22, h: 22 }) : uiImg(ICONS[l - 1] || 'loyalty_three'));
   }
 }
 
-function renderBar(host, t) {
+function categoryStrip(host, present, current, pick) {
   host.replaceChildren();
-  const st = traderState(t.id);
-  const ll = loyaltyLevel(t);
-  const next = LOYALTY_LEVELS.find((l) => l.level === ll + 1);
-
-  const id = el('div', { class: 'tbar__id' },
-    el('div', { class: 'tbar__name' }, t.name),
-    el('div', { class: 'tbar__tag' }, t.tag));
-
-  // roman numeral tier blocks, exactly like the loyalty widget in the game
-  const tiers = el('div', { class: 'tbar__tiers' });
-  for (const l of LOYALTY_LEVELS) {
-    tiers.append(el('div', {
-      class: `tier${l.level <= ll ? ' is-on' : ''}${l.level === ll ? ' is-cur' : ''}`,
-      title: l.level === 1 ? 'Loyalty level 1'
-        : `Requires PMC ${l.pmc} · rep ${l.rep.toFixed(2)} · ${fmtNum(l.spent)}₽ spent`,
-    }, ROMAN[l.level - 1]));
+  for (const c of CATEGORIES) {
+    const b = el('button', {
+      class: `ftab${current === c.key ? ' is-active' : ''}`, disabled: !present.has(c.key), dataset: { cat: c.key, sfx: 'own' },
+    }, uiImg(c.ico));
+    b.addEventListener('click', () => { sfx.ui('click'); pick(c.key); });
+    host.append(b);
   }
-  const rep = el('div', { class: 'tbar__rep' },
-    el('span', {}, `REP ${st.rep.toFixed(2)}`),
-    el('span', {}, `SPENT ${fmtNum(st.spent)}₽`),
-    next
-      ? el('span', { class: 'tbar__next' },
-        `NEXT: PMC ${next.pmc} · REP ${next.rep.toFixed(2)} · ${fmtNum(next.spent)}₽`)
-      : el('span', { class: 'tbar__next' }, 'MAXIMUM LOYALTY'));
+}
 
-  const wallet = el('div', { class: 'tbar__wallet' });
-  for (const cur of ['RUB', 'USD', 'EUR']) {
-    wallet.append(el('div', { class: `wallet-chip${cur === t.currency ? ' is-active' : ''}` },
-      el('span', { class: 'wallet-chip__sym' }, CUR_SYM[cur]),
-      el('span', {}, fmtNum(countMoney(cur)))));
-  }
-
-  host.append(id, el('div', { class: 'tbar__loyal' }, tiers, rep), wallet);
+function renderCategoryTabs() {
+  const present = new Set(['all']);
+  for (const o of offersOf(trader)) present.add(groupOf(offerTpl(o)));
+  if (!present.has(category)) category = 'all';
+  categoryStrip($('#assort-tools'), present, category, (key) => { category = key; renderTrade(); });
 }
 
 // ---------------------------------------------------------
-// BUY
+// the goods
 // ---------------------------------------------------------
-function renderBuy(t, host, idle = false) {
-  const ll = loyaltyLevel(t);
-  const offers = t.assort.length ? t.assort : randomFenceStock();
+const GOODS_COLS = 10;
 
-  const wrap = el('div', { class: 'assort-wrap' });
+function renderShelf(host) {
+  let offers = offersOf(trader);
+  if (category !== 'all') offers = offers.filter((o) => groupOf(offerTpl(o)) === category);
+  if (llFilter) offers = offers.filter((o) => (o.ll || 1) === llFilter);
 
   if (!offers.length) {
-    wrap.append(el('div', { class: 'empty-note' }, 'NOTHING IN STOCK'));
-    host.append(wrap);
+    host.append(el('div', { class: 'trgoods__empty' }, ''));
     return;
   }
 
-  // pack the assortment into a real inventory grid, biggest footprints first,
-  // so the shelf reads exactly like the in-game one
-  const entries = offers
-    .map((off) => ({ off, tpl: TPL[off.key] }))
-    .filter((e) => e.tpl)
-    .sort((a, b) => (b.tpl.w * b.tpl.h) - (a.tpl.w * a.tpl.h));
-
-  const COLS = 8;
-  // a gun on the shelf is the assembled preset, so it is measured assembled
-  for (const e of entries) {
-    e.disp = new Item(e.off.key, { examined: true });
-    e.disp.virtual = true;
-    e.disp.offer = e.off;
+  const entries = [];
+  for (const off of offers) {
+    const disp = displayItem(off);
+    if (disp) entries.push({ off, disp });
   }
-  entries.sort((a, b) => (b.disp.fw * b.disp.fh) - (a.disp.fw * a.disp.fh));
+  // by kind, then by loyalty level, then big before small
+  const rank = (e) => groupEntry(e.disp.tpl).order;
+  entries.sort((a, b) => rank(a) - rank(b) || (a.off.ll || 1) - (b.off.ll || 1)
+    || (b.disp.fw * b.disp.fh) - (a.disp.fw * a.disp.fh) || a.disp.tpl.name.localeCompare(b.disp.tpl.name));
+
   const cells = entries.reduce((n, e) => n + e.disp.fw * e.disp.fh, 0);
-  const shelf = new Grid(COLS, cells + 8, { tag: 'assort' });
-  // display only: the player must never be able to drop real items in here
+  const shelf = new Grid(GOODS_COLS, Math.ceil(cells / GOODS_COLS) + 14, { tag: 'assort' });
+  // display only: nothing real may ever be dropped in here
   shelf.mayAccept = (it) => !!it.virtual;
 
   const placed = [];
   for (const e of entries) {
-    const disp = e.disp;
-    const spot = shelf.findSpot(disp);
+    // a display item lives on one shelf at a time; lift it off the last one
+    e.disp.holder = null;
+    e.disp.rot = 0;
+    if (e.disp.fw > GOODS_COLS) continue;
+    const spot = shelf.findSpot(e.disp);
     if (!spot) continue;
-    shelf.place(disp, spot.x, spot.y, spot.rot);
-    placed.push({ disp, ...e });
+    shelf.place(e.disp, spot.x, spot.y, spot.rot);
+    placed.push(e);
   }
-
-  // trim the shelf to the packed height so no empty rows trail below
-  let maxY = 4;
+  let maxY = 12;
   for (const { disp } of placed) {
-    const p = shelf.posOf(disp);
-    if (p) maxY = Math.max(maxY, p.y + disp.h);
+    const pos = shelf.posOf(disp);
+    if (pos) maxY = Math.max(maxY, pos.y + disp.h);
   }
   shelf.h = maxY;
   shelf.cells = shelf.cells.slice(0, shelf.w * shelf.h);
 
   const gridEl = renderGrid(shelf);
   gridEl.classList.add('assort-grid');
+  const have = loyaltyLevel(trader);
 
-  // dress each tile up with price caption, stock counter and loyalty plate
-  for (const { disp, off, tpl } of placed) {
+  for (const { disp, off } of placed) {
     const tile = gridEl.querySelector(`.item[data-uid="${disp.uid}"]`);
     if (!tile) continue;
-    const locked = off.ll > ll;
-    const out = off.stock <= 0;
+    const state = offerState(off);
+    const cur = offerCurrency(off);
+    const left = offerLeft(off);
+    tile.classList.add('has-price');
+    // one cell across has room for the price and nothing beside it
+    if (disp.w === 1) tile.classList.add('is-narrow');
 
-    // price top-left with an oversized currency glyph, stock bottom-right —
-    // the way the real showcase cell reads
-    tile.append(el('div', { class: 'toffer__price' },
-      el('em', {}, CUR_SYM[buyCurrency(t, tpl, off)]),
-      fmtNum(buyPrice(t, tpl, FX, off))));
-
-    tile.append(el('div', { class: `toffer__stock${out ? ' is-out' : ''}` },
-      off.base == null || off.base >= 1000 ? 'A LOT' : String(off.stock)));
-    if (locked) {
-      tile.classList.add('toffer--locked');
-      tile.append(el('div', { class: 'toffer__lock' },
-        icon('lock', 'ico'), el('span', {}, ROMAN[off.ll - 1] || String(off.ll))));
-    } else if (out) {
-      tile.classList.add('toffer--out');
-      tile.append(el('div', { class: 'toffer__out' }, 'OUT OF STOCK'));
+    // the caption: a currency sign and the price, or the barter mark
+    if (cur) {
+      tile.append(el('div', { class: 'toffer__price' }, el('em', {}, CUR_SYM[cur]), fmtNum(offerPrice(off))));
     } else {
-      // clicking an offer puts it on the trading table; it does not buy it
-      if (!idle) {
-        tile.classList.add('toffer--buyable');
-        tile.title = 'Click to put on the trading table';
-        tile.addEventListener('click', (ev) => {
-          // a drag that ends on the tile must not also count as a pick
-          if (ev.detail === 0) return;
-          stageOffer(t, off);
-        });
+      tile.append(el('div', { class: 'toffer__price toffer__price--barter', title: barterTitle(off) },
+        uiIcon('icon_itemtype_barter'), el('span', {}, String(off.cost.length))));
+    }
+    // what he has of it: a number, or just "a lot"
+    const stock = off._fence ? left : (off.stock == null || off.stock > 9999 ? null : off.stock);
+    tile.append(el('div', { class: `toffer__stock${left <= 0 ? ' is-out' : ''}` }, stock == null ? t('A LOT') : fmtNum(Math.max(0, stock))));
+
+    if (state === 'level' || state === 'task') {
+      tile.classList.add('toffer--locked');
+      tile.append(el('div', { class: 'toffer__lock' }, uiImg('icon_lock_small'),
+        state === 'level' && off.ll > have ? rankNode(off.ll, trader.levels.length) : null));
+      if (state === 'task') {
+        const need = DB.taskById[off.task];
+        if (need) tile.title = need.name;
       }
-      if (staged && staged.off === off) tile.classList.add('toffer--staged');
+    } else {
+      tile.addEventListener('click', (ev) => {
+        // a drag that ends on the tile must not also count as a pick
+        if (ev.detail === 0 || mode !== 'buy') return;
+        stageOffer(off);
+      });
+      if (staged && staged.off.id === off.id) tile.classList.add('toffer--staged');
     }
   }
 
   const scroll = el('div', { class: 'assort-scroll' });
   scroll.append(gridEl);
-  wrap.append(scroll);
-  host.append(wrap);
+  host.append(scroll);
 }
 
-/**
- * Put an offer on the trading table. This is the step the screen was missing:
- * picking something from the shelf stages it, it does not buy it.
- */
-function stageOffer(t, off) {
-  const tpl = TPL[off.key];
-  if (!tpl) return;
-  // the sell screen has no transaction panel to show a staged purchase in
-  if (mode !== 'buy') return;
-  if (off.ll > loyaltyLevel(t)) { toast('Bad user loyalty level', 'warn'); return; }
-  if (off.stock <= 0) { toast('Item is out of stock', 'warn'); return; }
+function barterTitle(off) {
+  return off.cost.map(([id, n]) => `${fmtNum(n)} x ${id === 'dogtag' ? 'Dogtag' : itemName(id)}`).join('\n');
+}
 
-  // one offer at a time: picking a different one replaces what is on the
-  // table, picking the same one again adds another of it
-  if (staged && staged.off === off) {
-    // the same ceiling the quantity box enforces, so clicking cannot walk the
-    // order past what the field will let you type back
-    if (staged.qty >= Math.min(off.stock, MAX_BUY_QTY)) {
-      toast(staged.qty >= MAX_BUY_QTY ? 'Maximum amount reached' : 'Item is out of stock', 'warn');
-      return;
-    }
-    staged.qty++;
+/** put an offer on the table; picking the same one again asks for one more */
+function stageOffer(off) {
+  if (tab !== 'trade' || mode !== 'buy') return;
+  const state = offerState(off);
+  if (state === 'level' || state === 'task') return;
+
+  if (staged && staged.off.id === off.id) {
+    const cap = Math.min(offerLeft(off), MAX_BUY_QTY);
+    if (staged.qty < cap) staged.qty++;
   } else {
-    staged = { off, tpl, qty: 1 };
+    staged = { off, tpl: offerTpl(off), qty: 1 };
   }
-  // the money has to be allocated again once the price moves
-  filled = false;
+  filledRows = new Set();
   sfx.trade('click');
   renderTrade();
 }
 
-/** why DEAL! cannot be pressed yet, in the game's own words */
-function dealBlocker(t) {
-  if (!staged) return 'No selected items';
-  const cur = stagedCurrency(t);
-  const total = stagedTotal(t);
-  if (countMoney(cur) < total) return 'Not enough money';
-  if (!filled) return 'You don\'t have some items required to finish the deal';
+/** has every row of the price been met (and, with auto-fill off, been filled) */
+function rowMet(r, i) {
+  if (r.have < r.need) return false;
+  return autoFill || filledRows.has(i);
+}
+
+/** why DEAL! cannot be pressed yet, or null */
+function dealBlocker() {
+  if (!staged) return t('No items selected');
+  const b = buyBlocker(staged.off, staged.qty);
+  if (b) return b;
+  if (!requirements(staged.off, staged.qty).every(rowMet)) return t("You don't have some items to finish the deal");
   return null;
 }
 
+function dealBar(onClick) {
+  const sum = el('span', { class: 'deal-bar__sum' }, '');
+  const bar = el('button', { class: 'deal-bar', dataset: { sfx: 'own' } },
+    uiImg('trade_buy_icon_idle', 'deal-bar__ico'), uiImg('trade_buy_icon_hover', 'deal-bar__ico deal-bar__ico--hover'),
+    el('span', { class: 'deal-bar__label' }, t('DEAL!')), sum,
+    el('span', { class: 'kcap' }, 'SPACE'));
+  bar.addEventListener('click', onClick);
+  return { bar, sum };
+}
+
 /**
- * The transaction panel: what is on the table, what it costs, the payment
- * slot, and the two buttons that drive the real screen - "Fill items" to
- * allocate the money and "DEAL!" to commit the lot in one go.
+ * The purchase panel under the DEAL! bar: what is being bought and how many,
+ * what stands in the way, and every thing the price is made of with its tick.
  */
-function renderBuyTable(t, host) {
-  const cur = stagedCurrency(t);
+function renderBuy(host) {
+  const { bar, sum } = dealBar(() => doBuyStaged());
+  const panel = el('div', { class: 'barter' });
+  const inner = el('div', { class: 'barter__in' });
+  panel.append(inner);
+  host.append(bar, panel);
 
-  // the deal bar sits at the top of the column and carries the total itself
-  const sumEl = el('span', { class: 'deal-bar__sum' }, '');
-  const dealBtn = el('button', { class: 'deal-bar', dataset: { sfx: 'own' } },
-    el('span', { class: 'deal-bar__key' }, 'SPACE'),
-    el('span', { class: 'deal-bar__label' }, 'DEAL!'),
-    sumEl);
-  dealBtn.addEventListener('click', () => doBuyStaged(t));
-  host.append(dealBtn);
+  const buyBlock = el('div', { class: 'barter__buy' },
+    el('div', { class: 'barter__cap' }, staged ? `${t('Item to purchase')}: ${offerName(staged.off)}` : t('Item to purchase')),
+    el('div', { class: 'barter__tile' }), uiImg('arrow_right', 'barter__arrow'));
+  inner.append(buyBlock);
 
-  const wrap = el('div', { class: 'deal-wrap' });
-  wrap.append(el('div', { class: 'deal-head' },
-    staged ? 'Item to purchase: ' + staged.tpl.name : 'Item to purchase'));
-
-  const rows = el('div', { class: 'deal-rows' });
-  if (!staged) {
-    rows.append(el('div', { class: 'deal-empty' }, 'No selected items',
-      el('small', {}, 'click an offer on the shelf to put it on the table')));
-  } else {
-    const unit = buyPrice(t, staged.tpl, FX, staged.off);
-    const cap = Math.min(staged.off.stock, MAX_BUY_QTY);
-
-    // one stash cell per grid square, so what you are buying is drawn at the
-    // size it will be once it is sitting in the stash
-    const art = el('div', {
-      class: 'deal-row__art',
-      style: {
-        width: `calc(var(--cell) * ${staged.tpl.w})`,
-        height: `calc(var(--cell) * ${staged.tpl.h})`,
-      },
-    });
-    if (staged.tpl.imgUrl) art.append(el('img', { src: staged.tpl.imgUrl, alt: '' }));
-    else art.append(el('div', { class: 'item__fallback' }, staged.tpl.short));
-
-    // A typed box, not a number spinner \u2014 which is what the real transaction
-    // area has, and which also keeps the field from rebuilding the panel under
-    // the player's cursor: `change` fires on blur, so re-rendering there ate
-    // the very click on DEAL!/Fill items that caused the blur.
-    const qtyEl = el('input', {
-      class: 'deal-row__qty', type: 'text', inputmode: 'numeric',
-      autocomplete: 'off', spellcheck: 'false', maxlength: '3',
-      value: String(staged.qty),
-      title: fmtNum(unit) + ' ' + CUR_SYM[cur] + ' each, '
-        + (staged.off.stock >= 1000 ? 'plenty' : staged.off.stock) + ' in stock',
-    });
+  let qtyEl = null;
+  if (staged) {
+    const disp = displayItem(staged.off);
+    const show = el('div', { class: 'barter__show' });
+    if (disp) {
+      // the offer's own tile, at its own footprint but never taller than the box
+      const scale = Math.min(1, 126 / (disp.fh * 63), 250 / (disp.fw * 63));
+      const cell = Math.floor(63 * scale);
+      const box = el('div', { class: 'barter__item', style: { width: `${disp.fw * cell}px`, height: `${disp.fh * cell}px` } });
+      const tile = renderItem(disp, { static: true });
+      tile.style.setProperty('--cell', `${cell}px`);
+      box.style.setProperty('--cell', `${cell}px`);
+      box.style.backgroundSize = `${cell}px ${cell}px`;
+      box.append(tile);
+      show.append(box);
+    }
+    const cap = Math.max(1, Math.min(offerLeft(staged.off), MAX_BUY_QTY));
+    qtyEl = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false', maxlength: '3', value: String(staged.qty) });
+    qtyEl.addEventListener('focus', () => qtyEl.select());
     qtyEl.addEventListener('input', () => {
       const digits = qtyEl.value.replace(/\D/g, '');
       if (digits !== qtyEl.value) qtyEl.value = digits;
@@ -726,373 +783,137 @@ function renderBuyTable(t, host) {
       if (String(n) !== digits) qtyEl.value = String(n);
       if (n === staged.qty) return;
       staged.qty = n;
-      filled = false;                            // the price moved
+      filledRows = new Set();
       sync();
     });
     qtyEl.addEventListener('blur', () => { qtyEl.value = String(staged ? staged.qty : 1); });
-
-    // the showcase is to the left, so the chevron points back at it
-    rows.append(el('div', { class: 'deal-row' },
-      el('span', { class: 'deal-row__chev' }, '\u203A'),
-      art,
-      el('span', { class: 'deal-row__x' }, 'X'),
-      qtyEl,
-      el('button', {
-        class: 'deal-row__drop', title: 'Take it back off the table',
-        onclick: () => { clearStaged(); sfx.trade('click'); renderTrade(); },
-      }, '\u00D7')));
+    qtyEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') qtyEl.blur(); });
+    show.append(el('span', { class: 'barter__x' }, 'X'), el('div', { class: 'barter__qtywrap' }, qtyEl));
+    buyBlock.append(show);
   }
-  wrap.append(rows);
+  inner.append(el('div', { class: 'barter__gap' }));
 
-  // what has to be handed over, with the same n/n progress the real slot shows
-  let slotEl = null, cellEl = null, ratioEl = null;
-  if (staged) {
-    wrap.append(el('div', { class: 'deal-need' }, 'This item(s) is required from your stash:'));
-    cellEl = el('div', { class: 'deal-slot__cell' },
-      el('span', { class: 'deal-slot__sym' }, CUR_SYM[cur]));
-    ratioEl = el('div', { class: 'deal-slot__ratio' }, '');
-    slotEl = el('div', { class: 'deal-slot' },
-      cellEl, el('span', { class: 'deal-slot__chev' }, '\u2039'), ratioEl);
-    wrap.append(slotEl);
-  }
-
-  const fillBtn = el('button', {
-    class: 'btn', dataset: { sfx: 'own' },
-    title: 'Select to auto-fill requirements',
-    onclick: () => { filled = true; sfx.trade('buy'); sync(); },
-  }, 'Fill items');
-  wrap.append(el('div', { class: 'deal-foot' }, fillBtn));
-  const warnEl = el('div', { class: 'deal-warn' }, '');
-  wrap.append(warnEl);
+  const live = el('div', {});
+  inner.append(live);
 
   /** repaint everything the quantity drives, without rebuilding the panel */
   function sync() {
-    const total = stagedTotal(t);
-    const funds = countMoney(cur);
-    const short = total > funds;
-    const blocker = dealBlocker(t);
-
-    sumEl.textContent = CUR_SYM[cur] + ' ' + fmtNum(total);
-    dealBtn.disabled = !!blocker;
-    fillBtn.disabled = !staged || short || filled;
-    warnEl.textContent = blocker || '';
-    warnEl.hidden = !blocker;
-
-    if (slotEl) {
-      slotEl.classList.toggle('is-filled', filled);
-      slotEl.classList.toggle('is-short', short);
-      ratioEl.textContent = `${fmtNum(filled ? total : Math.min(funds, total))}/${fmtNum(total)}`;
-      const tick = cellEl.querySelector('.deal-slot__tick');
-      if (filled && !tick) cellEl.append(el('span', { class: 'deal-slot__tick' }, '\u2713'));
-      else if (!filled && tick) tick.remove();
-    }
-  }
-  sync();
-
-  host.append(wrap);
-}
-
-/** commit every offer on the table as one transaction, the way DEAL! does */
-function doBuyStaged(t) {
-  closeContext();
-  if (dealBlocker(t)) return;        // the button already says why it will not go through
-  const cur = stagedCurrency(t);
-  // charge for what is actually handed over: if the shelf ran short between
-  // staging and DEAL!, the staged total would have billed for the difference
-  const bought = Math.min(staged.qty, staged.off.stock);
-  if (bought < 1) { toast('Item is out of stock', 'warn'); return; }
-  const total = buyPrice(t, staged.tpl, FX, staged.off) * bought;
-  if (countMoney(cur) < total) { toast('Not enough money', 'bad'); return; }
-
-  // reserve space for the whole quantity first: a partial commit would take
-  // the money for items that then have nowhere to go
-  const made = [];
-  for (let i = 0; i < bought;) {
-    const stackSize = staged.tpl.stack > 1 ? Math.min(staged.tpl.stack, bought - i) : 1;
-    const it = new Item(staged.tpl.key, { stack: stackSize, examined: true });
-    // merging is off: it tops up stacks already in the stash, and that
-    // cannot be rolled back by detaching the purchased item
-    if (!autoPlace(it, [game.stash], { merge: false })) {
-      for (const m of made) detach(m);
-      toast('Not enough space in stash', 'warn');
+    live.replaceChildren();
+    if (!staged) {
+      sum.textContent = '';
+      bar.disabled = true;
+      live.append(el('div', { class: 'barter__none' }, t('No items selected')));
       return;
     }
-    made.push(it);
-    i += stackSize;
+    const off = staged.off;
+    const reqs = requirements(off, staged.qty);
+    const short = reqs.some((r) => r.have < r.need);
+    if (short) live.append(el('div', { class: 'barter__warn' }, t("You don't have some items to finish the deal")));
+    if (off.lim != null || off._fence) {
+      const total = off._fence ? off._fence.left : off.lim;
+      const bought = off._fence ? 0 : total - offerLeft(off);
+      live.append(el('div', { class: 'barter__warn' },
+        t('This item is purchased in quantities of {0} pcs. (Max: {1}) limited for you in one restock', bought, total)));
+    }
+    live.append(el('div', { class: 'barter__need' }, t('The items needed from your stash:')));
+
+    const list = el('div', { class: 'barter__reqs' }, uiImg('arrow_left', 'barter__arrow'));
+    list.style.setProperty('--cols', String(Math.min(3, reqs.length)));
+    let cash = '';
+    reqs.forEach((r, i) => {
+      const cur = CUR_OF_ITEM[r.id];
+      const met = rowMet(r, i);
+      const tpl = tplOf(r.id);
+      const cell = el('div', { class: 'req__cell' });
+      if (tpl?.imgUrl) cell.append(el('img', { src: tpl.imgUrl, alt: '' }));
+      else if (cur) cell.append(el('span', { class: 'req__sym' }, CUR_SYM[cur]));
+      else cell.append(el('span', { class: 'req__sym' }, r.id === 'dogtag' ? '▮' : '?'));
+      const node = el('div', { class: `req${met ? ' is-met' : ''}`, title: cur ? '' : (r.id === 'dogtag' ? 'Dogtag' : itemName(r.id)) },
+        r.attrs?.minLevel ? el('span', { class: 'req__level' }, `${t('LVL')} ${r.attrs.minLevel}`) : null,
+        cell,
+        uiImg(met ? 'needed_yes' : 'needed_no', 'req__mark'),
+        el('span', { class: 'req__count' }, `${fmtNum(Math.min(r.have, r.need))}/${fmtNum(r.need)}`),
+        r.attrs?.side && r.attrs.side !== 'Any' ? el('span', { class: 'req__side' }, String(r.attrs.side).toUpperCase()) : null);
+      // with auto-fill off a row is filled by hand: one click on its box
+      if (!autoFill && r.have >= r.need) {
+        node.style.cursor = 'pointer';
+        node.addEventListener('click', () => {
+          if (filledRows.has(i)) filledRows.delete(i); else filledRows.add(i);
+          sfx.ui('checkbox');
+          sync();
+        });
+      }
+      list.append(node);
+      if (cur && reqs.length === 1) cash = `${CUR_SYM[cur]} ${fmtNum(r.need)}`;
+    });
+    live.append(list);
+    sum.textContent = cash;
+    bar.disabled = !!dealBlocker();
   }
+  sync();
+}
 
-  takeMoney(total, cur);
-  const st = traderState(t.id);
-  const name = staged.tpl.name;
-  staged.off.stock -= bought;
-  st.spent += total * (FX[cur] || 1);
-  st.rep = Math.min(10, st.rep + (total * (FX[cur] || 1)) / 900000);
-  addExp(Math.round(bought * 2));
-
-  clearStaged();
+/** commit the staged offer as one transaction, the way DEAL! does */
+function doBuyStaged() {
+  closeContext();
+  if (dealBlocker()) return;
+  const { off, qty } = staged;
+  const res = buyOffer(off, qty);
+  if (!res.ok) { toast(res.reason, 'warn'); return; }
   sfx.trade('deal');
-  toast(`Bought ${bought > 1 ? `${bought}x ` : ''}${name}`, 'ok');
+  // the offer stays on the table for the next one, unless that was the last
+  if (offerState(off) === 'ok') { staged.qty = 1; filledRows = new Set(); } else clearStaged();
   renderTrade();
-  refreshTopbar();
-  emit(EV.INVENTORY_CHANGED);
-  saveSoon();
 }
 
 // ---------------------------------------------------------
 // SELL
 // ---------------------------------------------------------
-function renderSell(t, host) {
-  // Switching traders with a full stash can strand items on the table, and a
-  // case can be filled after it was put down — so what the table holds is not
-  // necessarily what THIS trader will take. Price only what he will.
+function renderSell(host) {
+  const who = trader;
   const onIt = tradeTable.items();
-  const sellable = onIt.filter((it) => sellableTo(t, it));
-  const refused = onIt.filter((it) => !sellableTo(t, it));
+  const sellable = onIt.filter((it) => !sellBlocker(who, it));
   let total = 0;
-  for (const it of sellable) total += sellValue(t, it, FX);
+  for (const it of sellable) total += sellPrice(who, it);
 
-  // the sell side mirrors the buy side: the same gold bar at the top of the
-  // middle column, carrying the sum the trader will pay
-  const dealBtn = el('button', {
-    class: 'deal-bar', disabled: !sellable.length, dataset: { sfx: 'own' },
-  },
-  el('span', { class: 'deal-bar__key' }, 'SPACE'),
-  el('span', { class: 'deal-bar__label' }, 'DEAL!'),
-  el('span', { class: 'deal-bar__sum' }, CUR_SYM[t.currency] + ' ' + fmtNum(total)));
-  dealBtn.addEventListener('click', () => doSell(t));
-  host.append(dealBtn);
+  const { bar, sum } = dealBar(() => doSell());
+  bar.disabled = !sellable.length;
+  sum.textContent = onIt.length ? `${CUR_SYM[who.cur]} ${fmtNum(total)}` : '';
+  const zone = el('div', { class: 'selltable' });
+  host.append(bar, zone);
 
-  const wrap = el('div', { class: 'deal-wrap' });
-  wrap.append(el('div', { class: 'deal-head' },
-    t.buysAll ? t.name + ' buys everything' : t.name + ' buys: ' + t.buys.join(', ')));
-
-  const zone = el('div', { class: 'table-zone' });
-  wrap.append(zone);
-
-  // The warning line is always in the column, empty or not: the zone above it
-  // is cut into rows off its own height, and a line coming and going would
-  // have added and taken away a row of the table under the player's cursor.
-  const warn = !onIt.length ? 'No selected items'
-    : refused.length ? `${t.name} will not take ${refused.length} item${refused.length > 1 ? 's' : ''} on the table`
-      : '';
-  wrap.append(el('div', { class: 'deal-warn deal-warn--line' }, warn));
-  host.append(wrap);
-
-  // the zone has its box now — the table is cut to it before it is drawn
-  fitTable(zone);
+  if (tradeTable.w !== TABLE.w || tradeTable.h < TABLE.h) tradeTable.resize(TABLE.w, Math.max(TABLE.h, tradeTable.h));
   const gridEl = renderGrid(tradeTable);
   gridEl.classList.add('table-grid');
   zone.append(gridEl);
-  if (!tradeTable.count) {
-    zone.append(el('div', { class: 'table-empty' },
-      'DRAG ITEMS HERE', el('small', {}, 'or right-click an item in the stash')));
-  }
 
-  // what the trader pays for each staged item, on the item itself, so a bad
-  // line is obvious before the deal rather than buried in the lump total
-  for (const it of sellable) {
-    const tile = gridEl.querySelector('.item[data-uid="' + it.uid + '"]');
-    if (tile) {
-      tile.append(el('div', { class: 'toffer__price' },
-        fmtNum(sellValue(t, it, FX)) + ' ' + CUR_SYM[t.currency]));
-    }
-  }
-  for (const it of refused) {
-    const tile = gridEl.querySelector('.item[data-uid="' + it.uid + '"]');
-    if (tile) {
-      tile.classList.add('is-nosell');
-      tile.append(el('div', { class: 'toffer__out' }, 'NOT BOUGHT'));
-    }
+  for (const it of onIt) {
+    const tile = gridEl.querySelector(`.item[data-uid="${it.uid}"]`);
+    if (!tile) continue;
+    if (sellBlocker(who, it)) { tile.classList.add('is-nosell'); continue; }
+    tile.classList.add('has-price');
+    tile.append(el('div', { class: 'tsell' }, el('em', {}, CUR_SYM[who.cur]), fmtNum(sellPrice(who, it))));
   }
 }
 
-/**
- * Cut the trading table to the box the zone actually has: as many cells
- * across and down as fit at the current cell size, so the whole table is on
- * screen at once and nothing scrolls. The zone is measured empty — the column
- * sizes it, not what it holds — and only while the pane is laid out. It can
- * never come out under TABLE_MIN, nor under what is already lying on it
- * (Grid.resize sees to the latter).
- */
-function fitTable(zone) {
-  const cs = getComputedStyle(zone);
-  const innerW = zone.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const innerH = zone.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-  // nothing has a size while the pane is hidden: keep the last fit
-  if (innerW <= 0 || innerH <= 0) return;
-  const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) || 62;
-  // renderGrid draws a grid at cell * n plus a 1px border either side
-  const cols = Math.max(TABLE_MIN.w, Math.floor((innerW - 2) / cell));
-  const rows = Math.max(TABLE_MIN.h, Math.floor((innerH - 2) / cell));
-  tradeTable.resize(cols, rows);
-}
-
-function doSell(t) {
-  // no menu may outlive the transaction it is describing
-  closeContext();
-  // never sell what this trader does not deal in, and never destroy a case
-  // that has been filled since it was put down
-  const items = tradeTable.items().filter((it) => sellableTo(t, it));
-  const refused = tradeTable.count - items.length;
-  if (!items.length) {
-    if (refused) toast(`${t.name} does not buy what is on the table`, 'warn');
+function doSell() {
+  closeContext();      // no menu may outlive the transaction it is describing
+  const who = trader;
+  const onIt = tradeTable.items();
+  if (!onIt.length) return;
+  const res = sellItems(who, onIt);
+  if (!res.ok) {
+    toast(res.reason === 'No selected items' ? t('Trader does not deal in this type of items') : res.reason, 'warn');
     return;
   }
-  let total = 0;
-  for (const it of items) total += sellValue(t, it, FX);
-  // the sold items sit on the table, not in the stash, so destroying them
-  // frees no stash space — check the payout fits BEFORE anything is destroyed
-  if (!canAddMoney(total, t.currency)) {
-    toast('No room in the stash for the payout', 'warn');
-    return;
-  }
-  // the cue only rings once the deal is actually going through
   sfx.trade('deal');
-  addMoney(total, t.currency);
-  for (const it of items) detach(it);
-  const st = traderState(t.id);
-  const rub = total * (FX[t.currency] || 1);
-  st.rep = Math.min(10, st.rep + rub / 1400000);
-  addExp(Math.round(items.length * 3));
-  toast(`Sold ${items.length} item${items.length > 1 ? 's' : ''} — ${fmtNum(total)}${CUR_SYM[t.currency]}`, 'ok');
-  if (refused) toast(`${refused} item${refused > 1 ? 's' : ''} left on the table`, 'warn');
   renderTrade();
-  refreshTopbar();
-  emit(EV.INVENTORY_CHANGED);
-  saveSoon();
 }
 
 // ---------------------------------------------------------
-// REPAIR
+// the stash, on the right
 // ---------------------------------------------------------
-/** the gun on the bench, if any */
-function benchGun() {
-  const on = tradeTable.items();
-  return on.length === 1 && isRepairable(on[0]) ? on[0] : null;
-}
-
-function renderRepair(t, host) {
-  const ll = loyaltyLevel(t);
-  const rr = traderRepairRate(t, ll);
-  const gun = benchGun();
-  const need = gun ? repairNeeded(gun) : 0;
-  const pts = gun ? Math.min(need, repairPts == null ? need : repairPts) : 0;
-  const price = gun ? traderRepairPrice(t, gun, pts, ll) : 0;
-
-  const sumEl = el('span', { class: 'deal-bar__sum' }, '₽ ' + fmtNum(price));
-  const dealBtn = el('button', { class: 'deal-bar', dataset: { sfx: 'own' } },
-    el('span', { class: 'deal-bar__key' }, 'SPACE'),
-    el('span', { class: 'deal-bar__label' }, 'REPAIR'),
-    sumEl);
-  dealBtn.addEventListener('click', () => doRepair(t));
-  host.append(dealBtn);
-
-  const wrap = el('div', { class: 'deal-wrap deal-wrap--repair' });
-  wrap.append(el('div', { class: 'deal-head' },
-    `${t.name} repairs weapons · ${fmtNum(Math.round((rr?.rate || 1) * 100))}% of the base cost at LL${ll} · wear x${rr?.quality ?? 1}`));
-
-  const zone = el('div', { class: 'table-zone table-zone--bench' });
-  wrap.append(zone);
-
-  const panel = el('div', { class: 'repair' });
-  if (!gun) {
-    panel.append(el('div', { class: 'deal-empty' }, 'No selected items',
-      el('small', {}, 'drag a worn gun onto the bench, or right-click one in the stash')));
-  } else {
-    const max = gun.maxDura, cur = gun.dura;
-    const after = Math.min(max, cur + pts);
-    const [lo, hi] = wearRange(gun, { quality: rr?.quality ?? 1 });
-    const per = traderRepairPrice(t, gun, 1, ll);
-    const bar = el('div', { class: 'repair__bar' },
-      el('i', { class: 'repair__bar-cur', style: { width: `${(cur / (gun.tpl.wpn.maxDura || max || 1)) * 100}%` } }),
-      el('i', { class: 'repair__bar-add', style: { left: `${(cur / (gun.tpl.wpn.maxDura || max || 1)) * 100}%`, width: `${((after - cur) / (gun.tpl.wpn.maxDura || max || 1)) * 100}%` } }),
-      el('i', { class: 'repair__bar-max', style: { left: `${(max / (gun.tpl.wpn.maxDura || max || 1)) * 100}%` } }));
-    const field = el('input', { class: 'split__val', type: 'number', min: '0', max: String(need), value: String(pts) });
-    const range = el('input', { type: 'range', min: '0', max: String(need), value: String(pts) });
-    const readout = el('div', { class: 'repair__readout' });
-    const sync = (v) => {
-      repairPts = clamp(Math.round(Number(v) || 0), 0, need);
-      field.value = String(repairPts); range.value = String(repairPts);
-      const p = traderRepairPrice(t, gun, repairPts, ll);
-      const a = Math.min(max, cur + repairPts);
-      sumEl.textContent = '₽ ' + fmtNum(p);
-      readout.textContent = `${fmt2(cur)} → ${fmt2(a)} of ${fmt2(max)} · ${fmtNum(per)}₽ a point · ${fmtNum(p)}₽`;
-      bar.querySelector('.repair__bar-add').style.width = `${((a - cur) / (gun.tpl.wpn.maxDura || max || 1)) * 100}%`;
-      dealBtn.disabled = repairPts <= 0 || countMoney('RUB') < p;
-      warnEl.textContent = repairPts <= 0 ? 'No selected items' : countMoney('RUB') < p ? 'Not enough money' : '';
-    };
-    field.addEventListener('input', () => sync(field.value));
-    range.addEventListener('input', () => sync(range.value));
-    const warnEl = el('div', { class: 'deal-warn' }, '');
-    panel.append(
-      el('div', { class: 'repair__name' }, gun.tpl.name),
-      el('div', { class: 'repair__dura' }, `DURABILITY ${fmt2(cur)} / ${fmt2(max)}`,
-        max < (gun.tpl.wpn.maxDura || max) ? el('small', {}, ` (was ${gun.tpl.wpn.maxDura})`) : null),
-      bar,
-      el('div', { class: 'deal-need' }, 'Points to repair:'),
-      el('div', { class: 'split__row' }, field, range),
-      readout,
-      el('div', { class: 'repair__wear' },
-        `Each repair takes ${fmt2(lo)}–${fmt2(hi)} off the maximum durability (${t.name}: x${rr?.quality ?? 1}).`),
-      warnEl);
-    setTimeout(() => sync(pts), 0);
-  }
-  wrap.append(panel);
-  host.append(wrap);
-
-  fitBench(zone);
-  const gridEl = renderGrid(tradeTable);
-  gridEl.classList.add('table-grid');
-  zone.append(gridEl);
-  if (!tradeTable.count) {
-    zone.append(el('div', { class: 'table-empty' }, 'DRAG A GUN HERE', el('small', {}, 'one at a time')));
-  }
-  if (!gun) dealBtn.disabled = true;
-}
-
-/** the bench is a small table: wide enough for the longest gun, two rows */
-function fitBench(zone) {
-  const cs = getComputedStyle(zone);
-  const innerW = zone.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  if (innerW <= 0) { tradeTable.resize(Math.max(TABLE_MIN.w, 7), 3); return; }
-  const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) || 62;
-  const cols = Math.max(TABLE_MIN.w, Math.min(8, Math.floor((innerW - 2) / cell)));
-  tradeTable.resize(cols, Math.max(3, TABLE_MIN.h - 1));
-}
-
-function fmt2(v) { const r = Math.round(v * 100) / 100; return String(r); }
-
-function doRepair(t) {
-  closeContext();
-  const gun = benchGun();
-  if (!gun || !t.repair) return;
-  const ll = loyaltyLevel(t);
-  const need = repairNeeded(gun);
-  const pts = Math.min(need, repairPts == null ? need : repairPts);
-  if (pts <= 0) return;
-  const price = traderRepairPrice(t, gun, pts, ll);
-  if (countMoney('RUB') < price) { toast('Not enough money', 'bad'); return; }
-  takeMoney(price, 'RUB');
-  const r = traderRepair(t, gun, pts, ll);
-  const st = traderState(t.id);
-  st.spent += price;
-  st.rep = Math.min(10, st.rep + price / 900000);
-  addExp(Math.round(pts / 5));
-  sfx.trade('deal');
-  toast(`Repaired ${gun.tpl.short}: ${fmt2(r.dura)} / ${fmt2(r.maxDura)}${r.loss ? ` (max -${fmt2(r.loss)})` : ''}`, 'ok');
-  // the mended gun goes home; the bench is for the next one
-  repairPts = null;
-  if (!autoPlace(gun, [game.stash])) toast('Stash is full — the gun stays on the bench', 'warn');
-  renderTrade();
-  refreshTopbar();
-  emit(EV.INVENTORY_CHANGED);
-  saveSoon();
-}
-
-// ---------------------------------------------------------
-// docked stash
-// ---------------------------------------------------------
-function renderDockedStash(t) {
+function renderDockedStash() {
   const host = $('#trade-stash-host');
   if (!host) return;
   let gridEl;
@@ -1103,84 +924,73 @@ function renderDockedStash(t) {
   });
   markOpenable(host);
 
-  const note = $('#trade-stash-note');
-  if (mode === 'sell') {
-    // grey out what this trader will not take, the way the game does
-    for (const node of gridEl.querySelectorAll('.item')) {
-      if (node._item && !sellableTo(t, node._item)) node.classList.add('is-nosell');
+  const selling = tab === 'trade' && mode === 'sell';
+  const present = new Set(['all']);
+  for (const node of gridEl.querySelectorAll('.item')) {
+    const it = node._item;
+    if (!it) continue;
+    present.add(groupOf(it.tpl));
+    let dim = false;
+    if (stashCategory !== 'all' && groupOf(it.tpl) !== stashCategory) dim = true;
+    if (search && !(`${it.tpl.name} ${it.tpl.short || ''}`.toLowerCase().includes(search))) dim = true;
+    if (selling) {
+      // every thing he would take wears what he would pay for it
+      if (sellBlocker(trader, it) || !isKnown(it)) dim = true;
+      else {
+        node.classList.add('has-price');
+        node.append(el('div', { class: 'tsell' }, el('em', {}, CUR_SYM[trader.cur]), fmtNum(sellPrice(trader, it))));
+      }
     }
-    if (note) note.textContent = 'greyed items: not bought here';
-  } else if (mode === 'repair') {
-    for (const node of gridEl.querySelectorAll('.item')) {
-      const it = node._item;
-      if (it && !(isRepairable(it) && repairNeeded(it) > 0)) node.classList.add('is-nosell');
-    }
-    if (note) note.textContent = 'greyed items: nothing to repair';
-  } else if (note) {
-    note.textContent = '';
+    if (dim) node.classList.add('is-nosell');
   }
+  if (!present.has(stashCategory)) stashCategory = 'all';
+  categoryStrip($('#stash-cats'), present, stashCategory, (key) => { stashCategory = key; renderDockedStash(); });
 }
 
 // ---------------------------------------------------------
-let fenceStock = null;
-function randomFenceStock() {
-  const t = TRADER_BY_ID.fence;
-  if (fenceStock) return fenceStock;
-  // the set the game shipped with: Fence's shelf is rolled from the same
-  // pool it always was until real stock replaces it
-  const pool = Object.values(TPL).filter((x) =>
-    x.core && !['money', 'secure'].includes(x.cat) && x.price > 3000 && x.price < 260000);
-  fenceStock = [];
-  const used = new Set();
-  for (let i = 0; i < (t.randomAssort || 12) && pool.length; i++) {
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    if (used.has(pick.key)) continue;
-    used.add(pick.key);
-    fenceStock.push({ key: pick.key, ll: 1, stock: 1 + Math.floor(Math.random() * 3), base: 3 });
-  }
-  return fenceStock;
+// TASKS / SERVICES
+// ---------------------------------------------------------
+function renderTasksTab() {
+  const host = $('#trader-tasks-host');
+  if (!host || !trader) return;
+  renderTasksPane(host, trader, { onChange: () => { renderChrome(); } });
 }
 
-/** traders restock between raids: stock counts reset and Fence rotates */
-export function restockTraders() {
-  fenceStock = null;
-  // Fence's assortment is rebuilt from scratch, so an offer staged before the
-  // raid now points at a listing that no longer exists on any shelf
-  clearStaged();
-  for (const t of TRADERS) {
-    for (const off of t.assort) if (off.base != null) off.stock = off.base;
-  }
+function renderServices() {
+  const host = $('#trader-services-host');
+  host.replaceChildren(
+    el('div', { class: 'svc__list' },
+      el('button', { class: 'svc__row', dataset: { sfx: 'own' } },
+        el('span', { class: 'svc__thumb' }, uiImg('tactical_icon')),
+        el('span', {}, t('ECustomizationItemCategory/Clothing')))),
+    el('div', { class: 'svc__pane' },
+      el('div', { class: 'svc__head' }, uiImg('tactical_icon_small'), el('span', {}, t('ECustomizationItemCategory/Clothing')),
+        el('em', {}, (game.profile.faction || 'USEC').toUpperCase())),
+      el('div', { class: 'svc__note' }, '')));
 }
+
+/** traders restock on their own clocks now; kept for the callers that asked for it by name */
+export function restockTraders() { shelfItems.clear(); clearStaged(); }
 export function rerollFence() { restockTraders(); }
-export function activeTraderId() { return activeId; }
+export function activeTraderId() { return trader ? trader.key : null; }
 
-/** headless capture hooks: ?dev=trade-sell / ?dev=trade-dialog */
+/** headless capture hooks: ?dev=trade-sell / ?dev=trade-dialog / ?dev=trade-tasks */
 export function devTrade(kind) {
-  const t = TRADER_BY_ID[activeId];
+  const who = DB.traderByKey.prapor;
   if (kind === 'sell') {
+    openTraderScreen(who);
     mode = 'sell';
-    // draw once so the table has been cut to the column before anything is
-    // put on it — the same order a real SELL click goes through
     renderTrade();
     for (const it of game.stash.items()) {
       if (tradeTable.count >= 3) break;
-      if (sellableTo(t, it)) autoPlace(it, [tradeTable]);
+      if (!sellBlocker(who, it)) autoPlace(it, [tradeTable]);
     }
     renderTrade();
   } else if (kind === 'dialog') {
-    // stage one offer, twice, so the capture shows a populated deal panel
-    mode = 'buy';
-    clearStaged();
-    const o = t.assort.find((x) => x.ll <= loyaltyLevel(t) && x.stock > 1);
-    if (o) { stageOffer(t, o); stageOffer(t, o); }
-    renderTrade();
-  } else if (kind === 'repair') {
-    // a worn AK on Prapor's bench, half repaired
-    activeId = 'prapor';
-    mode = 'repair';
-    renderTrade();
-    const gun = game.stash.items().find((it) => isRepairable(it));
-    if (gun) { gun.dura = Math.min(gun.dura, 41); autoPlace(gun, [tradeTable]); repairPts = 30; }
-    renderTrade();
+    openTraderScreen(who);
+    const o = offersOf(who).find((x) => offerState(x) === 'ok' && offerLeft(x) > 1);
+    if (o) { stageOffer(o); stageOffer(o); }
+  } else if (kind === 'tasks') {
+    openTraderScreen(who, 'tasks');
   }
 }
