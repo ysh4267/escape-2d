@@ -55,6 +55,15 @@ STEPS: list[tuple[str, str]] = [
         E.openCharacter('gear'); E.openCharacter('map'); await sleep(1800); seen('.pmap__img'); seen('.pmap__zbtn');
         click('.pmap__legendbtn'); await sleep(150); seen('.pmap__lrow');
     """),
+    ("journal", """
+        E.openCharacter('tasks'); await sleep(300); seen('.tj__tab'); seen('.tj__gridbox');
+        const task = E.DB.tasks.find((t) => E.Quests.statusOf(t) === 'available');
+        if (!task || !E.Quests.acceptTask(task)) throw new Error('no task could be accepted');
+        E.openCharacter('gear'); E.openCharacter('tasks'); await sleep(300); seen('.tjr');
+        click('.tjr .tjr__name'); await sleep(200); seen('.tjx .qobj');
+        click('.tjr__pin'); await sleep(150); seen('.tjr__pin.is-on');
+        for (const b of document.querySelectorAll('.tj__tab')) { b.click(); await sleep(150); }
+    """),
     ("character tabs", """
         for (const b of document.querySelectorAll('#screen-character .ptab:not(:disabled)')) { b.click(); await sleep(350); }
     """),

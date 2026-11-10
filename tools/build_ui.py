@@ -83,7 +83,7 @@ ROUNDS = 200_000
 # ---------------------------------------------------------------------------
 ALWAYS = """
 lvl ll check checkbox checkmark condition exp levelling shade button background
-keys camera setlock mass cross chtoto
+keys camera setlock mass cross chtoto mainquesttabicon
 """.split()
 
 # sprites that share a name with another one: say which export is meant

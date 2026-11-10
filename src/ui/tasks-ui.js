@@ -21,7 +21,8 @@
 // Handing things over is done from the objective's own bar: TURN IN opens
 // the window with what you hold that qualifies.
 //
-// The journal on the character screen draws the same task view from here.
+// The journal on the character screen (journal.js) lays the same task body
+// out under the row it opens.
 // =========================================================
 
 import { el, fmtNum } from '../core/util.js';
@@ -260,7 +261,6 @@ export function renderTaskView(host, task, opts) {
   }
   const status = statusOf(task);
   const trader = DB.traderById[task.trader];
-  const live = status === QS.ACTIVE || status === QS.READY;
 
   host.append(el('div', { class: 'qv__head' },
     typeIcon(task, 'qv__type'),
@@ -271,9 +271,21 @@ export function renderTaskView(host, task, opts) {
       el('span', { class: `qv__status qv__status--${status}` }, statusWord(status)),
       task.tier && trader ? rankNode(task.tier, Math.max(trader.levels.length, 5)) : uiImg('quests_chain_icon', '', { w: 28, h: 25 }))));
 
+  host.append(el('div', { class: 'qv__scroll', dataset: { task: task.id } }, taskBody(task, opts)));
+}
+
+/**
+ * What a task is, under whatever names it: the picture beside what the
+ * trader said (or, locked, what it takes), what he hands over to do it with,
+ * a bar an objective, a tile for everything that comes back. The trader's
+ * screen and the journal both lay this out.
+ * @param {any} task
+ * @param {{ atTrader?: boolean, onChange: () => void }} opts
+ */
+export function taskBody(task, opts) {
+  const status = statusOf(task);
+  const live = status === QS.ACTIVE || status === QS.READY;
   const inner = el('div', { class: 'qv__in' });
-  const scroll = el('div', { class: 'qv__scroll', dataset: { task: task.id } }, inner);
-  host.append(scroll);
 
   if (status === QS.LOCKED) inner.append(el('div', { class: 'qv__blocked' }, t('QuestRequirementsTitle')));
 
@@ -335,6 +347,7 @@ export function renderTaskView(host, task, opts) {
     inner.append(section(t('QuestRewardsTitle'), status === QS.DONE ? t('QuestRewardsRecieved') : null,
       el('div', { class: 'qsec__tiles' }, tiles)));
   }
+  return inner;
 }
 
 function section(title, note, body) {

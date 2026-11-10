@@ -3,8 +3,7 @@
 //
 // One screen, its tabs along the top in the game's order and words: OVERALL,
 // GEAR, HEALTH, CUSTOMIZATION, SKILLS, MAP, TASKS, ACHIEVEMENTS, PRESTIGE.
-// OVERALL, GEAR, HEALTH, SKILLS and MAP are drawn by their own modules; the
-// task journal and the achievements are here.
+// Each is drawn by its own module but the achievements, which are here.
 // =========================================================
 
 import { $, $$, el } from '../core/util.js';
@@ -12,14 +11,13 @@ import { on, emit, EV } from '../core/events.js';
 import { game } from '../core/state.js';
 import { sfx } from '../core/audio.js';
 import { DB } from '../game/db.js';
-import { activeTasks, completedTasks, QS } from '../game/quests.js';
-import { renderTaskView, taskRow } from './tasks-ui.js';
 import { t } from '../core/i18n.js';
 import { uiImg } from '../core/uiart.js';
 import { showScreen, currentScreen } from './shell.js';
 import { renderOverall } from './overall.js';
 import { renderSkills, initSkills } from './skills-ui.js';
 import { renderMap } from './map-ui.js';
+import { renderJournal } from './journal.js';
 
 /** the tabs, with the client's locale key and glyph for each (`<ico>_selected` when lit) */
 const TABS = [
@@ -39,8 +37,6 @@ const TABS = [
 const litIcon = (def) => def.icoOn || (def.ico + '_selected');
 
 let tab = 'gear';
-let journalFilter = 'active';
-let journalSelected = null;
 
 export function currentTab() { return tab; }
 
@@ -90,44 +86,6 @@ export function initCharacter() {
   on(EV.SCREEN_CHANGED, (id) => { if (id === 'character') { paint(); emit(EV.SCREEN_CHANGED, `character:${tab}`); } });
   on(EV.QUEST, () => { if (currentScreen() === 'character' && tab === 'tasks') renderJournal(); });
   on(EV.LEVEL_UP, () => { if (currentScreen() === 'character' && tab === 'overall') renderOverall(); });
-}
-
-// ---------------------------------------------------------
-// TASKS (the journal)
-// ---------------------------------------------------------
-function renderJournal() {
-  const host = $('#tasks-host');
-  if (!host) return;
-  host.replaceChildren();
-
-  const filters = el('div', { class: 'tj-filters' });
-  for (const [key, label] of [['active', 'Active'], ['completed', 'Completed']]) {
-    const b = el('button', { class: `tj-filter${journalFilter === key ? ' is-active' : ''}`, dataset: { sfx: 'own' } }, label);
-    b.addEventListener('click', () => { journalFilter = key; journalSelected = null; sfx.ui('checkbox'); renderJournal(); });
-    filters.append(b);
-  }
-
-  let rows;
-  if (journalFilter === 'completed') rows = completedTasks().map((task) => ({ task, status: QS.DONE }));
-  else rows = activeTasks();
-  if (journalSelected && !rows.some((r) => r.task.id === journalSelected)) journalSelected = null;
-  if (!journalSelected && rows.length) journalSelected = rows[0].task.id;
-
-  const listHost = el('div', { class: 'tasksview__list' });
-  const detailHost = el('div', { class: 'tasksview__detail' });
-  host.append(el('div', { class: 'tasksview tasksview--journal' },
-    el('div', { class: 'tasksview__left' }, filters, listHost), detailHost));
-
-  for (const r of rows) {
-    listHost.append(taskRow(r, {
-      selected: r.task.id === journalSelected,
-      onSelect: () => { journalSelected = r.task.id; renderJournal(); },
-    }));
-  }
-  const sel = journalSelected ? DB.taskById[journalSelected] : null;
-  const view = el('div', { class: 'qv' });
-  detailHost.append(view);
-  renderTaskView(view, sel, { atTrader: false, onChange: renderJournal });
 }
 
 // ---------------------------------------------------------

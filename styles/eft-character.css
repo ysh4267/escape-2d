@@ -9,11 +9,6 @@
 .charback { position: absolute; right: 25px; top: 3px; min-width: 200px; font-size: 28px; }
 .char-body { position: absolute; left: 0; right: 0; top: 43px; bottom: var(--bar-h); }
 .char-body > .pane { padding: 10px 10px 16px; }
-#pane-tasks { padding: 0 !important; }
-#pane-tasks .tasks { position: absolute; left: 0; top: -232px; width: 1920px; height: 1080px; }
-#pane-tasks .ql__filters { top: 0; }
-#pane-tasks .ql__filters .chk { position: absolute; top: 14.5px; }
-#pane-tasks .ql__list { top: 50px; height: 765px; }
 
 /* the panels of the older shell, in the game's greys */
 .stash-head { gap: 16px; }
@@ -293,6 +288,113 @@
 .pmw__input::before { content: ""; position: absolute; inset: -4px; border: 5px solid transparent; border-image: var(--ui-border_shadow) 5 / 5px stretch; pointer-events: none; }
 .pmw__text { position: absolute; left: 5px; top: 5px; width: 361px; height: 60px; padding: 0; border: 0; outline: 0; resize: none; background: none; color: #fff; font-family: var(--font-ui); font-size: 18px; line-height: 20px; }
 .pmw__save { min-width: 160px; height: 42.4px; margin-top: 5px; padding: 8px 20px; font-size: 24px; }
+
+/* ---- TASKS (the journal) ----
+   The client's TasksScreen; positions are its own less the 43 px of the tab
+   strip. TasksPart [12,43 1261x1004] is the left block, QuestItemsPanel
+   [1294,43 551x1004] the right one. A row's cells are where 1080p captures
+   of 1.1 have them: the layout shares its width out between them. */
+#pane-tasks { padding: 0; }
+.journal { position: absolute; inset: 0; background: #131516 var(--ui-queststabmainbackground) 0 0 / 100% 100% no-repeat; }
+.tj__left { position: absolute; left: 12px; top: 0; width: 1261px; height: 1004px; background: var(--ui-queststabquestlistbackground) 0 0 / 100% 100% no-repeat; }
+
+/* STORY | SIDE | OPERATIONAL: an icon and a word, the chosen one on the paint plate */
+.tj__tabs { position: absolute; left: 0; top: 0; width: 1261px; height: 50px; box-sizing: border-box; padding: 0 10px; display: flex; align-items: center; gap: 10px; background: var(--ui-questtypeselectionbackground) 0 0 / 100% 100% no-repeat; }
+.tj__tab { height: 36.4px; padding: 0 10px; gap: 12px; font-size: 24px; letter-spacing: .85px; color: #b4b49a; }
+.tj__tab img { max-width: 28px; max-height: 28px; }
+.tj__tab.is-hover img, .tj__tab:hover img { filter: brightness(0); }
+.tj__tabsep { flex: none; width: 2px; height: 40px; background: var(--ui-questtypeselectionseparator) 0 0 / 100% 100% no-repeat; }
+/* SearchInputField: the box [922,52 342x32], a pin and a glass at its right end */
+.tj__search { position: absolute; left: 910px; top: 9px; width: 342px; height: 32px; box-sizing: border-box; border: 1px solid #4e535799; background: #0e0e0e; }
+.tj__input { position: absolute; left: 7px; top: 0; width: 282px; height: 30px; padding: 0; border: 0; outline: 0; background: none; color: #fff; font-family: var(--font-ui); font-size: 15px; }
+.tj__input::placeholder { font-weight: 700; font-style: italic; color: #c5c3b266; }
+.tj__pinned, .tj__clear { position: absolute; padding: 0; border: 0; background: none; display: grid; place-items: center; }
+.tj__pinned { left: 293px; top: 5px; width: 20px; height: 20px; }
+.tj__clear { left: 316px; top: 7px; width: 16px; height: 16px; opacity: .84; }
+
+/* the table: SideQuestsPanel [12,95 1261x952] */
+.tj__side, .tj__story { position: absolute; left: 0; top: 52px; width: 1261px; height: 952px; }
+.tj__side::before, .tj__story::before {
+  content: ""; position: absolute; left: 2px; top: 2px; width: 1259px; height: 950px; box-sizing: border-box; border: 1px solid #373a34; opacity: .78;
+  background: var(--ui-main_part_gradient) 0 0 / 100% 64px no-repeat, linear-gradient(#00000099, #00000099) 0 64px / 100% calc(100% - 64px) no-repeat;
+}
+.tj__heads { position: absolute; left: 2px; top: 0; width: 1259px; height: 45px; display: flex; gap: 3px; }
+.tjh { flex: none; height: 45px; padding: 10px 0 0; border: 0; background: none; display: flex; align-items: center; justify-content: center; gap: 4px; color: #c5c3b2; font-family: var(--font-ui); font-size: 16px; letter-spacing: .3px; white-space: nowrap; }
+.tjh:disabled { cursor: default; }
+.tjh--who { width: 128px; padding-left: 26px; box-sizing: border-box; }
+.tjh--type { width: 60px; }
+.tjh--class { width: 64px; padding-left: 3px; box-sizing: border-box; justify-content: flex-start; }
+.tjh--name { flex: 1; }
+.tjh--loc, .tjh--status { width: 146px; padding-right: 9px; box-sizing: border-box; }
+.tjh--prog { width: 200px; padding-right: 9px; box-sizing: border-box; }
+.tj__rows { position: absolute; left: 6px; top: 45px; width: 1255px; height: 907px; overflow-x: hidden; overflow-y: scroll; }
+.tj__none { position: absolute; left: 433.5px; top: 480px; width: 400px; height: 37px; display: grid; place-items: center; font-size: 23px; letter-spacing: .85px; color: #c5c3b2; text-transform: uppercase; white-space: nowrap; pointer-events: none; }
+/* pinned rows keep to the top, a line under the last of them */
+.tj__sep { position: relative; height: 40px; margin: -3px 0 0; }
+.tj__sep::before { content: ""; position: absolute; left: 2px; right: 0; top: 24.5px; height: 1px; background: #484846; }
+
+.tjr { position: relative; margin: 0 0 3px 27px; width: 1216px; height: 100px; color: #c5c3b2; font-size: 18px; }
+.tjr__cell { position: absolute; top: 0; height: 100px; background: #1c1c1a78; overflow: hidden; }
+.tjr__who { left: 0; width: 98px; }
+.tjr__who img { position: absolute; left: 6px; top: 6px; width: 86px; height: 88px; object-fit: cover; }
+.tjr__type { left: 101px; width: 53px; display: grid; place-items: center; }
+.tjr__type img { max-width: 21.9px; max-height: 39.1px; width: auto; height: auto; }
+.tjr__class { left: 158px; width: 53px; display: grid; place-items: center; }
+.tjr__rank { width: 25px; height: 25px; display: grid; place-items: center; background: var(--ui-bind_label) 0 0 / 100% 100% no-repeat; color: #000; font-size: 14px; line-height: 14px; }
+.tjr__chain { width: 28px; height: 24.8px; }
+.tjr__name { left: 215px; width: 504px; display: flex; align-items: center; padding: 0 12px; box-sizing: border-box; letter-spacing: .35px; }
+.tjr__name span { position: relative; line-height: 19.8px; }
+.tjr__loc { left: 722px; width: 147px; display: grid; place-items: center; text-align: center; color: #b6c1c7; letter-spacing: .35px; }
+.tjr__loc span { position: relative; padding: 0 4px; }
+.tjr__status { left: 872px; width: 147px; display: grid; place-items: center; letter-spacing: .35px; }
+.tjr--active .tjr__status { background: #855b2441; color: #e78d19; }
+.tjr--ready .tjr__status { background: #15283299; color: #98b6c9; }
+.tjr__prog { left: 1022px; width: 194px; }
+.tjr__pct { position: absolute; left: 0; right: 0; top: 22.3px; text-align: center; font-size: 24px; line-height: 26.4px; color: #a6b0b5; }
+.tjr__bar { position: absolute; left: 10px; top: 58.7px; width: 174px; height: 19px; box-sizing: border-box; border-style: solid; border-width: 3px 4px; border-image: var(--ui-objectiveprogressback) 3 4 fill stretch; }
+.tjr__bar i { position: absolute; left: 0; top: 1px; height: 11px; max-width: 100%; background: #9aa5ab var(--ui-objectiveprogress) 0 0 / 100% 100%; }
+.tjr__pin { position: absolute; left: -25px; top: 0; width: 22px; height: 100px; padding: 0; border: 0; display: grid; place-items: center; background: #1c1c1adb; border-radius: 6px 0 0 6px; }
+.tjr__pin.is-on { background: #ca8a0032; }
+.tjr:hover .tjr__cell { filter: brightness(1.25); }
+/* the row that is open: its cells the colour of the paint plate, black on it */
+.tjr.is-open .tjr__cell:not(.tjr__status) { background: #89877d; color: #000; filter: none; }
+.tjr.is-open .tjr__type img, .tjr.is-open .tjr__chain { filter: brightness(0); }
+.tjr.is-open .tjr__loc, .tjr.is-open .tjr__pct { color: #000; }
+
+/* the open row's sheet: framed on three sides, the task's body laid out for this width */
+.tjx { margin: -3px 0 3px 28px; width: 1214px; box-sizing: border-box; padding: 0 0 8px; border: 2px solid #909090; border-top: 0; background: #000; }
+.tjx .qv__in { width: auto; gap: 12px; padding-bottom: 0; }
+.tjx .qv__desc { height: auto; min-height: 190px; padding: 10px 20px 0 340px; box-sizing: border-box; }
+.tjx .qv__pic { left: 7px; top: 10px; width: 318px; height: 180px; }
+.tjx .qv__text, .tjx .qv__reqs { position: static; width: auto; height: auto; overflow: visible; padding: 0; }
+.tjx .qv__text p { margin: 0 0 18px; font-size: 15.5px; line-height: 18.3px; letter-spacing: .3px; color: #bfc0c2; }
+.tjx .qv__text p:last-child { margin-bottom: 0; }
+.tjx .qsec { gap: 5px; }
+.tjx .qsec__title { padding-left: 27px; font-size: 19px; letter-spacing: .35px; color: #c2c4c4; }
+.tjx .qobjs { gap: 7px; padding-top: 0; }
+.tjx .qobj, .tjx .qobj--child { margin-left: 7px; width: 1196px; }
+.tjx .qobj { min-height: 48px; background: #2a2b2e; }
+.tjx .qobj.is-done { background: #101d23; }
+.tjx .qobj--child { min-height: 40px; background: #141616; }
+.tjx .qsec__tiles { margin: 0 7px; padding-left: 0; justify-content: center; }
+
+/* the task items: on the character, and in the stash kept for them */
+.tj__items { position: absolute; left: 1294px; top: 0; width: 551px; height: 1004px; }
+.tj__items::before { content: ""; position: absolute; left: 0; top: 0; width: 551px; height: 77px; background: #ffffff0a; }
+.tj__items::after {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: var(--ui-main_part_gradient) 0 0 / 100% 64px no-repeat, linear-gradient(#00000099, #00000099) 0 64px / 100% 386px no-repeat,
+    var(--ui-main_part_gradient) 0 452px / 100% 64px no-repeat, linear-gradient(#00000099, #00000099) 0 516px / 100% 488px no-repeat;
+}
+.tj__ihead { position: absolute; left: 0; top: 0; width: 551px; height: 40px; box-sizing: border-box; padding: 0 15px; display: flex; align-items: center; background: #54585b2d; font-size: 18px; letter-spacing: .35px; color: #b6c1c7; }
+.tj__ihead img { position: absolute; left: 515px; top: 8.5px; }
+.tj__ihead--stash { top: 452px; }
+/* a grid's box is 518 wide and its scroll bar stands 6 px clear of it */
+.tj__gridbox { position: absolute; left: 11.6px; top: 52.6px; width: 534px; height: 384.7px; overflow-x: hidden; overflow-y: scroll; background: linear-gradient(#0000007f, #0000007f) 0 0 / 518px 100% no-repeat; --cell: 63px; }
+.tj__ihead--stash + .tj__gridbox { left: 12px; top: 504.5px; height: 487px; }
+.tj__grid { position: relative; margin: 1.1px 0 0 4px; width: 504px; background: var(--ui-grid_cell) 0 0 / 63px 63px; }
+.tj__qitem { pointer-events: auto; }
+div.tj__qitem > img:only-child { display: block; width: 100%; height: 100%; }
 
 /* ---- ACHIEVEMENTS ---- */
 .achv { height: 100%; overflow: auto; }
