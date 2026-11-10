@@ -764,7 +764,12 @@ def build_progress():
     en = tdev('items_en')['data']
     g = spt('database/globals.json')['config']
     exp = g['exp']
-    levels = [lv['exp'] for lv in items['playerLevels']]
+    # the table gives what each level costs (1,000 for the second, 3,017 more
+    # for the third); the page reads off where a level begins (1,000, 4,017)
+    levels, total = [], 0
+    for lv in items['playerLevels']:
+        total += lv['exp']
+        levels.append(total)
     skills = []
     for s in items['skills']:
         skills.append({'id': s['id'], 'name': en.get(s['name'], s['name'])})

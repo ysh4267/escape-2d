@@ -178,7 +178,7 @@ export function netWorthRub() {
 // ---------------------------------------------------------
 /**
  * Experience goes onto the running total and the level is read off the game's
- * own table (1,000 for level 2, 3,017 for level 3 ... 27 million for 79).
+ * own table (level 2 begins at 1,000, level 3 at 4,017 ... 79 at 172 million).
  */
 export function addExp(n, why = '') {
   n = Math.round(n);
