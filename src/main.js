@@ -678,6 +678,10 @@ function runSelfTest() {
 function deploy(mapId, opts = {}) {
   const mapDef = MAPS[mapId];
   if (!mapDef) return;
+  // where the skills and the experience stand as the raid begins: the SKILLS
+  // tab marks what has come in since
+  Skills.markSkills();
+  game.profile.expMark = game.profile.exp;
   startRaid({
     mapDef,
     geo,

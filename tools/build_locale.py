@@ -13,8 +13,10 @@ src/ and writes, for each language, a table of just those keys.
 A key is anything passed as a literal to t(...), tOr(...) or tRich(...); any `label:`,
 `key:` or `title:` of a table in src/ whose text is a key of the locale (the
 bars and tab strips keep their entries in tables and translate them as they
-draw); and every key matching one of FAMILIES (the ones the page builds at
-run time, like the status words of a task).
+draw); every key matching one of FAMILIES (the ones the page builds at
+run time, like the status words of a task); and the keys the data files name
+(data_keys: a skill's name, its two descriptions and the sentence of each of
+its effects, all filed in the locale under the ids in progress-db.json).
 
 The source tables are dumps of the client locale: the 1.3 one when it is in
 the cache (tools/cache/spt13/, fetched by tools/build_story.py), else SPT's
@@ -78,6 +80,19 @@ def wanted_keys() -> tuple[set[str], set[str]]:
     return keys, maybe - keys
 
 
+def data_keys() -> set[str]:
+    """keys that are ids in the data files rather than words in the code"""
+    keys: set[str] = set()
+    src = OUT / "progress-db.json"
+    if src.exists():
+        for s in json.loads(src.read_text(encoding="utf-8")).get("skills", []):
+            if not s.get("cls"):
+                continue
+            keys.update((s["id"], s["id"] + "Description", s["id"] + "LevelingUpDescription"))
+            keys.update(b["id"] for b in s.get("buffs", []))
+    return keys
+
+
 def load_table(dump: str) -> dict:
     """the newest dump of a language, with the older ones behind it"""
     table: dict = {}
@@ -94,6 +109,7 @@ def main() -> None:
     args = ap.parse_args()
 
     keys, maybe = wanted_keys()
+    maybe |= data_keys() - keys
     fams = [re.compile(p) for p in FAMILIES]
     missing_all: set[str] = set()
     for lang, dump in LANGS.items():

@@ -13,6 +13,7 @@
 
 import { game, saveSoon } from '../core/state.js';
 import { emit, EV } from '../core/events.js';
+import { tOr } from '../core/i18n.js';
 import { DB } from './db.js';
 
 export const MAX_SKILL_LEVEL = 51;
@@ -26,9 +27,8 @@ function book() {
   return p.skills;
 }
 
-/** [level, points into it, points it takes] */
-export function skillState(id) {
-  let pts = book()[id] || 0;
+/** where a number of points stands: [level, points into it, points it takes] */
+function stateOf(pts) {
   let level = 0;
   while (level < MAX_SKILL_LEVEL) {
     const c = costOf(level);
@@ -37,6 +37,35 @@ export function skillState(id) {
     level++;
   }
   return [MAX_SKILL_LEVEL, 0, 0];
+}
+
+/** [level, points into it, points it takes] */
+export function skillState(id) { return stateOf(book()[id] || 0); }
+
+/** remember where every skill stands: a raid is about to begin */
+export function markSkills() {
+  game.profile.skillsMark = { ...book() };
+}
+
+/**
+ * What a skill has gained since the last raid began - the green end of its
+ * bar. `from` is where the bar stood then as a share of the level it is in
+ * now (0 when that was a level ago: the whole fill is new) and `shown` the
+ * figure written over it, counted the way the client counts it: the rest of
+ * a level and every whole one crossed are worth what the level after costs,
+ * so a first level reads +20 and four of them +140.
+ * @returns {{ from: number, shown: number } | null}
+ */
+export function skillGain(id) {
+  const now = book()[id] || 0;
+  const was = Math.min(now, game.profile.skillsMark?.[id] || 0);
+  if (now - was < 0.005) return null;
+  const [l0, i0, c0] = stateOf(was);
+  const [l1, i1, c1] = stateOf(now);
+  if (l0 === l1) return { from: c1 ? i0 / c1 : 0, shown: i1 - i0 };
+  let shown = (1 - (c0 ? i0 / c0 : 0)) * costOf(l0 + 1);
+  for (let l = l0 + 1; l < l1; l++) shown += costOf(l + 1);
+  return { from: 0, shown: shown + i1 };
 }
 
 export function skillLevel(id) { return skillState(id)[0]; }
@@ -76,9 +105,49 @@ export function addSkillLevels(id, levels) {
   saveSoon();
 }
 
+/** the skill's row of the table: { id, name, cls?, buffs? } */
+export function skillMeta(id) {
+  return (DB.progress?.skills || []).find((x) => x.id === id) || null;
+}
+
+/** the client files a skill's name under its id */
 export function skillName(id) {
-  const s = (DB.progress?.skills || []).find((x) => x.id === id);
-  return s ? s.name : id;
+  return tOr(id, skillMeta(id)?.name || id);
+}
+
+/** the skills the SKILLS tab lists, in its order: the ones the table gives a class */
+export function listedSkills() {
+  return (DB.progress?.skills || []).filter((s) => s.cls);
+}
+
+/** a number the way the client's format string asks for it: `0.#%` or `0.#` */
+function formatted(value, spec) {
+  const pct = spec.endsWith('%');
+  return String(Math.round(value * (pct ? 1000 : 10)) / 10) + (pct ? '%' : '');
+}
+
+/**
+ * What a skill does at the level it stands at, an entry for each effect in
+ * the tooltip's order: its picture, whether it is an elite one, and its
+ * sentence in pieces - the client brackets the part it lights up
+ * ("Increases jump height by [0.4%]"). An effect grows by the level up to
+ * 50; the elite ones are only there at the top.
+ * @returns {{ ico: string|null, elite: boolean, parts: { text: string, lit: boolean }[] }[]}
+ */
+export function skillBuffs(id) {
+  const level = skillLevel(id);
+  const out = [];
+  for (const b of skillMeta(id)?.buffs || []) {
+    if (b.e && level < MAX_SKILL_LEVEL) continue;
+    const line = tOr(b.id, null);
+    if (line == null) continue;
+    let v = b.v ?? 0;
+    if (!b.e) v = v * Math.min(50, level) + (level >= MAX_SKILL_LEVEL ? b.ea || 0 : 0);
+    const text = line.replace(/\{0(?::([^}]*))?\}/g, (m, spec) => (spec ? formatted(v, spec) : String(v)));
+    const parts = text.split(/\[([^\]]*)\]/).map((piece, i) => ({ text: piece, lit: i % 2 === 1 })).filter((x) => x.text);
+    out.push({ ico: b.ico || null, elite: !!b.e, parts });
+  }
+  return out;
 }
 
 /** the client's picture for each skill: the sprite `skill_<this>` in the `skills` art pack */
@@ -98,18 +167,6 @@ const SKILL_ART = {
   Shadowconnections: 'practical_shadowconnections', Taskperformance: 'practical_taskperformance',
 };
 export function skillSprite(id) { return SKILL_ART[id] ? `skill_${SKILL_ART[id]}` : null; }
-
-/**
- * The skills the character screen lists, in the game's five groups. Only the
- * ones this game can actually train are listed with their group; the rest of
- * the table is still readable by id for tasks that ask for them.
- */
-export const SKILL_GROUPS = [
-  { key: 'physical', name: 'Physical', skills: ['Endurance', 'Strength', 'Vitality', 'Health', 'StressResistance', 'Metabolism', 'Immunity'] },
-  { key: 'mental', name: 'Mental', skills: ['Perception', 'Intellect', 'Attention', 'Charisma', 'Memory'] },
-  { key: 'combat', name: 'Combat', skills: ['Pistol', 'Revolver', 'SMG', 'Assault', 'Shotgun', 'Sniper', 'LMG', 'HMG', 'Launcher', 'AttachedLauncher', 'Throwing', 'Melee', 'DMR', 'RecoilControl', 'AimDrills', 'TroubleShooting'] },
-  { key: 'practical', name: 'Practical', skills: ['Surgery', 'CovertMovement', 'Search', 'MagDrills', 'FieldMedicine', 'FirstAid', 'LightVests', 'HeavyVests', 'WeaponTreatment', 'HideoutManagement', 'Crafting', 'Lockpicking'] },
-];
 
 export function allSkills() {
   return (DB.progress?.skills || []).map((s) => {

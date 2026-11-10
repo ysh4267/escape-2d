@@ -30,7 +30,8 @@
 # output (src/data/):
 #   traders-db.json   traders, every offer, every sold or awarded weapon build
 #   quests-db.json    tasks, task items, zones (world coordinates)
-#   progress-db.json  level table, experience rules, skills, mastering
+#   progress-db.json  level table, experience rules, skills (with what each
+#                     does, from tools/skill_table.py), mastering
 #   profiles-db.json  starting stash and gear per edition and faction
 #   hideout-db.json   stations and crafts
 #
@@ -47,6 +48,9 @@ import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from skill_table import rows as skill_rows  # noqa: E402
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -759,6 +763,23 @@ def build_tasks():
 # ---------------------------------------------------------
 # progression
 # ---------------------------------------------------------
+def buff_sprites():
+    """
+    The picture of each skill effect, by the effect's id: the client keeps
+    the pairing in a table of its own (tools/cache/client/icon_tables.json,
+    written by tools/extract_tarkov_ui.py). Without the extraction the
+    effects simply come out with no picture.
+    """
+    path = os.path.join(CACHE, 'client', 'icon_tables.json')
+    if not os.path.exists(path):
+        return lambda bid: None
+    with open(path, encoding='utf-8') as f:
+        objects = json.load(f)['objects']
+    table = next((o['tables']['skill_buff'] for k, o in objects.items() if 'skill_buff' in (o.get('tables') or {})), {})
+    norm = lambda name: re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+    return lambda bid: norm(table[bid]) if table.get(bid) else None
+
+
 def build_progress():
     items = tdev('items')['data']
     en = tdev('items_en')['data']
@@ -770,9 +791,12 @@ def build_progress():
     for lv in items['playerLevels']:
         total += lv['exp']
         levels.append(total)
-    skills = []
-    for s in items['skills']:
-        skills.append({'id': s['id'], 'name': en.get(s['name'], s['name'])})
+    # the skills the SKILLS tab lists come first, in its order, each with its
+    # class and effects; the rest are the ones only a task still names
+    names = {s['id']: en.get(s['name'], s['name']) for s in items['skills']}
+    shown = skill_rows(buff_sprites())
+    skills = [{'id': sid, 'name': names.get(sid, sid), **meta} for sid, meta in shown.items()]
+    skills += [{'id': sid, 'name': name} for sid, name in names.items() if sid not in shown]
     mastering = [{'id': m['id'], 'weapons': m['weapons'], 'l2': m['level2'], 'l3': m['level3']}
                  for m in items['mastering']]
     return {

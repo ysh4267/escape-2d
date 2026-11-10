@@ -57,6 +57,10 @@ sealed packs under `assets/ui-eft/`; `src/core/uiart.js` opens them.
   (`border-image: var(--ui-header_panel) 0 22 0 8 fill stretch` with matching
   border widths); the slices are in `uiMeta(name).border` and in
   `export/_nine_slice.json`.
+  Some of the client's frames are cut down the very middle - an 8 px sprite
+  with 4 px borders, nothing left between them. The client stretches the seam;
+  a browser draws only the corners. Take the slice one pixel short of the
+  middle (`3 fill / 3px` for that one) and the frame comes out whole.
 
 ## Words
 
@@ -66,7 +70,9 @@ locale key - `t('QuestsShowCompleted')`, `t('DEAL!')` - and
 (`src/data/locale-<lang>.json`, English and Korean). The layout dump shows the
 key of every label (`EFT.UI.LocalizedText{KEY}`). Run the builder after adding
 a key; `--report` lists the ones the dump does not have (use
-`tOr(key, 'fallback')` for those). A control or a note that only this build
+`tOr(key, 'fallback')` for those). Where the key is an id in a data file and
+not a word in the code - a skill's name and descriptions, the sentence of
+each thing it does - the builder reads the data file for it (`data_keys`). A control or a note that only this build
 has, and the client therefore has no key for, is written out at the call site
 in each language: `own('Reset game profile', '게임 프로필 초기화')`.
 

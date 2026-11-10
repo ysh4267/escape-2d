@@ -1,26 +1,24 @@
 // =========================================================
 // the character screen
 //
-// One screen, seven tabs along the top, in the game's order and words:
-// OVERALL, GEAR, HEALTH, SKILLS, MAP, TASKS, ACHIEVEMENTS. GEAR is the stash
-// screen and HEALTH the body; those two are drawn by their own modules. The
-// rest are here: the numbers of a career, the skills and how far along each
-// is, the places you may be sent, the task journal, the achievements.
+// One screen, its tabs along the top in the game's order and words: OVERALL,
+// GEAR, HEALTH, CUSTOMIZATION, SKILLS, MAP, TASKS, ACHIEVEMENTS, PRESTIGE.
+// OVERALL, GEAR, HEALTH and SKILLS are drawn by their own modules; the rest
+// are here: the places you may be sent, the task journal, the achievements.
 // =========================================================
 
-import { $, $$, el, fmtNum } from '../core/util.js';
+import { $, $$, el } from '../core/util.js';
 import { on, emit, EV } from '../core/events.js';
 import { game } from '../core/state.js';
 import { sfx } from '../core/audio.js';
-import { DB, levelProgress, levelGroup, MAX_LEVEL, CUR_SYM } from '../game/db.js';
-import { activeTasks, completedTasks, QS, taskCounts } from '../game/quests.js';
-import { SKILL_GROUPS, skillState, skillName, skillSprite, MAX_SKILL_LEVEL } from '../game/skills.js';
-import { editionInfo } from '../game/profile.js';
+import { DB } from '../game/db.js';
+import { activeTasks, completedTasks, QS } from '../game/quests.js';
 import { renderTaskView, taskRow } from './tasks-ui.js';
 import { t } from '../core/i18n.js';
-import { uiImg, loadUiGroup, hasUi, setUiSrc } from '../core/uiart.js';
+import { uiImg } from '../core/uiart.js';
 import { showScreen, currentScreen } from './shell.js';
 import { renderOverall } from './overall.js';
+import { renderSkills, initSkills } from './skills-ui.js';
 
 /** the tabs, with the client's locale key and glyph for each (`<ico>_selected` when lit) */
 const TABS = [
@@ -86,36 +84,11 @@ export function initCharacter() {
   const back = el('button', { class: 'dbtn charback', dataset: { sfx: 'own' } }, t('BACK'));
   back.addEventListener('click', () => { sfx.ui('click'); showScreen('menu'); });
   strip.append(back);
+  initSkills();
   on('shell:character', (t) => openCharacter(t));
   on(EV.SCREEN_CHANGED, (id) => { if (id === 'character') { paint(); emit(EV.SCREEN_CHANGED, `character:${tab}`); } });
   on(EV.QUEST, () => { if (currentScreen() === 'character' && tab === 'tasks') renderJournal(); });
   on(EV.LEVEL_UP, () => { if (currentScreen() === 'character' && tab === 'overall') renderOverall(); });
-}
-
-// ---------------------------------------------------------
-// SKILLS
-// ---------------------------------------------------------
-export function renderSkills() {
-  const host = $('#skills-host');
-  if (!host) return;
-  // the pictures are a pack of their own, fetched the first time the tab is opened
-  if (!hasUi('skill_physical_endurance')) loadUiGroup('skills').then((ok) => { if (ok && hasUi('skill_physical_endurance')) renderSkills(); });
-  host.replaceChildren();
-  for (const g of SKILL_GROUPS) {
-    const grid = el('div', { class: 'sk-grid' });
-    for (const id of g.skills) {
-      const [level, into, cost] = skillState(id);
-      const elite = level >= MAX_SKILL_LEVEL;
-      const tile = el('div', { class: `sk${elite ? ' is-elite' : ''}${level === 0 && !into ? ' is-untrained' : ''}`, title: skillName(id) },
-        el('div', { class: 'sk__art' },
-          hasUi(skillSprite(id)) ? uiImg(skillSprite(id)) : null,
-          el('b', { class: 'sk__lvl' }, elite ? 'ELITE' : String(level))),
-        el('div', { class: 'sk__name' }, skillName(id)),
-        el('div', { class: 'sk__bar' }, el('i', { style: { width: cost ? `${(into / cost) * 100}%` : '100%' } })));
-      grid.append(tile);
-    }
-    host.append(el('div', { class: 'sk-group' }, el('div', { class: 'sk-group__head' }, g.name.toUpperCase()), grid));
-  }
 }
 
 // ---------------------------------------------------------

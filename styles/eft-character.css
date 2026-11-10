@@ -87,20 +87,128 @@
 .ov__k { position: absolute; left: 44px; top: 6.5px; color: #c5c3b2; white-space: nowrap; }
 .ov__v { position: absolute; right: 10px; top: 5.5px; color: #b6c1c7; white-space: nowrap; }
 
-/* ---- SKILLS ---- */
-.skills { height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding: 4px 6px; }
-.sk-group__head { color: #aeb9c1; font-size: 16px; font-weight: 700; margin-bottom: 8px; border-bottom: 1px solid #2a2c2c; padding-bottom: 4px; }
-.sk-grid { display: flex; flex-wrap: wrap; gap: 10px; }
-.sk { width: 112px; }
-.sk__art { position: relative; width: 112px; height: 112px; background: #0d0e10; border: 1px solid #2a2c2c; display: grid; place-items: center; overflow: hidden; }
-.sk__art img { width: 100%; height: 100%; object-fit: cover; }
-.sk__lvl { position: absolute; right: 5px; bottom: 3px; font-size: 20px; color: #fff; text-shadow: 0 0 4px #000, 0 0 2px #000; }
-.sk__name { margin-top: 4px; font-size: 13px; color: var(--e-text); height: 30px; line-height: 15px; overflow: hidden; }
-.sk__bar { height: 4px; background: #000; border: 1px solid #343738; }
-.sk__bar i { display: block; height: 100%; background: #b9c4cc; }
-.sk.is-untrained .sk__art img { filter: grayscale(1) brightness(.45); }
-.sk.is-untrained .sk__lvl { color: #6d7378; }
-.sk.is-elite .sk__lvl { color: var(--e-gold); font-size: 14px; }
+/* ---- SKILLS ----
+   The client's SkillsAndMasteringScreen; positions are its own less the
+   43 px of the tab strip. TopPanel [0,39 1920x255] holds the level and the
+   experience bar, Caption Bar [191,243] the two sub-tabs and the options,
+   BottomPanel [0,293 1920x753] the list. */
+#pane-skills { padding: 0; }
+.skills { position: absolute; inset: 0; }
+
+.skl__top { position: absolute; left: 0; top: 0; width: 1920px; height: 251px; background: #00000024; }
+.skl__top::before { content: ""; position: absolute; left: 0; top: 39px; width: 1920px; height: 159px; background: #00000054; }
+.skl__lv { position: absolute; top: 69.5px; width: 198px; height: 100px; }
+.skl__lv--now { left: 140px; }
+.skl__lv--next { left: 1549px; }
+.skl__badge { position: absolute; left: 0; top: 0; width: 100px; height: 100px; }
+.skl__lv span { position: absolute; left: 105px; top: 13px; line-height: 71.5px; font-size: 65px; letter-spacing: 3px; color: #cecfcb; }
+.skl__bar { position: absolute; left: 347px; top: 99px; width: 1184px; height: 19px; }
+.skl__bar::before { content: ""; position: absolute; inset: -4px; border: 4px solid transparent; border-image: var(--ui-experience_bar_background) 4 fill / 4px stretch; }
+.skl__fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--ui-experience_bar_gradient) 0 0 / 100% 100%; }
+.skl__fill--new { opacity: .41; }
+/* what came in since the last raid, over the end of the fill: the figure sits
+   half a pointer left of the end, the EXP tag after it, the pointer on the end */
+.skl__gain { position: absolute; top: 0; width: 0; height: 0; }
+.skl__gainnum { position: absolute; left: -9px; top: -50.7px; transform: translateX(-50%); font-size: 24px; line-height: 26.4px; color: #b6c1c7; white-space: nowrap; }
+.skl__gainnum img { position: absolute; left: calc(100% + 4px); top: -2.3px; }
+.skl__pointer { position: absolute; left: -9px; top: -20.5px; }
+.skl__cur, .skl__rem { position: absolute; top: 124px; height: 27px; line-height: 27px; font-size: 24px; letter-spacing: .5px; color: #999c9e; white-space: pre; }
+.skl__cur { left: 344px; }
+.skl__rem { right: 386px; }
+.skl__cur b, .skl__rem b { margin-left: 8px; font-weight: 400; color: #cdd0c8; }
+
+.skl__strip { position: absolute; left: 0; top: 200px; width: 1920px; height: 50px; }
+.skl__tab { position: absolute; top: 12px; width: 230px; height: 33px; padding: 0 25px 0 0; gap: 0; font-size: 24px; letter-spacing: .85px; color: #c5c3b2; }
+/* this strip's plate is the duller cut of the paint stroke */
+.skl__tab::before { filter: brightness(.82); }
+.skl__tab:nth-child(1) { left: 187px; }
+.skl__tab:nth-child(2) { left: 416px; padding-right: 22px; }
+.skl__show { position: absolute; right: 695.9px; top: 17px; font-size: 18px; line-height: 19.8px; letter-spacing: .35px; color: #bdbaad; white-space: nowrap; }
+.skl__filter, .skl__sort { position: absolute; top: 13px; }
+.skl__filter { left: 1234px; }
+.skl__sort { left: 1430.2px; }
+.skl__view { position: absolute; top: 14px; width: 37px; height: 28px; padding: 0; border: 0; display: grid; place-items: center; background: var(--ui-option_button_off) 0 0 / 100% 100% no-repeat; }
+.skl__view.is-on { background-image: var(--ui-option_button_on); }
+.skl__view:nth-last-of-type(2) { left: 1625.2px; }
+.skl__view:nth-last-of-type(1) { left: 1665.2px; }
+/* MASTERING's search box: SearchInputField [894,255.5 218x31] */
+.skl__search { position: absolute; left: 894px; top: 12.5px; width: 218px; height: 31px; }
+.skl__search::before { content: ""; position: absolute; inset: 0; box-sizing: border-box; border-style: solid; border-width: 21px; border-image: var(--ui-input_box) 21 fill stretch; pointer-events: none; }
+.skl__search input { position: absolute; left: 8.9px; top: 6.5px; width: 173px; height: 19px; padding: 0; border: 0; outline: 0; background: none; color: #fff; font-family: var(--font-ui); font-size: 14px; }
+.skl__search input::placeholder { font-style: italic; color: #c3c5bb4f; }
+.skl__search img { position: absolute; left: 189.9px; top: 6px; }
+/* the options' boxes are a smaller cut of the drop-down box: 180 x 31 */
+.ddb--31 { height: 31px; }
+.ddb--31 .ddb__btn { right: 7px; top: 5.5px; }
+.ddb--31 .ddb__list { top: 29px; }
+/* the value is centred in the 130 px left of the button, not in the whole box */
+.ddb--31 .ddb__value { position: absolute; left: 19px; width: 130px; max-width: none; text-align: center; letter-spacing: .35px; }
+
+/* the list's sheet: a line of light along the top, darkening over 64 px into a flat veil */
+.skills::before {
+  content: ""; position: absolute; left: 0; top: 250px; width: 1920px; bottom: 0;
+  background: var(--ui-main_part_gradient) 0 0 / 100% 64px no-repeat, linear-gradient(#00000099, #00000099) 0 64px / 100% calc(100% - 64px) no-repeat;
+}
+.skl__scroll { position: absolute; left: 0; top: 250px; width: 1818.1px; bottom: 0; overflow-y: auto; }
+.skl__list { display: grid; grid-template-columns: 824px 824px; column-gap: 25px; row-gap: 34px; padding: 20px 0 20px 122.1px; }
+.skl__grid { display: grid; grid-template-columns: repeat(14, 96px); gap: 24px; padding: 21px 0 20px 123.1px; }
+
+.sk { position: relative; width: 824px; height: 100px; }
+/* a picture: 90 x 90 in a 96 box with a hatched plate behind and a thin frame round it */
+.skpic { position: absolute; left: 0; top: 4px; width: 96px; height: 96px; }
+.skpic::before { content: ""; position: absolute; left: -6px; top: -6px; width: 109px; height: 109px; background: var(--ui-skill_background) 0 0 / 100% 100% no-repeat; }
+/* the client slices these frames down the very middle; a browser draws nothing
+   between corners that meet, so the cut is taken one pixel short of it */
+.skpic::after { content: ""; position: absolute; inset: -4px; border: 5px solid transparent; border-image: var(--ui-skill_border) 5 / 5px stretch; pointer-events: none; }
+.skpic__img { position: absolute; left: 3px; top: 3px; width: 90px; height: 90px; }
+.skpic__img img { display: block; width: 90px; height: 90px; }
+.sklv { position: absolute; left: 0; top: 71px; width: 25px; height: 25px; display: grid; place-items: end center; padding-bottom: 3px; box-sizing: border-box; background: var(--ui-skill_level_panel) 0 0 / 100% 100% no-repeat; font-size: 14px; line-height: 17px; color: #121414; }
+.sklv img { margin-bottom: 1.5px; }
+/* the class tag: the plate takes the class's colour, two dark letters on it */
+.skc { flex: none; width: 25px; height: 25px; display: grid; place-items: center; font-size: 12px; line-height: 20px; color: #121414; -webkit-mask: var(--ui-skill_icon_type) center / 100% 100% no-repeat; mask: var(--ui-skill_icon_type) center / 100% 100% no-repeat; }
+.sk__head { position: absolute; left: 110px; top: 2px; display: flex; align-items: flex-start; gap: 3px; }
+.sk__name { margin-top: 2.6px; font-size: 18px; line-height: 19.8px; letter-spacing: .35px; color: #c5c3b2; white-space: nowrap; }
+.sk__buffs { position: absolute; right: 1px; top: 5px; display: flex; gap: 2px; }
+.skbf { flex: none; width: 24px; height: 22px; display: grid; place-items: center; background: var(--ui-buff_background) 0 0 / 100% 100% no-repeat; }
+.skbf.is-elite { background-image: var(--ui-elite_buff_background); }
+.skbf img { display: block; width: 19px; height: 18px; }
+/* the bar: its frame 4 px out all round, the fill 707 x 19 inside it */
+.skbar { position: absolute; left: 114px; top: 45px; width: 707px; height: 19px; }
+.skbar::before { content: ""; position: absolute; inset: -4px; border: 3px solid transparent; border-image: var(--ui-level_fill_bar) 3 fill / 3px stretch; }
+.skbar__fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--ui-level_fill_bar_current) 0 0 / 100% 100%; }
+.skbar__fill--new { background-image: var(--ui-level_fill_bar_new_1); }
+.skbar__fill--elite { background-image: var(--ui-level_fill_bar_elite); }
+.skbar__gain { position: absolute; top: -18px; transform: translateX(-50%); font-size: 14px; line-height: 18px; color: #76ae36; white-space: nowrap; }
+.sk__level { position: absolute; left: 113px; top: 70px; font-size: 18px; line-height: 21px; letter-spacing: .35px; color: #b6c1c7; white-space: nowrap; }
+.sk__level.is-elite { color: #c78b2c; }
+.sk__pts { position: absolute; right: 3px; top: 74px; font-size: 18px; line-height: 21px; color: #b6c1c7; white-space: nowrap; }
+.sk__pts b { color: #c5c3b2; font-weight: 700; }
+
+/* the grid: the picture alone, its class in the top corner and the points in the bottom one */
+.skpic--cell { position: relative; left: auto; top: auto; }
+.skpic--cell .skc { position: absolute; left: 71px; top: 0; }
+.skpic__pts { position: absolute; right: 4px; top: 76.2px; font-size: 14.5px; line-height: 16px; color: #b6c1c7; text-shadow: 1px 0 #000, -1px 0 #000, 0 1px #000, 0 -1px #000; white-space: nowrap; }
+.skpic__pts b { color: #c5c3b2; font-weight: 700; }
+
+/* the card: a black sheet 426 wide that grows with its longest line */
+.sktip { position: absolute; z-index: 60; min-width: 426px; width: max-content; max-width: 900px; box-sizing: border-box; padding: 51px 3px 14px; display: flex; flex-direction: column; gap: 13px; background: #000; border: 1px solid #52595a; box-shadow: 0 0 6px rgba(0,0,0,.6); pointer-events: none; }
+.sktip__head { position: absolute; left: 3px; right: 3px; top: 3px; height: 36px; background: #54585b4d; }
+.sktip__head .skc { position: absolute; left: 7px; top: 5px; }
+.sktip__name { position: absolute; left: 36px; top: 8px; font-size: 18px; line-height: 21px; letter-spacing: .35px; color: #c5c3b2; white-space: nowrap; }
+.sktip__head .sklv { left: auto; right: 6px; top: 5px; }
+/* the words take the card's width and never set it */
+.sktip__about { width: 0; min-width: 100%; box-sizing: border-box; padding: 0 9px 10px; font-size: 14px; line-height: 15.8px; letter-spacing: .3px; color: #a6b0b5; }
+.sktip__about p { margin: 0; }
+.sktip__about p + p { margin-top: 15.8px; }
+.sktip__prog { position: relative; height: 68px; border-bottom: 1px solid #ffffff24; box-sizing: border-box; }
+.skbar--tip { left: 11px; top: 4px; right: 11px; width: auto; }
+.sktip__prog .sk__level { left: 10px; top: 33px; }
+.sktip__prog .sk__pts { right: 9px; top: 33px; }
+.sktip__buffs { display: flex; flex-direction: column; gap: 6px; padding: 0 7px; }
+.sktip__buffs:empty { display: none; }
+.sktip__buff { display: flex; align-items: center; gap: 5px; min-height: 22px; font-size: 14px; line-height: 15.4px; letter-spacing: .3px; color: #a6b0b5; white-space: pre; }
+.sktip__buff b { color: #59aad5; }
+.sktip__buff em { font-style: normal; color: #c78b2c; }
 
 /* ---- MAP ---- */
 .charmap { height: 100%; overflow: auto; }

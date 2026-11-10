@@ -24,20 +24,20 @@ document.addEventListener('keydown', (e) => {
 }, true);
 
 /**
- * @param {{ value: string, options: { id: string, label: string }[], onChange?: (id: string) => void, width?: number }} o
+ * @param {{ value: string, options: { id: string, label: string }[], onChange?: (id: string) => void, width?: number, cls?: string }} o
  * @returns {{ node: HTMLElement, value: string, set: (id: string) => void, close: () => void }}
  */
 export function dropdown(o) {
   let value = o.value;
   const label = el('span', { class: 'ddb__value' });
   const list = el('div', { class: 'ddb__list', hidden: true });
-  const node = el('div', { class: 'ddb', tabindex: '0', dataset: { sfx: 'own' } },
+  const node = el('div', { class: `ddb${o.cls ? ` ${o.cls}` : ''}`, tabindex: '0', dataset: { sfx: 'own' } },
     label,
     el('span', { class: 'ddb__btn' },
       uiImg('dropdown_arrow_down_new', 'ddb__arrow ddb__arrow--down', { w: 10, h: 8 }),
       uiImg('dropdown_arrow_up_new', 'ddb__arrow ddb__arrow--up', { w: 10, h: 8 })),
     list);
-  if (o.width) node.style.width = `${o.width}px`;
+  if (o.width) { node.style.width = `${o.width}px`; list.style.width = `${o.width}px`; }
 
   const api = {
     node,

@@ -40,6 +40,14 @@ STEPS: list[tuple[str, str]] = [
         E.openCharacter('overall'); await sleep(400); seen('.ov__sheet .ov__level'); seen('.ov__cell'); seen('.ov__row');
         for (const b of document.querySelectorAll('.ov__tab')) { b.click(); await sleep(150); seen('.ov__row'); }
     """),
+    ("skills", """
+        E.openCharacter('skills'); await sleep(900); seen('.skl__bar'); seen('.sk .skpic__img img'); seen('.sk .skbf img');
+        click('.skl__view:not(.is-on)'); await sleep(200); seen('.skpic--cell');
+        click('.skl__view:not(.is-on)'); await sleep(200); seen('.sk');
+        click('.skl__filter'); await sleep(100); click('.skl__filter .ddb__opt:nth-child(4)'); await sleep(200); seen('.sk');
+        click('.skl__tab:not(.is-hover)'); await sleep(200); seen('.skl__search');
+        click('.skl__tab:not(.is-hover)'); await sleep(200); seen('.sk');
+    """),
     ("character tabs", """
         for (const b of document.querySelectorAll('#screen-character .ptab:not(:disabled)')) { b.click(); await sleep(350); }
     """),
