@@ -1,0 +1,93 @@
+/* =========================================================
+   The settings screen (src/ui/settings.js).
+
+   Positions are the client's, off its SettingsScreen hierarchy and a
+   1920 x 1080 capture of 1.1: the caption and its gear centred at the top,
+   five tabs on a 215 px pitch under it, BACK / REVERT / SAVE in a column on
+   x 1806, and an 850 px panel down the middle (x 535 - 1385). CONTROLS is
+   the one tab that uses the whole width.
+   ========================================================= */
+
+#screen-settings { color: var(--e-text); }
+
+/* ---------------- caption ---------------- */
+.set__cap { position: absolute; left: 0; right: 0; top: 15px; height: 46px; display: flex; justify-content: center; pointer-events: none; }
+.set__cap span { position: relative; font-size: 42px; line-height: 46px; color: #f9f9e3; text-transform: uppercase; }
+/* the gear sits 15 px off the caption's first letter whatever the caption's length */
+.set__capico { position: absolute; right: calc(100% + 15px); top: -10px; max-width: none; }
+
+/* ---------------- tabs ---------------- */
+.set__tabs { position: absolute; left: 0; right: 0; top: 85px; height: 34px; display: flex; justify-content: center; gap: 15px; }
+.set__tab { min-width: 200px; height: 34px; padding: 0 12px; font-size: 26px; color: #cfd9dc; }
+.set__tab.is-hover { font-weight: 700; }
+.set__tab:disabled { color: #4d5254; }
+.set__subtabs { position: absolute; left: 0; right: 0; top: 131.7px; height: 38.6px; display: flex; justify-content: center; gap: 20px; }
+.set__subtabs .set__tab { height: 38.6px; }
+
+/* ---------------- the column of buttons on the right, and CREDITS ---------------- */
+.set__side { position: absolute; left: 1805px; transform: translate(-50%, -50%); min-width: 200px; height: 56px; font-size: 35px; }
+.set__back { top: 47px; }
+.set__revert { top: 107px; }
+.set__save { top: 967px; }
+.set__credits { left: 115px; top: 967px; }
+
+/* ---------------- the panel ---------------- */
+.set__pane { position: absolute; left: 535px; top: 165px; width: 850px; height: 785px; }
+
+/* GAME: a header strip, the nickname block, the list of options */
+.set__nickpanel { position: absolute; left: 0; top: 0; width: 850px; height: 179px; background: rgba(0,0,0,.94); }
+.set__nickhead { position: absolute; left: 0; top: 0; width: 850px; height: 38px; display: flex; align-items: center; padding-left: 22px; box-sizing: border-box; isolation: isolate; }
+.set__nickhead::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; opacity: .4;
+  border: 11px solid transparent; border-image: var(--ui-name_block_header) 11 fill stretch;
+  background: none;
+}
+.set__nickmsg { font-size: 15px; font-weight: 700; color: #000; }
+.set__nickmsg.is-bad { color: #2a0000; }
+.set__nickfield { position: absolute; left: 48px; top: 87.5px; width: 500px; height: 50px; box-sizing: border-box; background: rgba(0,0,0,.63); border: 1px solid rgba(92,96,97,.76); }
+.set__nick { width: 100%; height: 100%; box-sizing: border-box; padding: 0 9px; border: 0; outline: none; background: none; color: #c5c3b2; font-family: var(--font-ui); font-size: 36px; }
+.set__nickfield:focus-within { border-color: #9aa0a2; }
+.set__nickbtn { position: absolute; left: 573px; top: 91px; min-width: 165px; height: 43px; padding: 8px 20px; gap: 9px; }
+.set__nickico--hot, .set__nickbtn:hover:not(:disabled) .set__nickico--idle { display: none; }
+.set__nickbtn:hover:not(:disabled) .set__nickico--hot { display: block; }
+.set__nickbtn:disabled .set__nickico { opacity: .35; }
+.set__used { position: absolute; left: 48px; top: 144px; width: 473px; font-size: 18px; color: #7c7a6f; }
+.set__used b { font-weight: 400; color: #c3c5bb; }
+
+.set__scroll { position: absolute; left: 0; top: 183px; width: 850px; height: 602px; overflow-y: auto; background: rgba(0,0,0,.94); }
+.set__list { margin: 0 49px; padding: 10px 0 16px; display: flex; flex-direction: column; gap: 10px; }
+.set__row { display: flex; align-items: center; justify-content: space-between; height: 35px; flex: none; }
+.set__label { font-size: 18px; color: #8f948f; white-space: nowrap; }
+
+/* a row that is a button across the list */
+.set__rowbtn {
+  display: flex; align-items: center; justify-content: center; gap: 5px; height: 35px; flex: none; width: 100%;
+  border: 0; background: rgba(27,30,31,.8); color: #7d7b73; font-family: var(--font-ui); font-size: 18px;
+}
+.set__rowbtn:hover:not(:disabled) { background: #c6c7b7; color: #000; }
+.set__rowbtn:hover:not(:disabled) .set__rowico { filter: brightness(0); }
+.set__rowbtn:disabled { background: #000; color: #474641; cursor: default; }
+.set__rowbtn:disabled .set__rowico { opacity: .3; }
+.set__rowico { opacity: .55; }
+.set__rowbtn--danger { color: #a0463c; margin-top: 25px; }
+.set__rowbtn--danger:hover:not(:disabled) { background: #6c1010; color: #f3d8d2; }
+
+/* SOUND: one dark sheet, the rows inset 50 px */
+.set__pane--sound { background: rgba(0,0,0,.8); }
+.set__list--sound { margin: 0 50px; padding: 40px 0 0; gap: 12px; }
+.set__row--slider { height: 40px; }
+.set__row--slider .set__label { color: #8f948f; }
+
+/* CONTROLS: the table of keys, the width of the screen */
+.set__pane--controls { left: 50px; top: 190px; width: 1720px; height: 623px; background: rgba(0,0,0,.8); }
+.ctl__head, .ctl__row { display: grid; grid-template-columns: repeat(4, 1fr); column-gap: 4px; align-items: center; }
+.ctl__head { height: 30px; margin-bottom: 4px; }
+.ctl__head span { text-align: center; font-size: 15px; color: #747b7e; text-transform: uppercase; }
+.ctl__rows { height: 579px; padding: 3px 8px 0 8px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; box-sizing: border-box; }
+.ctl__row { height: 30px; flex: none; }
+.ctl__row span { height: 30px; line-height: 30px; background: rgba(25,27,28,.3); font-size: 18px; text-align: center; white-space: nowrap; overflow: hidden; }
+.ctl__row .ctl__name { text-align: left; padding-left: 30px; color: #88867d; }
+.ctl__row .ctl__key { color: #c5c3b2; }
+.ctl__row .ctl__key.is-unset { color: #515049; }
+.ctl__row .ctl__press { background: rgba(84,88,91,.1); color: #bdbaad; }
+.ctl__group { height: 30px; flex: none; line-height: 30px; padding-left: 36px; background: #252628; color: #fff; font-size: 14px; text-transform: uppercase; }
