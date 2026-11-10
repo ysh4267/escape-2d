@@ -147,3 +147,18 @@
 .actbox[hidden] { display: none; }
 .actbox__row { height: 13px; padding: 0 5px 0 4px; font-size: 11px; line-height: 13px; letter-spacing: .2px; text-transform: uppercase; color: #838383; white-space: nowrap; }
 .actbox__row.is-on { background: #838383; color: #000; }
+
+/* ---------------- something that takes a while ----------------
+   The client's long-action bar: a frame 472 x 8 with a fill 468 x 4, 88 px
+   under the middle of the screen, and over it what is being done in its
+   11 px capitals on the near-black strip it writes a thing's name on. A
+   door being forced, the gun's reload or check, a med going on each have
+   one, stacked downwards; all in the one colour, a stoppage alone in red. */
+#screen-raid .interact-prompt { left: calc(50% - 236px); top: calc(50% + 72px); bottom: auto; width: 472px; transform: none; text-align: center; font-size: 0; }
+#screen-raid .gun-prompt { top: calc(50% + 102px); }
+#screen-raid .med-prompt { top: calc(50% + 132px); }
+#screen-raid .interact-prompt__label { display: inline-block; height: 13px; margin: 0 0 3px; padding: 0 6px; background: #070707; color: #fff; font-size: 11px; line-height: 13px; letter-spacing: .2px; text-transform: uppercase; white-space: nowrap; }
+#screen-raid .interact-prompt__label .ico { display: none; }
+#screen-raid .gun-prompt.is-malf .interact-prompt__label { color: #ed4652; }
+#screen-raid .interact-prompt__bar { height: 8px; box-sizing: border-box; padding: 2px; border: 0; background: #0e1416; }
+#screen-raid .interact-prompt__bar > i { height: 4px; background: #b6c1c7; }
