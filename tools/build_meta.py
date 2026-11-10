@@ -804,6 +804,13 @@ def build_progress():
         'deploySeconds': g.get('TimeBeforeDeployLocal') or g.get('TimeBeforeDeploy'),
         'insurance': {'storeH': g['Insurance'].get('MaxStorageTimeInHour')},
         'buyout': g.get('TradingSettings', {}).get('BuyoutRestrictions'),
+        # what can be carried, kg: each band is [where it starts to cost, where it stops being possible]
+        # - base (stamina drains; its top is the figure the character screen shows as the limit),
+        # sprint, walk and the band the walking speed falls over
+        'weight': {name: [g['Stamina'][key]['x'], g['Stamina'][key]['y']]
+                   for name, key in (('base', 'BaseOverweightLimits'), ('sprint', 'SprintOverweightLimits'),
+                                     ('walk', 'WalkOverweightLimits'), ('speed', 'WalkSpeedOverweightLimits'))
+                   if key in g.get('Stamina', {})},
     }
 
 
